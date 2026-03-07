@@ -772,6 +772,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [disciplineType, setDisciplineType] = useState('Warning');
   const [disciplineReason, setDisciplineReason] = useState('');
   const [disciplineIssuer, setDisciplineIssuer] = useState('');
+  const [sessionRankFilter, setSessionRankFilter] = useState('All');
+  const [sessionUserQuery, setSessionUserQuery] = useState('');
+  const [sessionTargetId, setSessionTargetId] = useState(null);
+  const [sessionNotesOpen, setSessionNotesOpen] = useState(false);
+  const [sessionActionsOpen, setSessionActionsOpen] = useState(false);
   const [disciplineRankFilter, setDisciplineRankFilter] = useState('All');
   const [disciplineUserQuery, setDisciplineUserQuery] = useState('');
   const [disciplineTargetId, setDisciplineTargetId] = useState(null);
@@ -1125,6 +1130,18 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   const traineeRecord = staff.find(s => s.traineeUserId === authUser?.id) || null;
   const selected = traineeRestricted ? traineeRecord : (staff.find(s => s.id === selectedId) || staff[0] || null);
+  const sessionCandidates = useMemo(() => {
+    const q = sessionUserQuery.trim().toLowerCase();
+    return staff
+      .filter(member => sessionRankFilter === 'All' || member.role === sessionRankFilter)
+      .filter(member => {
+        if (!q) return true;
+        const haystack = [member.name, member.role, member.status, member.trainer].filter(Boolean).join(' ').toLowerCase();
+        return haystack.includes(q);
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [staff, sessionRankFilter, sessionUserQuery]);
+  const sessionTarget = staff.find(member => member.id === sessionTargetId) || sessionCandidates[0] || null;
   const disciplineCandidates = useMemo(() => {
     const q = disciplineUserQuery.trim().toLowerCase();
     return staff
@@ -1140,13 +1157,18 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   useEffect(() => {
     if (!staff.length) {
+      setSessionTargetId(null);
       setDisciplineTargetId(null);
       return;
+    }
+    const sessionTargetStillExists = sessionTargetId !== null && staff.some(member => member.id === sessionTargetId);
+    if (!sessionTargetStillExists) {
+      setSessionTargetId(selected?.id ?? staff[0].id);
     }
     const targetStillExists = disciplineTargetId !== null && staff.some(member => member.id === disciplineTargetId);
     if (targetStillExists) return;
     setDisciplineTargetId(selected?.id ?? staff[0].id);
-  }, [staff, selected?.id, disciplineTargetId]);
+  }, [staff, selected?.id, disciplineTargetId, sessionTargetId]);
 
   const totals = {
     total: staff.length,
@@ -1262,6 +1284,61 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       saveStaffMember(updated);
       writeAudit('staff.update', updated.id, null, patch);
     }
+  }
+
+  function updateSessionTarget(patch) {
+    if (!sessionTarget || !canEdit) return;
+    let updated = null;
+    setStaff(prev => prev.map(s => {
+      if (s.id !== sessionTarget.id) return s;
+      updated = { ...s, ...patch };
+      return updated;
+    }));
+    if (updated) {
+      saveStaffMember(updated);
+      writeAudit('staff.session.update', updated.id, null, patch);
+    }
+  }
+
+  function promoteSessionTarget() {
+    if (!sessionTarget || !canEdit) return;
+    const currentIndex = roles.indexOf(sessionTarget.role);
+    if (currentIndex >= roles.length - 1) return;
+    const nextRole = roles[currentIndex + 1];
+    const today = new Date().toISOString().slice(0, 10);
+    updateSessionTarget({
+      role: nextRole,
+      promotion: roles[Math.min(currentIndex + 2, roles.length - 1)],
+      checks: Object.fromEntries((baseChecksByRole[nextRole] || []).map(item => [item, false])),
+      modSince: today,
+    });
+  }
+
+  function demoteSessionTarget() {
+    if (!sessionTarget || !canEdit) return;
+    const currentIndex = roles.indexOf(sessionTarget.role);
+    if (currentIndex <= 0) return;
+    const nextRole = roles[currentIndex - 1];
+    const today = new Date().toISOString().slice(0, 10);
+    updateSessionTarget({
+      role: nextRole,
+      promotion: roles[currentIndex],
+      checks: Object.fromEntries((baseChecksByRole[nextRole] || []).map(item => [item, false])),
+      modSince: today,
+    });
+  }
+
+  function removeSessionTargetStaff() {
+    if (!sessionTarget || !canDeleteStaff || staff.length <= 1) return;
+    const confirmed = window.confirm(`Remove ${sessionTarget.name} from staff records? This cannot be undone.`);
+    if (!confirmed) return;
+
+    const remaining = staff.filter(s => s.id !== sessionTarget.id);
+    setStaff(remaining);
+    setSelectedId(remaining[0].id);
+    setSessionTargetId(remaining[0].id);
+    removeStaffMemberFromDb(sessionTarget.id);
+    writeAudit('staff.delete', sessionTarget.id, sessionTarget, null);
   }
 
   function toggleCheck(key, category) {
@@ -1492,11 +1569,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   }
 
   function updateQuizReview(attemptId, patch) {
-    if (!selected || !canEdit) return;
-    const nextHistory = (selected.quizHistory || []).map(attempt =>
+    if (!sessionTarget || !canEdit) return;
+    const nextHistory = (sessionTarget.quizHistory || []).map(attempt =>
       attempt.id === attemptId ? { ...attempt, ...patch } : attempt
     );
-    updateSelected({ quizHistory: nextHistory });
+    updateSessionTarget({ quizHistory: nextHistory });
   }
 
   function applyQuizReview(attemptId, status) {
@@ -2381,19 +2458,80 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           <TabsContent value="session">
             <div className="grid gap-6 xl:grid-cols-[1.2fr,0.8fr]">
               <Card className="border-white/10 bg-white/5">
-                <CardHeader><CardTitle>Trainer notes for {selected.name}</CardTitle></CardHeader>
+                <CardHeader><CardTitle>Training Session Control</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
-                  <div>
-                    <div className="mb-2 text-sm text-zinc-400">Strong sides</div>
-                    <Textarea value={selected.strongSides} onChange={(e) => updateSelected({ strongSides: e.target.value })} className="min-h-[120px] border-white/10 bg-black/20 text-white" />
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div>
+                      <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Select rank</div>
+                      <Select value={sessionRankFilter} onValueChange={setSessionRankFilter}>
+                        <SelectTrigger className="border-white/10 bg-black/30 text-white"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="All">All ranks</SelectItem>
+                          {roles.map(role => (
+                            <SelectItem key={`session-rank-${role}`} value={role}>{role}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Search user</div>
+                      <Input
+                        value={sessionUserQuery}
+                        onChange={(e) => setSessionUserQuery(e.target.value)}
+                        placeholder="Search name, role, trainer..."
+                        className="border-white/10 bg-black/30 text-white placeholder:text-zinc-500"
+                      />
+                    </div>
                   </div>
                   <div>
-                    <div className="mb-2 text-sm text-zinc-400">Attention points</div>
-                    <Textarea value={selected.attentionPoints} onChange={(e) => updateSelected({ attentionPoints: e.target.value })} className="min-h-[120px] border-white/10 bg-black/20 text-white" />
+                    <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Select user</div>
+                    <Select
+                      value={sessionTarget ? String(sessionTarget.id) : 'none'}
+                      onValueChange={(value) => setSessionTargetId(value === 'none' ? null : Number(value))}
+                    >
+                      <SelectTrigger className="border-white/10 bg-black/30 text-white">
+                        <SelectValue placeholder="Select a staff member" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No selection</SelectItem>
+                        {sessionCandidates.map(member => (
+                          <SelectItem key={`session-target-${member.id}`} value={String(member.id)}>
+                            {member.name} ({member.role})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <div className="mt-2 text-xs text-zinc-500">{sessionCandidates.length} user(s) match current filters.</div>
                   </div>
-                  <div>
-                    <div className="mb-2 text-sm text-zinc-400">General notes</div>
-                    <Textarea value={selected.notes} onChange={(e) => updateSelected({ notes: e.target.value })} className="min-h-[140px] border-white/10 bg-black/20 text-white" />
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-white">{sessionTarget?.name || 'No staff selected'}</div>
+                        <div className="mt-1 text-xs text-zinc-400">{sessionTarget ? `${sessionTarget.role} · Trainer: ${sessionTarget.trainer}` : 'Select a staff member to start a training session.'}</div>
+                      </div>
+                      {sessionTarget && (
+                        <Badge className={`${statusColor(sessionTarget.status)} px-2 text-[10px]`}>{sessionTarget.status}</Badge>
+                      )}
+                    </div>
+                    {sessionTarget && (
+                      <div className="mt-4 space-y-3">
+                        <div>
+                          <div className="mb-1 flex items-center justify-between text-xs uppercase tracking-[0.18em] text-zinc-500">
+                            <span>Readiness</span>
+                            <span>{completionPercent(sessionTarget)}%</span>
+                          </div>
+                          <Progress value={completionPercent(sessionTarget)} className="h-2 bg-white/10" />
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <Button disabled={!canEdit || !sessionTarget} onClick={() => setSessionNotesOpen(true)} className="rounded-2xl border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white hover:from-fuchsia-500 hover:to-indigo-500">
+                            Open Notes
+                          </Button>
+                          <Button disabled={!canEdit || !sessionTarget} onClick={() => setSessionActionsOpen(true)} className="rounded-2xl border border-emerald-400/40 bg-gradient-to-r from-emerald-600 to-green-500 text-white hover:from-emerald-500 hover:to-green-400">
+                            Open Actions
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -2401,12 +2539,17 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               <Card className="border-white/10 bg-white/5">
                 <CardHeader><CardTitle>Quiz Review History</CardTitle></CardHeader>
                 <CardContent className="space-y-3">
-                  {!(selected.quizHistory || []).length && (
+                  {!sessionTarget && (
+                    <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">
+                      Select a staff member to review quiz attempts.
+                    </div>
+                  )}
+                  {sessionTarget && !(sessionTarget.quizHistory || []).length && (
                     <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">
                       No quiz attempts recorded yet.
                     </div>
                   )}
-                  {(selected.quizHistory || []).slice(0, 12).map(attempt => (
+                  {(sessionTarget?.quizHistory || []).slice(0, 12).map(attempt => (
                     <div key={attempt.id} className="rounded-xl border border-white/10 bg-black/20 p-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="text-sm font-semibold text-white">
@@ -2468,47 +2611,6 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                       )}
                     </div>
                   ))}
-                </CardContent>
-              </Card>
-
-              <Card className="border-white/10 bg-white/5">
-                <CardHeader><CardTitle>Session actions</CardTitle></CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Update trainer</div>
-                    <Input disabled={!canEdit} value={selected.trainer} onChange={(e) => updateSelected({ trainer: e.target.value })} className="border-white/10 bg-black/30 text-white" />
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Set status</div>
-                    <Select value={selected.status} onValueChange={(value) => updateSelected({ status: value })} disabled={!canEdit}>
-                      <SelectTrigger className="border-white/10 bg-black/30 text-white"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="In Training">In Training</SelectItem>
-                        <SelectItem value="Active">Active</SelectItem>
-                        <SelectItem value="Reviewing Others">Reviewing Others</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <div className="mb-3 text-xs uppercase tracking-[0.2em] text-zinc-500">Sign-off</div>
-                    <Button disabled={!canEdit} variant={selected.signedOff ? 'secondary' : 'default'} onClick={() => updateSelected({ signedOff: !selected.signedOff })} className={selected.signedOff ? 'w-full rounded-2xl' : 'w-full rounded-2xl bg-fuchsia-600 hover:bg-fuchsia-500'}>
-                      {selected.signedOff ? 'Remove sign-off' : 'Mark as signed off'}
-                    </Button>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <div className="mb-3 text-xs uppercase tracking-[0.2em] text-zinc-500">Rank actions</div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button disabled={!canEdit} onClick={promoteSelected} className="w-full rounded-2xl bg-emerald-600 text-white hover:bg-emerald-500">Promote</Button>
-                      <Button disabled={!canEdit} onClick={demoteSelected} className="w-full rounded-2xl bg-red-600 text-white hover:bg-red-500">Demote</Button>
-                    </div>
-                  </div>
-                  <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4">
-                    <div className="mb-3 text-xs uppercase tracking-[0.2em] text-red-200">Remove from tracker</div>
-                    <Button disabled={!canDeleteStaff} onClick={removeSelectedStaff} className="w-full rounded-2xl bg-red-700/80 text-white hover:bg-red-700">Remove staff member</Button>
-                  </div>
-                  <div className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/10 p-4 text-sm text-fuchsia-100">
-                    Suggested next step: {completionPercent(selected) >= 90 ? `review ${selected.name} for ${selected.promotion}` : `continue ${selected.role} training until all required checks are complete`}.
-                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -3305,6 +3407,91 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 <div className="flex gap-2">
                   <Button variant="secondary" onClick={closeCheckboxEditor} className="rounded-2xl border border-white/15 bg-black/25 text-zinc-100 hover:bg-white/10">Cancel</Button>
                   <Button onClick={saveCheckboxDraft} className="rounded-2xl border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white hover:from-fuchsia-500 hover:to-indigo-500">Save</Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {sessionNotesOpen && sessionTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+            <div className="w-full max-w-2xl rounded-2xl border border-fuchsia-500/35 bg-zinc-950 p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="text-lg font-semibold text-white">Session Notes · {sessionTarget.name}</div>
+                <button type="button" onClick={() => setSessionNotesOpen(false)} className="text-sm text-zinc-400 hover:text-white">Close</button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <div className="mb-2 text-sm text-zinc-400">Strong sides</div>
+                  <Textarea
+                    value={sessionTarget.strongSides}
+                    onChange={(e) => updateSessionTarget({ strongSides: e.target.value })}
+                    className="min-h-[110px] border-white/10 bg-black/20 text-white"
+                  />
+                </div>
+                <div>
+                  <div className="mb-2 text-sm text-zinc-400">Attention points</div>
+                  <Textarea
+                    value={sessionTarget.attentionPoints}
+                    onChange={(e) => updateSessionTarget({ attentionPoints: e.target.value })}
+                    className="min-h-[110px] border-white/10 bg-black/20 text-white"
+                  />
+                </div>
+                <div>
+                  <div className="mb-2 text-sm text-zinc-400">General notes</div>
+                  <Textarea
+                    value={sessionTarget.notes}
+                    onChange={(e) => updateSessionTarget({ notes: e.target.value })}
+                    className="min-h-[130px] border-white/10 bg-black/20 text-white"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {sessionActionsOpen && sessionTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+            <div className="w-full max-w-xl rounded-2xl border border-emerald-500/35 bg-zinc-950 p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="text-lg font-semibold text-white">Session Actions · {sessionTarget.name}</div>
+                <button type="button" onClick={() => setSessionActionsOpen(false)} className="text-sm text-zinc-400 hover:text-white">Close</button>
+              </div>
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Update trainer</div>
+                  <Input disabled={!canEdit} value={sessionTarget.trainer} onChange={(e) => updateSessionTarget({ trainer: e.target.value })} className="border-white/10 bg-black/30 text-white" />
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Set status</div>
+                  <Select value={sessionTarget.status} onValueChange={(value) => updateSessionTarget({ status: value })} disabled={!canEdit}>
+                    <SelectTrigger className="border-white/10 bg-black/30 text-white"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="In Training">In Training</SelectItem>
+                      <SelectItem value="Active">Active</SelectItem>
+                      <SelectItem value="Reviewing Others">Reviewing Others</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <div className="mb-3 text-xs uppercase tracking-[0.2em] text-zinc-500">Sign-off</div>
+                  <Button disabled={!canEdit} variant={sessionTarget.signedOff ? 'secondary' : 'default'} onClick={() => updateSessionTarget({ signedOff: !sessionTarget.signedOff })} className={sessionTarget.signedOff ? 'w-full rounded-2xl' : 'w-full rounded-2xl bg-fuchsia-600 hover:bg-fuchsia-500'}>
+                    {sessionTarget.signedOff ? 'Remove sign-off' : 'Mark as signed off'}
+                  </Button>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <div className="mb-3 text-xs uppercase tracking-[0.2em] text-zinc-500">Rank actions</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button disabled={!canEdit} onClick={promoteSessionTarget} className="w-full rounded-2xl bg-emerald-600 text-white hover:bg-emerald-500">Promote</Button>
+                    <Button disabled={!canEdit} onClick={demoteSessionTarget} className="w-full rounded-2xl bg-red-600 text-white hover:bg-red-500">Demote</Button>
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4">
+                  <div className="mb-3 text-xs uppercase tracking-[0.2em] text-red-200">Remove from tracker</div>
+                  <Button disabled={!canDeleteStaff} onClick={removeSessionTargetStaff} className="w-full rounded-2xl bg-red-700/80 text-white hover:bg-red-700">Remove staff member</Button>
+                </div>
+                <div className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/10 p-4 text-sm text-fuchsia-100">
+                  Suggested next step: {completionPercent(sessionTarget) >= 90 ? `review ${sessionTarget.name} for ${sessionTarget.promotion}` : `continue ${sessionTarget.role} training until all required checks are complete`}.
                 </div>
               </div>
             </div>
