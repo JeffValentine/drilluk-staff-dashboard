@@ -699,6 +699,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileName, setProfileName] = useState(profile?.username || '');
   const [profileAvatar, setProfileAvatar] = useState(profile?.avatar_url || '');
+  const lastLocalStaffEditRef = useRef(0);
 
   useEffect(() => {
     setProfileName(profile?.username || '');
@@ -713,7 +714,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       .order('updated_at', { ascending: false });
 
     if (error || !data?.length) return false;
-    const mapped = data.map(row => ({
+    let mapped = data.map(row => ({
       id: row.id,
       name: row.name,
       role: row.role,
@@ -732,6 +733,13 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       disciplinary: row.disciplinary || { warnings: 0, actions: 0, logs: [] },
       notes: row.notes || '',
     }));
+    const shouldPreserveLocalSelected = Date.now() - lastLocalStaffEditRef.current < 1400;
+    if (shouldPreserveLocalSelected && selectedId) {
+      const localSelected = staff.find(member => member.id === selectedId);
+      if (localSelected) {
+        mapped = mapped.map(member => (member.id === selectedId ? { ...member, ...localSelected } : member));
+      }
+    }
     setStaff(mapped);
     setSelectedId(prev => (mapped.some(s => s.id === prev) ? prev : mapped[0]?.id ?? null));
     return true;
@@ -802,7 +810,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     if (!dbReady || !supabase) return;
     const channel = supabase
       .channel('staff_members_sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'staff_members' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'staff_members' }, (payload) => {
+        if (payload?.eventType === 'UPDATE' && payload?.new?.updated_by === authUser?.id) return;
         refreshStaffFromDb();
       })
       .subscribe();
@@ -833,20 +842,21 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   useEffect(() => {
     if (!dbReady || !supabase) return;
     refreshCheckboxCatalogFromDb();
-  }, [dbReady]);
+  }, [dbReady, authUser?.id]);
 
   useEffect(() => {
     if (!dbReady || !supabase) return;
     const channel = supabase
       .channel('checkbox_catalog_sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'checkbox_catalog' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'checkbox_catalog' }, (payload) => {
+        if (payload?.eventType === 'UPDATE' && payload?.new?.updated_by === authUser?.id) return;
         refreshCheckboxCatalogFromDb();
       })
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [dbReady]);
+  }, [dbReady, authUser?.id]);
 
   const baseChecksByRole = useMemo(() => {
     const map = Object.fromEntries(roles.map(role => [role, []]));
@@ -905,6 +915,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   async function saveStaffMember(member) {
     if (!dbReady || !supabase) return;
+    lastLocalStaffEditRef.current = Date.now();
 
     const payload = {
       id: member.id,
@@ -1064,10 +1075,38 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     writeAudit('staff.delete', selected.id, selected, null);
   }
 
-  function handleProfileFile(file) {
-    if (!file || !canEdit) return;
-    const url = URL.createObjectURL(file);
-    updateSelected({ profileImage: url });
+  async function fileToDataUrl(file) {
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('File reading failed'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function uploadStaffProfileImage(file, staffId) {
+    if (!dbReady || !supabase) return await fileToDataUrl(file);
+
+    const extRaw = (file.name?.split('.').pop() || 'png').toLowerCase();
+    const safeExt = extRaw.replace(/[^a-z0-9]/g, '') || 'png';
+    const path = `staff/${staffId}/${Date.now()}.${safeExt}`;
+
+    const { error } = await supabase.storage
+      .from('staff-cards')
+      .upload(path, file, { upsert: true, contentType: file.type || 'image/png' });
+
+    if (error) {
+      return await fileToDataUrl(file);
+    }
+
+    const { data } = supabase.storage.from('staff-cards').getPublicUrl(path);
+    return data?.publicUrl || (await fileToDataUrl(file));
+  }
+
+  async function handleProfileFile(file) {
+    if (!file || !canEdit || !selected) return;
+    const persistedUrl = await uploadStaffProfileImage(file, selected.id);
+    updateSelected({ profileImage: persistedUrl });
   }
 
   function addStaff() {
@@ -1537,7 +1576,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                           ref={profileFileInputRef}
                           type="file"
                           accept="image/png,image/webp,image/jpeg"
-                          onChange={(e) => handleProfileFile(e.target.files?.[0])}
+                          onChange={(e) => {
+                            handleProfileFile(e.target.files?.[0]);
+                            e.target.value = '';
+                          }}
                           className="hidden"
                         />
                       </div>
