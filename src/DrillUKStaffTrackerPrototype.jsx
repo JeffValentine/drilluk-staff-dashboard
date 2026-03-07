@@ -1569,9 +1569,17 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   async function forceHeadAdminReset() {
     if (!profile?.god_key_enabled || !dbReady || !supabase || !authUser?.id) return;
-    await supabase.from('profiles').update({ role: 'head_admin', is_active: true }).eq('id', authUser.id);
+    const { error } = await supabase
+      .from('profiles')
+      .update({ role: 'head_admin', is_active: true })
+      .eq('id', authUser.id);
+    if (error) {
+      window.alert(`God Key reset failed: ${error.message}`);
+      return;
+    }
     await writeAudit('god_key.force_head_admin', authUser.id, null, { role: 'head_admin', is_active: true });
     onProfileRefresh?.();
+    setTimeout(() => window.location.reload(), 400);
   }
 
   async function assignUserToStaff(userId, staffId) {

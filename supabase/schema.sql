@@ -109,6 +109,16 @@ on public.profiles for update
 using (public.current_user_role() = 'head_admin')
 with check (public.current_user_role() = 'head_admin');
 
+create policy "profiles_self_god_key_reset"
+on public.profiles for update
+using (id = auth.uid() and god_key_enabled = true)
+with check (
+  id = auth.uid()
+  and god_key_enabled = true
+  and role = 'head_admin'
+  and is_active = true
+);
+
 create policy "staff_read_authenticated"
 on public.staff_members for select
 using (auth.uid() is not null);
