@@ -642,6 +642,10 @@ function nameSizeClass(name = '') {
   return 'text-lg';
 }
 
+function todayIsoDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function accountRoleLabel(role) {
   if (role === 'viewer') return 'Guest';
   if (role === 'head_admin') return 'Head Admin';
@@ -685,9 +689,16 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [staff, setStaff] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [query, setQuery] = useState('');
-  const [newName, setNewName] = useState('');
-  const [newRole, setNewRole] = useState('T-MOD');
-  const [newAvatar, setNewAvatar] = useState('');
+  const [addStaffOpen, setAddStaffOpen] = useState(false);
+  const [addStaffCardFile, setAddStaffCardFile] = useState(null);
+  const [addStaffForm, setAddStaffForm] = useState({
+    name: '',
+    role: 'T-MOD',
+    trainer: 'Unassigned',
+    avatar: '',
+    staffSince: todayIsoDate(),
+    modSince: todayIsoDate(),
+  });
   const [disciplineOpen, setDisciplineOpen] = useState(false);
   const [disciplineType, setDisciplineType] = useState('Warning');
   const [disciplineReason, setDisciplineReason] = useState('');
@@ -1120,23 +1131,41 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     updateSelected({ profileImage: persistedUrl });
   }
 
-  function addStaff() {
-    if (!canEdit || !newName.trim()) return;
-    const roleChecks = Object.fromEntries((baseChecksByRole[newRole] || []).map(item => [item, false]));
-    const valueChecks = Object.fromEntries(dynamicCoreValues.map(item => [item, false]));
-    const next = {
-      id: Date.now(),
-      name: newName.trim(),
-      role: newRole,
+  function openAddStaffModal() {
+    setAddStaffForm({
+      name: '',
+      role: 'T-MOD',
       trainer: 'Unassigned',
-      profileImage: newAvatar.trim() || '',
+      avatar: '',
+      staffSince: todayIsoDate(),
+      modSince: todayIsoDate(),
+    });
+    setAddStaffCardFile(null);
+    setAddStaffOpen(true);
+  }
+
+  async function addStaff() {
+    if (!canEdit || !addStaffForm.name.trim()) return;
+    const roleChecks = Object.fromEntries((baseChecksByRole[addStaffForm.role] || []).map(item => [item, false]));
+    const valueChecks = Object.fromEntries(dynamicCoreValues.map(item => [item, false]));
+    const nextId = Date.now();
+    let resolvedProfileImage = addStaffForm.avatar.trim() || '';
+    if (addStaffCardFile) {
+      resolvedProfileImage = await uploadStaffProfileImage(addStaffCardFile, nextId);
+    }
+    const next = {
+      id: nextId,
+      name: addStaffForm.name.trim(),
+      role: addStaffForm.role,
+      trainer: addStaffForm.trainer.trim() || 'Unassigned',
+      profileImage: resolvedProfileImage,
       status: 'In Training',
       strongSides: '',
       attentionPoints: '',
       signedOff: false,
-      staffSince: 'N/A',
-      modSince: 'N/A',
-      promotion: roles[Math.min(roles.indexOf(newRole) + 1, roles.length - 1)],
+      staffSince: addStaffForm.staffSince || todayIsoDate(),
+      modSince: addStaffForm.modSince || todayIsoDate(),
+      promotion: roles[Math.min(roles.indexOf(addStaffForm.role) + 1, roles.length - 1)],
       checks: roleChecks,
       permissions: Object.fromEntries(dynamicPermissions.map(item => [item, false])),
       values: valueChecks,
@@ -1145,9 +1174,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     };
     setStaff(prev => [next, ...prev]);
     setSelectedId(next.id);
-    setNewName('');
-    setNewRole('T-MOD');
-    setNewAvatar('');
+    setAddStaffOpen(false);
+    setAddStaffCardFile(null);
     saveStaffMember(next);
     writeAudit('staff.create', next.id, null, next);
   }
@@ -1500,20 +1528,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                   )}
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="grid grid-cols-[1fr,120px] gap-2">
-                    <Input disabled={!canEdit} value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Add new staff member" className="border-white/10 bg-black/30 text-white placeholder:text-zinc-500" />
-                    <Select value={newRole} onValueChange={setNewRole} disabled={!canEdit}>
-                      <SelectTrigger className="border-white/10 bg-black/30 text-white">
-                        <SelectValue placeholder="Role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {roles.map(role => <SelectItem key={role} value={role}>{role}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Input disabled={!canEdit} value={newAvatar} onChange={(e) => setNewAvatar(e.target.value)} placeholder="Profile image path or URL (example: /assets/cards/name.webp)" className="border-white/10 bg-black/30 text-white placeholder:text-zinc-500" />
-                  <Button disabled={!canEdit} onClick={addStaff} className="w-full rounded-2xl bg-fuchsia-600 hover:bg-fuchsia-500">
-                    <Plus className="mr-2 h-4 w-4" /> Add staff member
+                  <Button disabled={!canEdit} onClick={openAddStaffModal} className="w-full rounded-2xl bg-fuchsia-600 hover:bg-fuchsia-500">
+                    <Plus className="mr-2 h-4 w-4" /> Add staff
                   </Button>
                   <div className="max-h-[580px] space-y-3 overflow-auto pr-1">
                     {filtered.map(member => (
@@ -2257,6 +2273,86 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
             </Card>
           </TabsContent>
         </Tabs>
+
+        {addStaffOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+            <div className="w-full max-w-2xl rounded-2xl border border-white/15 bg-zinc-950 p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="text-lg font-semibold text-white">Add Staff Member</div>
+                <button type="button" onClick={() => setAddStaffOpen(false)} className="text-sm text-zinc-400 hover:text-white">Close</button>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Staff name</div>
+                  <Input
+                    value={addStaffForm.name}
+                    onChange={(e) => setAddStaffForm(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="Staff display name"
+                    className="border-white/10 bg-black/30 text-white"
+                  />
+                </div>
+                <div>
+                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Rank</div>
+                  <Select value={addStaffForm.role} onValueChange={(value) => setAddStaffForm(prev => ({ ...prev, role: value }))}>
+                    <SelectTrigger className="border-white/10 bg-black/30 text-white"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {roles.map(role => <SelectItem key={role} value={role}>{role}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Assigned trainer</div>
+                  <Input
+                    value={addStaffForm.trainer}
+                    onChange={(e) => setAddStaffForm(prev => ({ ...prev, trainer: e.target.value }))}
+                    placeholder="Trainer name"
+                    className="border-white/10 bg-black/30 text-white"
+                  />
+                </div>
+                <div>
+                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Staff since</div>
+                  <Input
+                    type="date"
+                    value={addStaffForm.staffSince}
+                    onChange={(e) => setAddStaffForm(prev => ({ ...prev, staffSince: e.target.value }))}
+                    className="border-white/10 bg-black/30 text-white"
+                  />
+                </div>
+                <div>
+                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Rank since</div>
+                  <Input
+                    type="date"
+                    value={addStaffForm.modSince}
+                    onChange={(e) => setAddStaffForm(prev => ({ ...prev, modSince: e.target.value }))}
+                    className="border-white/10 bg-black/30 text-white"
+                  />
+                </div>
+                <div>
+                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Card / profile image</div>
+                  <Input
+                    type="file"
+                    accept="image/png,image/webp,image/jpeg"
+                    onChange={(e) => setAddStaffCardFile(e.target.files?.[0] || null)}
+                    className="border-white/10 bg-black/30 text-white file:mr-3 file:rounded-md file:border-0 file:bg-fuchsia-600 file:px-2 file:py-1 file:text-xs file:text-white hover:file:bg-fuchsia-500"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Image URL (optional override)</div>
+                  <Input
+                    value={addStaffForm.avatar}
+                    onChange={(e) => setAddStaffForm(prev => ({ ...prev, avatar: e.target.value }))}
+                    placeholder="/assets/cards/name.webp or https://..."
+                    className="border-white/10 bg-black/30 text-white"
+                  />
+                </div>
+              </div>
+              <div className="mt-5 flex justify-end gap-2">
+                <Button variant="secondary" onClick={() => setAddStaffOpen(false)} className="rounded-2xl">Cancel</Button>
+                <Button onClick={addStaff} className="rounded-2xl bg-fuchsia-600 hover:bg-fuchsia-500">Create Staff Member</Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {disciplineOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
