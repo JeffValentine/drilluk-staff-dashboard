@@ -772,6 +772,9 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [disciplineType, setDisciplineType] = useState('Warning');
   const [disciplineReason, setDisciplineReason] = useState('');
   const [disciplineIssuer, setDisciplineIssuer] = useState('');
+  const [disciplineRankFilter, setDisciplineRankFilter] = useState('All');
+  const [disciplineUserQuery, setDisciplineUserQuery] = useState('');
+  const [disciplineTargetId, setDisciplineTargetId] = useState(null);
   const profileFileInputRef = useRef(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterRole, setFilterRole] = useState('All');
@@ -1122,6 +1125,28 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   const traineeRecord = staff.find(s => s.traineeUserId === authUser?.id) || null;
   const selected = traineeRestricted ? traineeRecord : (staff.find(s => s.id === selectedId) || staff[0] || null);
+  const disciplineCandidates = useMemo(() => {
+    const q = disciplineUserQuery.trim().toLowerCase();
+    return staff
+      .filter(member => disciplineRankFilter === 'All' || member.role === disciplineRankFilter)
+      .filter(member => {
+        if (!q) return true;
+        const haystack = [member.name, member.role, member.status, member.trainer].filter(Boolean).join(' ').toLowerCase();
+        return haystack.includes(q);
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [staff, disciplineRankFilter, disciplineUserQuery]);
+  const disciplineTarget = staff.find(member => member.id === disciplineTargetId) || disciplineCandidates[0] || null;
+
+  useEffect(() => {
+    if (!staff.length) {
+      setDisciplineTargetId(null);
+      return;
+    }
+    const targetStillExists = disciplineTargetId !== null && staff.some(member => member.id === disciplineTargetId);
+    if (targetStillExists) return;
+    setDisciplineTargetId(selected?.id ?? staff[0].id);
+  }, [staff, selected?.id, disciplineTargetId]);
 
   const totals = {
     total: staff.length,
@@ -1264,13 +1289,13 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   }
 
   function applyDisciplinary(type) {
-    if (!selected || !canEdit || !disciplineReason.trim()) return;
+    if (!disciplineTarget || !canEdit || !disciplineReason.trim()) return;
     const today = new Date().toISOString().slice(0, 10);
 
     let updated = null;
     setStaff(prev =>
       prev.map(s => {
-        if (s.id !== selected.id) return s;
+        if (s.id !== disciplineTarget.id) return s;
         const current = s.disciplinary || { warnings: 0, actions: 0, logs: [] };
         const nextWarnings = type === 'Warning' ? current.warnings + 1 : current.warnings;
         const nextActions = type === 'Disciplinary Action' ? current.actions + 1 : current.actions;
@@ -2830,12 +2855,55 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                   <CardTitle>Disciplinary Actions</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div>
+                      <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Select rank</div>
+                      <Select value={disciplineRankFilter} onValueChange={setDisciplineRankFilter}>
+                        <SelectTrigger className="border-white/10 bg-black/30 text-white"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="All">All ranks</SelectItem>
+                          {roles.map(role => (
+                            <SelectItem key={`discipline-rank-${role}`} value={role}>{role}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Search user</div>
+                      <Input
+                        value={disciplineUserQuery}
+                        onChange={(e) => setDisciplineUserQuery(e.target.value)}
+                        placeholder="Search name, role, trainer..."
+                        className="border-white/10 bg-black/30 text-white placeholder:text-zinc-500"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Select user</div>
+                    <Select
+                      value={disciplineTarget ? String(disciplineTarget.id) : 'none'}
+                      onValueChange={(value) => setDisciplineTargetId(value === 'none' ? null : Number(value))}
+                    >
+                      <SelectTrigger className="border-white/10 bg-black/30 text-white">
+                        <SelectValue placeholder="Select a staff member" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No selection</SelectItem>
+                        {disciplineCandidates.map(member => (
+                          <SelectItem key={`discipline-target-${member.id}`} value={String(member.id)}>
+                            {member.name} ({member.role})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <div className="mt-2 text-xs text-zinc-500">{disciplineCandidates.length} user(s) match current filters.</div>
+                  </div>
                   <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-300">
-                    Selected staff: <span className="font-semibold text-white">{selected.name}</span> ({selected.role})
+                    Selected staff: <span className="font-semibold text-white">{disciplineTarget?.name || 'None selected'}</span>{disciplineTarget ? ` (${disciplineTarget.role})` : ''}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <Button
-                      disabled={!canEdit}
+                      disabled={!canEdit || !disciplineTarget}
                       onClick={() => {
                         setDisciplineType('Warning');
                         setDisciplineOpen(true);
@@ -2845,7 +2913,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                       Issue Warning
                     </Button>
                     <Button
-                      disabled={!canEdit}
+                      disabled={!canEdit || !disciplineTarget}
                       onClick={() => {
                         setDisciplineType('Disciplinary Action');
                         setDisciplineOpen(true);
@@ -2866,12 +2934,17 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                   <CardTitle>Disciplinary Log</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {(selected.disciplinary?.logs || []).length === 0 && (
+                  {!disciplineTarget && (
+                    <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">
+                      Select a staff member to review disciplinary history.
+                    </div>
+                  )}
+                  {disciplineTarget && (disciplineTarget.disciplinary?.logs || []).length === 0 && (
                     <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">
                       No disciplinary entries for this staff member.
                     </div>
                   )}
-                  {(selected.disciplinary?.logs || []).map(log => (
+                  {(disciplineTarget?.disciplinary?.logs || []).map(log => (
                     <div key={log.id} className="rounded-xl border border-white/10 bg-black/20 p-3">
                       <div className="flex items-center justify-between">
                         <div className="text-sm font-semibold text-white">{log.type}</div>
@@ -3247,7 +3320,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               </div>
               <div className="space-y-4">
                 <div className="rounded-2xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-300">
-                  Staff member: <span className="font-semibold text-white">{selected.name}</span> ({selected.role})
+                  Staff member: <span className="font-semibold text-white">{disciplineTarget?.name || 'None selected'}</span>{disciplineTarget ? ` (${disciplineTarget.role})` : ''}
                 </div>
                 <div>
                   <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Issued by</div>
@@ -3259,7 +3332,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 </div>
                 <div className="flex justify-end gap-2">
                   <Button variant="secondary" onClick={() => setDisciplineOpen(false)} className="rounded-2xl">Cancel</Button>
-                  <Button onClick={() => applyDisciplinary(disciplineType)} className="rounded-2xl bg-red-600 text-white hover:bg-red-500">Submit {disciplineType}</Button>
+                  <Button disabled={!disciplineTarget} onClick={() => applyDisciplinary(disciplineType)} className="rounded-2xl bg-red-600 text-white hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-40">Submit {disciplineType}</Button>
                 </div>
               </div>
             </div>
