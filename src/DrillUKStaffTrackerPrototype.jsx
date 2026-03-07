@@ -753,7 +753,6 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const canManageCheckboxes = ['head_admin', 'admin'].includes(profile?.role || '');
   const canDeleteStaff = ['head_admin', 'admin'].includes(profile?.role || '');
   const isStaffInTraining = profile?.role === 'staff_in_training';
-  const traineeRestricted = isStaffInTraining && !canManageUsers;
 
   const [staff, setStaff] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -1129,7 +1128,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   }, [staff, query, filterRole, filterTrainerOnly, filterActiveOnly, filterWarningOnly]);
 
   const traineeRecord = staff.find(s => s.traineeUserId === authUser?.id) || null;
-  const selected = traineeRestricted ? traineeRecord : (staff.find(s => s.id === selectedId) || staff[0] || null);
+  const selected = isStaffInTraining ? traineeRecord : (staff.find(s => s.id === selectedId) || staff[0] || null);
   const sessionCandidates = useMemo(() => {
     const q = sessionUserQuery.trim().toLowerCase();
     return staff
@@ -1989,7 +1988,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   }
 
   if (!selected) {
-    if (traineeRestricted) {
+    if (isStaffInTraining) {
       return (
         <div className="min-h-screen bg-[#07070b] p-6 text-zinc-200">
           <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
@@ -2114,9 +2113,9 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           </div>
         )}
 
-        <Tabs defaultValue={traineeRestricted ? 'myprogress' : 'tracker'} className="space-y-4">
-          <TabsList className={`grid w-full bg-white/5 ${traineeRestricted ? 'grid-cols-1 md:w-[260px]' : 'grid-cols-8 md:w-[1320px]'}`}>
-            {traineeRestricted ? (
+        <Tabs defaultValue={isStaffInTraining ? 'myprogress' : 'tracker'} className="space-y-4">
+          <TabsList className={`grid w-full bg-white/5 ${isStaffInTraining ? 'grid-cols-1 md:w-[260px]' : 'grid-cols-8 md:w-[1320px]'}`}>
+            {isStaffInTraining ? (
               <TabsTrigger value="myprogress">My Progress</TabsTrigger>
             ) : (
               <>
