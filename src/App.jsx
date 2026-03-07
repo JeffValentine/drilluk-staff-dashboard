@@ -224,6 +224,7 @@ export default function App() {
       email,
       password,
       options: {
+        emailRedirectTo: `${window.location.origin}/`,
         data: {
           username: username?.trim() || email.split("@")[0],
         },
