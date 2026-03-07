@@ -2872,7 +2872,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                         {managementUsers.map(user => {
                           const linkedStaff = staff.find(member => member.traineeUserId === user.id) || null;
                           return (
-                          <div key={user.id} className="grid gap-3 rounded-xl border border-white/10 bg-black/20 p-3 md:grid-cols-[1.35fr,1fr,1fr,1.25fr,0.8fr,150px]">
+                          <div key={user.id} className="grid gap-2 rounded-xl border border-white/10 bg-black/20 p-2.5 md:grid-cols-[1.35fr,0.95fr,1fr,1.9fr,0.78fr,140px] md:items-center">
                             <div className="flex items-start gap-3">
                               {user.avatar_url ? (
                                 <img src={user.avatar_url} alt={`${user.username || 'user'} avatar`} className="h-10 w-10 rounded-xl border border-white/10 object-cover" />
@@ -2922,9 +2922,9 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                                 }}
                               />
                             </div>
-                            <div className="space-y-2">
+                            <div className="grid gap-2 md:grid-cols-2">
                               <div>
-                                <div className="mb-1 text-[10px] uppercase tracking-[0.18em] text-zinc-500">Current rank</div>
+                                <div className="mb-1 text-[10px] uppercase tracking-[0.16em] text-zinc-500">Current rank</div>
                                 <Select
                                   value={linkedStaff?.role || 'none'}
                                   onValueChange={(value) => {
@@ -2933,7 +2933,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                                   }}
                                   disabled={!linkedStaff}
                                 >
-                                  <SelectTrigger className="border-white/10 bg-black/30 text-white">
+                                  <SelectTrigger className="h-9 border-white/10 bg-black/30 text-white">
                                     <SelectValue placeholder="No linked profile" />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -2947,12 +2947,12 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                                 </Select>
                               </div>
                               <div>
-                                <div className="mb-1 text-[10px] uppercase tracking-[0.18em] text-zinc-500">Profile</div>
+                                <div className="mb-1 text-[10px] uppercase tracking-[0.16em] text-zinc-500">Profile</div>
                                 <Select
                                   value={linkedStaff?.id?.toString() || 'none'}
                                   onValueChange={(value) => assignUserToStaff(user.id, value)}
                                 >
-                                  <SelectTrigger className="border-white/10 bg-black/30 text-white"><SelectValue placeholder="Linked staff profile" /></SelectTrigger>
+                                  <SelectTrigger className="h-9 border-white/10 bg-black/30 text-white"><SelectValue placeholder="Linked staff profile" /></SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="none">No linked staff</SelectItem>
                                     {staff.map(member => (
