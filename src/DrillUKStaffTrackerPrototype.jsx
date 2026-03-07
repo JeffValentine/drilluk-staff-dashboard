@@ -1375,8 +1375,15 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               </div>
               <img src="/assets/logos/drilluk-logo.png" alt="Drill UK logo" className="h-10 w-10 rounded-xl border border-white/10 bg-black/20 object-cover mix-blend-screen" />
               <Badge className="border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-200 hover:bg-fuchsia-500/10">Drill UK Staff System</Badge>
-              <Badge className="border-white/10 bg-white/10 text-zinc-200">{accountRoleLabel(profile?.role)}</Badge>
-              <Badge className="border-white/10 bg-white/10 text-zinc-200">{profile?.username || authUser?.email?.split('@')[0] || 'Guest'}</Badge>
+              <Badge className="max-w-[120px] overflow-hidden text-ellipsis whitespace-nowrap border-white/10 bg-white/10 px-2 text-[10px] text-zinc-200">
+                {accountRoleLabel(profile?.role)}
+              </Badge>
+              <Badge
+                className="max-w-[140px] overflow-hidden text-ellipsis whitespace-nowrap border-white/10 bg-white/10 px-2 text-[10px] text-zinc-200"
+                title={profile?.username || authUser?.email?.split('@')[0] || 'Guest'}
+              >
+                {profile?.username || authUser?.email?.split('@')[0] || 'Guest'}
+              </Badge>
             </div>
             <h1 className="font-display text-3xl font-bold tracking-tight md:text-4xl">Drill-UK Staff Dashboard</h1>
             <p className="mt-2 max-w-3xl text-sm text-zinc-300 md:text-base">A modern interactive staff panel for promotions and progression by xJeffValentine, with cleaner workflows for training, permissions, and disciplinary tracking.</p>
@@ -1516,7 +1523,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                         className={`w-full rounded-2xl border p-4 text-left transition ${selectedId === member.id ? 'border-fuchsia-500/50 bg-fuchsia-500/10' : 'border-white/10 bg-black/20 hover:bg-white/5'}`}
                       >
                         <div className="flex items-start justify-between gap-3">
-                          <div className="flex items-start gap-3">
+                          <div className="flex min-w-0 items-start gap-3">
                             <div className="h-11 w-11 overflow-hidden rounded-xl border border-white/10 bg-black/30">
                               {member.profileImage ? (
                                 <img src={member.profileImage} alt={`${member.name} profile`} className="h-full w-full object-cover" />
@@ -1524,10 +1531,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                                 <div className="flex h-full w-full items-center justify-center text-xs text-zinc-500">No img</div>
                               )}
                             </div>
-                            <div>
-                              <div className="flex items-center gap-2">
+                            <div className="min-w-0">
+                              <div className="flex min-w-0 items-center gap-2">
                                 <div
-                                  className={`${nameSizeClass(member.name)} max-w-[140px] truncate font-semibold`}
+                                  className={`${nameSizeClass(member.name)} min-w-0 max-w-[120px] truncate font-semibold`}
                                   title={member.name}
                                 >
                                   {member.name}
@@ -1537,13 +1544,13 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                               <div className="mt-1 text-sm text-zinc-400">Trainer: {member.trainer}</div>
                             </div>
                           </div>
-                          <div className="flex max-w-[130px] flex-col items-end gap-1">
-                            <Badge className={`${statusColor(member.status)} max-w-full overflow-hidden text-ellipsis whitespace-nowrap px-2 text-[10px]`}>{member.status}</Badge>
+                          <div className="flex w-[106px] shrink-0 flex-col items-end gap-1">
+                            <Badge className={`${statusColor(member.status)} w-full justify-center overflow-hidden text-ellipsis whitespace-nowrap px-2 text-[10px]`}>{member.status}</Badge>
                             {member.disciplinary?.warnings > 0 && (
-                              <Badge className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap border-red-500/40 bg-red-500/15 px-2 text-[10px] text-red-300">Warning - {member.disciplinary.warnings}</Badge>
+                              <Badge className="w-full justify-center overflow-hidden text-ellipsis whitespace-nowrap border-red-500/40 bg-red-500/15 px-2 text-[10px] text-red-300">Warning - {member.disciplinary.warnings}</Badge>
                             )}
                             {member.disciplinary?.actions > 0 && (
-                              <Badge className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap border-red-600/50 bg-red-600/20 px-2 text-[10px] text-red-200">Disciplinary Action - {member.disciplinary.actions}</Badge>
+                              <Badge className="w-full justify-center overflow-hidden text-ellipsis whitespace-nowrap border-red-600/50 bg-red-600/20 px-2 text-[10px] text-red-200">Disciplinary Action - {member.disciplinary.actions}</Badge>
                             )}
                           </div>
                         </div>
