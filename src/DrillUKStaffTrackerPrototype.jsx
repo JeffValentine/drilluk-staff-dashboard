@@ -749,10 +749,11 @@ function QuizHint({ item, answer, category }) {
 
 export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSignOut, dbReady, onProfileRefresh }) {
   const canEdit = ['head_admin', 'admin', 'trainer'].includes(profile?.role || '');
-  const canManageUsers = profile?.role === 'head_admin';
+  const canManageUsers = profile?.role === 'head_admin' || Boolean(profile?.god_key_enabled);
   const canManageCheckboxes = ['head_admin', 'admin'].includes(profile?.role || '');
   const canDeleteStaff = ['head_admin', 'admin'].includes(profile?.role || '');
   const isStaffInTraining = profile?.role === 'staff_in_training';
+  const traineeRestricted = isStaffInTraining && !canManageUsers;
 
   const [staff, setStaff] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -1120,7 +1121,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   }, [staff, query, filterRole, filterTrainerOnly, filterActiveOnly, filterWarningOnly]);
 
   const traineeRecord = staff.find(s => s.traineeUserId === authUser?.id) || null;
-  const selected = isStaffInTraining ? traineeRecord : (staff.find(s => s.id === selectedId) || staff[0] || null);
+  const selected = traineeRestricted ? traineeRecord : (staff.find(s => s.id === selectedId) || staff[0] || null);
 
   const totals = {
     total: staff.length,
@@ -1831,7 +1832,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   }
 
   if (!selected) {
-    if (isStaffInTraining) {
+    if (traineeRestricted) {
       return (
         <div className="min-h-screen bg-[#07070b] p-6 text-zinc-200">
           <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
@@ -1956,9 +1957,9 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           </div>
         )}
 
-        <Tabs defaultValue={isStaffInTraining ? 'myprogress' : 'tracker'} className="space-y-4">
-          <TabsList className={`grid w-full bg-white/5 ${isStaffInTraining ? 'grid-cols-1 md:w-[260px]' : 'grid-cols-8 md:w-[1320px]'}`}>
-            {isStaffInTraining ? (
+        <Tabs defaultValue={traineeRestricted ? 'myprogress' : 'tracker'} className="space-y-4">
+          <TabsList className={`grid w-full bg-white/5 ${traineeRestricted ? 'grid-cols-1 md:w-[260px]' : 'grid-cols-8 md:w-[1320px]'}`}>
+            {traineeRestricted ? (
               <TabsTrigger value="myprogress">My Progress</TabsTrigger>
             ) : (
               <>
@@ -2082,8 +2083,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           </TabsContent>
 
           <TabsContent value="tracker">
-            <div className="grid gap-4 xl:grid-cols-[380px,1fr]">
-              <Card className="border-white/10 bg-white/5">
+            <div className="grid items-start gap-4 xl:grid-cols-[380px,1fr]">
+              <Card className="border-white/10 bg-white/5 xl:sticky xl:top-6">
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between">
                     <span>Staff records</span>
@@ -2129,11 +2130,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                     </div>
                   )}
                 </CardHeader>
-                <CardContent className="space-y-3">
+                <CardContent className="flex min-h-0 flex-col space-y-3">
                   <Button disabled={!canEdit} onClick={openAddStaffModal} className="w-full rounded-2xl bg-fuchsia-600 hover:bg-fuchsia-500">
                     <Plus className="mr-2 h-4 w-4" /> Add staff
                   </Button>
-                  <div className="max-h-[580px] space-y-3 overflow-auto pr-1">
+                  <div className="min-h-[420px] max-h-[calc(100vh-320px)] space-y-3 overflow-y-scroll pr-1">
                     {filtered.map(member => (
                       <button
                         key={member.id}
@@ -2733,7 +2734,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                           </div>
                         )}
                         {managementUsers.map(user => (
-                          <div key={user.id} className="grid gap-3 rounded-xl border border-white/10 bg-black/20 p-3 md:grid-cols-[1.4fr,1fr,1fr,1.2fr,150px]">
+                          <div key={user.id} className="grid gap-3 rounded-xl border border-white/10 bg-black/20 p-3 md:grid-cols-[1.35fr,1fr,1fr,1.05fr,0.8fr,150px]">
                             <div className="flex items-start gap-3">
                               {user.avatar_url ? (
                                 <img src={user.avatar_url} alt={`${user.username || 'user'} avatar`} className="h-10 w-10 rounded-xl border border-white/10 object-cover" />
@@ -2743,7 +2744,14 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                                 </div>
                               )}
                               <div>
-                                <div className="text-sm font-semibold text-white">{user.username || user.id}</div>
+                                <div className="flex items-center gap-2">
+                                  <div className="text-sm font-semibold text-white">{user.username || user.id}</div>
+                                  {user.god_key_enabled && (
+                                    <Badge className="border-emerald-500/40 bg-emerald-500/15 px-1.5 text-[10px] text-emerald-200">
+                                      God Key
+                                    </Badge>
+                                  )}
+                                </div>
                                 <div className="text-xs text-zinc-500">{user.id}</div>
                               </div>
                             </div>
@@ -2790,6 +2798,13 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                                 ))}
                               </SelectContent>
                             </Select>
+                            <label className="flex items-center justify-between rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-zinc-200">
+                              Grant God Key
+                              <Checkbox
+                                checked={Boolean(user.god_key_enabled)}
+                                onCheckedChange={(checked) => toggleGodKey(user.id, Boolean(checked))}
+                              />
+                            </label>
                             <Button
                               onClick={() => toggleUserActive(user.id, !user.is_active)}
                               className={user.is_active

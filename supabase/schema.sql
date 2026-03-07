@@ -100,6 +100,16 @@ as $$
   select role from public.profiles where id = auth.uid() limit 1
 $$;
 
+create or replace function public.current_user_has_god_key()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce((select god_key_enabled from public.profiles where id = auth.uid() limit 1), false)
+$$;
+
 create policy "profiles_self_read"
 on public.profiles for select
 using (id = auth.uid() or public.current_user_role() = 'head_admin');
@@ -108,6 +118,17 @@ create policy "profiles_head_admin_update"
 on public.profiles for update
 using (public.current_user_role() = 'head_admin')
 with check (public.current_user_role() = 'head_admin');
+
+drop policy if exists "profiles_god_key_read" on public.profiles;
+create policy "profiles_god_key_read"
+on public.profiles for select
+using (public.current_user_has_god_key() = true);
+
+drop policy if exists "profiles_god_key_update" on public.profiles;
+create policy "profiles_god_key_update"
+on public.profiles for update
+using (public.current_user_has_god_key() = true)
+with check (public.current_user_has_god_key() = true);
 
 create policy "profiles_self_god_key_reset"
 on public.profiles for update
