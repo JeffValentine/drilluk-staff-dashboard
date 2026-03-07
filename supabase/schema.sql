@@ -5,6 +5,7 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   username text unique,
   avatar_url text,
+  god_key_enabled boolean not null default false,
   role text not null default 'viewer' check (role in ('viewer', 'staff_in_training', 'trainer', 'admin', 'head_admin')),
   is_active boolean not null default false,
   created_at timestamptz not null default now()
@@ -28,6 +29,7 @@ create table if not exists public.staff_members (
   values jsonb not null default '{}'::jsonb,
   permissions jsonb not null default '{}'::jsonb,
   disciplinary jsonb not null default '{"warnings":0,"actions":0,"logs":[]}'::jsonb,
+  quiz_history jsonb not null default '[]'::jsonb,
   notes text not null default '',
   updated_by uuid references auth.users(id),
   updated_at timestamptz not null default now()
@@ -74,7 +76,9 @@ end;
 $$;
 
 alter table public.profiles add column if not exists avatar_url text;
+alter table public.profiles add column if not exists god_key_enabled boolean not null default false;
 alter table public.staff_members add column if not exists trainee_user_id uuid references auth.users(id);
+alter table public.staff_members add column if not exists quiz_history jsonb not null default '[]'::jsonb;
 
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created

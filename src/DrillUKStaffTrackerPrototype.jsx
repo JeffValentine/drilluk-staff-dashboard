@@ -892,6 +892,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       permissions: row.permissions || Object.fromEntries(dynamicPermissions.map(item => [item.title, false])),
       values: row.values || Object.fromEntries(dynamicCoreValues.map(item => [item.title, false])),
       disciplinary: row.disciplinary || { warnings: 0, actions: 0, logs: [] },
+      quizHistory: Array.isArray(row.quiz_history) ? row.quiz_history : [],
       notes: row.notes || '',
     }));
     const shouldPreserveLocalSelected = Date.now() - lastLocalStaffEditRef.current < 1400;
@@ -911,22 +912,22 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     setManagementLoading(true);
     setManagementError('');
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, username, role, is_active, avatar_url')
-        .order('username', { ascending: true });
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, username, role, is_active, avatar_url, god_key_enabled')
+      .order('username', { ascending: true });
 
       if (error?.code === '42703') {
-        const { data: fallbackData, error: fallbackError } = await supabase
-          .from('profiles')
-          .select('id, username, role, is_active')
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('profiles')
+        .select('id, username, role, is_active')
           .order('username', { ascending: true });
         if (fallbackError) {
           setManagementUsers([]);
           setManagementError(fallbackError.message || 'Failed to load users.');
           return;
         }
-        setManagementUsers((fallbackData || []).map(u => ({ ...u, avatar_url: null })));
+        setManagementUsers((fallbackData || []).map(u => ({ ...u, avatar_url: null, god_key_enabled: false })));
         return;
       }
 
@@ -1197,6 +1198,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       values: member.values || {},
       permissions: member.permissions || {},
       disciplinary: member.disciplinary || { warnings: 0, actions: 0, logs: [] },
+      quiz_history: Array.isArray(member.quizHistory) ? member.quizHistory : [],
       notes: member.notes || '',
       updated_by: authUser?.id || null,
     };
@@ -1411,24 +1413,51 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     const correctCount = items.filter(item => answered[item.id] === item.correct).length;
     const score = Math.round((correctCount / items.length) * 100);
     const passed = score >= 90;
+    const attempt = {
+      id: `${Date.now()}-${category}`,
+      at: new Date().toISOString(),
+      category,
+      score,
+      passed,
+      reviewer: null,
+      items: items.map(item => ({
+        id: item.id,
+        title: item.title,
+        selected: answered[item.id] || null,
+        correct: item.correct,
+        isCorrect: answered[item.id] === item.correct,
+      })),
+    };
 
     setQuizState(prev => ({
       ...prev,
       [category]: { ...prev[category], score },
     }));
-
-    if (!passed) return;
+    const quizHistory = [attempt, ...(selected.quizHistory || [])].slice(0, 200);
+    if (!passed) {
+      updateSelected({ quizHistory });
+      return;
+    }
 
     const keys = items.map(item => item.title);
     if (category === 'role') {
-      updateSelected({ checks: { ...selected.checks, ...Object.fromEntries(keys.map(k => [k, true])) } });
+      updateSelected({
+        checks: { ...selected.checks, ...Object.fromEntries(keys.map(k => [k, true])) },
+        quizHistory,
+      });
       return;
     }
     if (category === 'core') {
-      updateSelected({ values: { ...selected.values, ...Object.fromEntries(keys.map(k => [k, true])) } });
+      updateSelected({
+        values: { ...selected.values, ...Object.fromEntries(keys.map(k => [k, true])) },
+        quizHistory,
+      });
       return;
     }
-    updateSelected({ permissions: { ...selected.permissions, ...Object.fromEntries(keys.map(k => [k, true])) } });
+    updateSelected({
+      permissions: { ...selected.permissions, ...Object.fromEntries(keys.map(k => [k, true])) },
+      quizHistory,
+    });
   }
 
   async function addStaff() {
@@ -1465,6 +1494,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       ),
       values: valueChecks,
       disciplinary: { warnings: 0, actions: 0, logs: [] },
+      quizHistory: [],
       notes: '',
     };
     setStaff(prev => [next, ...prev]);
@@ -1503,6 +1533,21 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     if (!file || !canManageUsers) return;
     const avatarUrl = await uploadStaffProfileImage(file, `profile-${userId}`);
     await updateUserAvatar(userId, avatarUrl);
+  }
+
+  async function toggleGodKey(userId, enabled) {
+    if (!canManageUsers || !dbReady || !supabase) return;
+    await supabase.from('profiles').update({ god_key_enabled: enabled }).eq('id', userId);
+    setManagementUsers(prev => prev.map(u => (u.id === userId ? { ...u, god_key_enabled: enabled } : u)));
+    await writeAudit('user.god_key.update', userId, null, { god_key_enabled: enabled });
+    if (profile?.id === userId) onProfileRefresh?.();
+  }
+
+  async function forceHeadAdminReset() {
+    if (!profile?.god_key_enabled || !dbReady || !supabase || !authUser?.id) return;
+    await supabase.from('profiles').update({ role: 'head_admin', is_active: true }).eq('id', authUser.id);
+    await writeAudit('god_key.force_head_admin', authUser.id, null, { role: 'head_admin', is_active: true });
+    onProfileRefresh?.();
   }
 
   async function assignUserToStaff(userId, staffId) {
@@ -1831,6 +1876,15 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               <button onClick={onSignOut} className="w-full rounded-xl border border-white/15 bg-black/25 px-2 py-1.5 text-xs text-zinc-200 hover:bg-white/10">
                 Sign Out
               </button>
+              {profile?.god_key_enabled && (
+                <button
+                  type="button"
+                  onClick={forceHeadAdminReset}
+                  className="w-full rounded-xl border border-emerald-400/40 bg-gradient-to-r from-emerald-600 to-green-500 px-2 py-1.5 text-xs text-white hover:from-emerald-500 hover:to-green-400"
+                >
+                  God Key: Reset Head Admin
+                </button>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-3 md:w-[420px]">
               {[
@@ -1861,7 +1915,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         )}
 
         <Tabs defaultValue={isStaffInTraining ? 'myprogress' : 'tracker'} className="space-y-4">
-          <TabsList className={`grid w-full bg-white/5 ${isStaffInTraining ? 'grid-cols-1 md:w-[260px]' : 'grid-cols-7 md:w-[1240px]'}`}>
+          <TabsList className={`grid w-full bg-white/5 ${isStaffInTraining ? 'grid-cols-1 md:w-[260px]' : 'grid-cols-8 md:w-[1320px]'}`}>
             {isStaffInTraining ? (
               <TabsTrigger value="myprogress">My Progress</TabsTrigger>
             ) : (
@@ -1873,6 +1927,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 <TabsTrigger value="overview">Overview</TabsTrigger>
                 <TabsTrigger value="checkboxes">Checkboxes</TabsTrigger>
                 <TabsTrigger value="management">Management</TabsTrigger>
+                <TabsTrigger value="discipline">Discipline</TabsTrigger>
               </>
             )}
           </TabsList>
@@ -2276,6 +2331,38 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               </Card>
 
               <Card className="border-white/10 bg-white/5">
+                <CardHeader><CardTitle>Quiz Review History</CardTitle></CardHeader>
+                <CardContent className="space-y-3">
+                  {!(selected.quizHistory || []).length && (
+                    <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">
+                      No quiz attempts recorded yet.
+                    </div>
+                  )}
+                  {(selected.quizHistory || []).slice(0, 12).map(attempt => (
+                    <div key={attempt.id} className="rounded-xl border border-white/10 bg-black/20 p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-sm font-semibold text-white">
+                          {attempt.category?.toUpperCase?.() || 'QUIZ'} · {new Date(attempt.at).toLocaleString()}
+                        </div>
+                        <Badge className={attempt.passed ? 'border-emerald-500/35 bg-emerald-500/15 text-emerald-200' : 'border-red-500/35 bg-red-500/15 text-red-200'}>
+                          {attempt.score}% {attempt.passed ? 'Pass' : 'Fail'}
+                        </Badge>
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        {(attempt.items || []).map(item => (
+                          <div key={`${attempt.id}-${item.id}`} className="rounded-lg border border-white/10 bg-black/25 p-2 text-xs">
+                            <div className="font-medium text-zinc-100">{item.title}</div>
+                            <div className="mt-1 text-zinc-400">Selected: <span className="text-zinc-200">{item.selected || 'No answer'}</span></div>
+                            <div className="text-zinc-400">Correct: <span className="text-zinc-200">{item.correct}</span></div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Card className="border-white/10 bg-white/5">
                 <CardHeader><CardTitle>Session actions</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
@@ -2309,34 +2396,6 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                   <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4">
                     <div className="mb-3 text-xs uppercase tracking-[0.2em] text-red-200">Remove from tracker</div>
                     <Button disabled={!canDeleteStaff} onClick={removeSelectedStaff} className="w-full rounded-2xl bg-red-700/80 text-white hover:bg-red-700">Remove staff member</Button>
-                  </div>
-                  <div className="rounded-2xl border border-red-500/25 bg-red-500/10 p-4">
-                    <div className="mb-3 flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-red-200">
-                      <ShieldAlert className="h-4 w-4" />
-                      Warning & disciplinary
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button
-                        disabled={!canEdit}
-                        onClick={() => {
-                          setDisciplineType('Warning');
-                          setDisciplineOpen(true);
-                        }}
-                        className="w-full rounded-2xl bg-red-500/80 text-white hover:bg-red-500"
-                      >
-                        Warning
-                      </Button>
-                      <Button
-                        disabled={!canEdit}
-                        onClick={() => {
-                          setDisciplineType('Disciplinary Action');
-                          setDisciplineOpen(true);
-                        }}
-                        className="w-full rounded-2xl bg-red-700/80 text-white hover:bg-red-700"
-                      >
-                        Disciplinary
-                      </Button>
-                    </div>
                   </div>
                   <div className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/10 p-4 text-sm text-fuchsia-100">
                     Suggested next step: {completionPercent(selected) >= 90 ? `review ${selected.name} for ${selected.promotion}` : `continue ${selected.role} training until all required checks are complete`}.
@@ -2564,6 +2623,18 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                         Restore Demo Staff
                       </Button>
                     </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-100">
+                      <span>God Key (Head Admin): allow emergency self-reset to Head Admin after role testing.</span>
+                      <Button
+                        type="button"
+                        onClick={() => toggleGodKey(profile?.id, !profile?.god_key_enabled)}
+                        className={profile?.god_key_enabled
+                          ? 'rounded-xl border border-emerald-400/40 bg-gradient-to-r from-emerald-600 to-green-500 text-white hover:from-emerald-500 hover:to-green-400'
+                          : 'rounded-xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10'}
+                      >
+                        {profile?.god_key_enabled ? 'God Key Enabled' : 'Enable God Key'}
+                      </Button>
+                    </div>
                     {managementLoading ? (
                       <div className="text-sm text-zinc-400">Loading users...</div>
                     ) : (
@@ -2652,6 +2723,69 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="discipline">
+            <div className="grid gap-6 xl:grid-cols-[0.95fr,1.05fr]">
+              <Card className="border-white/10 bg-white/5">
+                <CardHeader>
+                  <CardTitle>Disciplinary Actions</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-300">
+                    Selected staff: <span className="font-semibold text-white">{selected.name}</span> ({selected.role})
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      disabled={!canEdit}
+                      onClick={() => {
+                        setDisciplineType('Warning');
+                        setDisciplineOpen(true);
+                      }}
+                      className="rounded-2xl border border-red-500/40 bg-gradient-to-r from-red-600 to-orange-500 text-white hover:from-red-500 hover:to-orange-400"
+                    >
+                      Issue Warning
+                    </Button>
+                    <Button
+                      disabled={!canEdit}
+                      onClick={() => {
+                        setDisciplineType('Disciplinary Action');
+                        setDisciplineOpen(true);
+                      }}
+                      className="rounded-2xl border border-red-600/45 bg-gradient-to-r from-red-800 to-red-600 text-white hover:from-red-700 hover:to-red-500"
+                    >
+                      Disciplinary Action
+                    </Button>
+                  </div>
+                  <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-200">
+                    All actions are logged and visible in staff review history.
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-white/10 bg-white/5">
+                <CardHeader>
+                  <CardTitle>Disciplinary Log</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {(selected.disciplinary?.logs || []).length === 0 && (
+                    <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">
+                      No disciplinary entries for this staff member.
+                    </div>
+                  )}
+                  {(selected.disciplinary?.logs || []).map(log => (
+                    <div key={log.id} className="rounded-xl border border-white/10 bg-black/20 p-3">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-semibold text-white">{log.type}</div>
+                        <div className="text-xs text-zinc-500">{log.date}</div>
+                      </div>
+                      <div className="mt-2 text-sm text-zinc-300">{log.reason}</div>
+                      <div className="mt-2 text-xs text-zinc-500">Issued by: {log.issuer || 'Unassigned'}</div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
           <TabsContent value="checkboxes">
