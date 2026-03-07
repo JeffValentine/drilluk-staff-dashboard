@@ -737,6 +737,46 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     return true;
   }
 
+  async function refreshManagementUsersFromDb() {
+    if (!dbReady || !supabase || !canManageUsers) return;
+    setManagementLoading(true);
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, username, role, is_active, avatar_url')
+      .order('username', { ascending: true });
+    if (error?.code === '42703') {
+      const { data: fallbackData } = await supabase
+        .from('profiles')
+        .select('id, username, role, is_active')
+        .order('username', { ascending: true });
+      setManagementUsers((fallbackData || []).map(u => ({ ...u, avatar_url: null })));
+    } else {
+      setManagementUsers(data || []);
+    }
+    setManagementLoading(false);
+  }
+
+  async function refreshCheckboxCatalogFromDb() {
+    if (!dbReady || !supabase) return;
+    setCheckboxCatalogLoading(true);
+    const { data, error } = await supabase
+      .from('checkbox_catalog')
+      .select('*')
+      .order('category', { ascending: true });
+
+    if (!error && data?.length) {
+      setCheckboxCatalog(data.map(item => ({
+        id: item.id,
+        category: item.category,
+        role: item.role || '',
+        title: item.title,
+        question: item.question || '',
+        answer: item.answer || '',
+      })));
+    }
+    setCheckboxCatalogLoading(false);
+  }
+
   useEffect(() => {
     if (!dbReady || !supabase) {
       setStaff(initialStaff);
@@ -774,52 +814,38 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   useEffect(() => {
     if (!dbReady || !supabase || !canManageUsers) return;
+    refreshManagementUsersFromDb();
+  }, [dbReady, canManageUsers]);
 
-    async function loadManagementUsers() {
-      setManagementLoading(true);
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, username, role, is_active, avatar_url')
-        .order('username', { ascending: true });
-      if (error?.code === '42703') {
-        const { data: fallbackData } = await supabase
-          .from('profiles')
-          .select('id, username, role, is_active')
-          .order('username', { ascending: true });
-        setManagementUsers((fallbackData || []).map(u => ({ ...u, avatar_url: null })));
-      } else {
-        setManagementUsers(data || []);
-      }
-      setManagementLoading(false);
-    }
-
-    loadManagementUsers();
+  useEffect(() => {
+    if (!dbReady || !supabase || !canManageUsers) return;
+    const channel = supabase
+      .channel('profiles_sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+        refreshManagementUsersFromDb();
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [dbReady, canManageUsers]);
 
   useEffect(() => {
     if (!dbReady || !supabase) return;
+    refreshCheckboxCatalogFromDb();
+  }, [dbReady]);
 
-    async function loadCheckboxCatalog() {
-      setCheckboxCatalogLoading(true);
-      const { data, error } = await supabase
-        .from('checkbox_catalog')
-        .select('*')
-        .order('category', { ascending: true });
-
-      if (!error && data?.length) {
-        setCheckboxCatalog(data.map(item => ({
-          id: item.id,
-          category: item.category,
-          role: item.role || '',
-          title: item.title,
-          question: item.question || '',
-          answer: item.answer || '',
-        })));
-      }
-      setCheckboxCatalogLoading(false);
-    }
-
-    loadCheckboxCatalog();
+  useEffect(() => {
+    if (!dbReady || !supabase) return;
+    const channel = supabase
+      .channel('checkbox_catalog_sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'checkbox_catalog' }, () => {
+        refreshCheckboxCatalogFromDb();
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [dbReady]);
 
   const baseChecksByRole = useMemo(() => {

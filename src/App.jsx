@@ -184,6 +184,24 @@ export default function App() {
     loadProfile();
   }, [loadProfile]);
 
+  useEffect(() => {
+    if (!session?.user || !supabase) return;
+    const channel = supabase
+      .channel("profile_self_sync")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "profiles", filter: `id=eq.${session.user.id}` },
+        () => {
+          loadProfile();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session?.user?.id, loadProfile]);
+
   const canAccessDashboard = useMemo(() => {
     if (!session || !profile) return false;
     if (!profile.is_active) return false;
