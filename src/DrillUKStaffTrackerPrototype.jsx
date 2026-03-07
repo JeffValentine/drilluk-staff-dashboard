@@ -795,6 +795,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const ownProfileFileInputRef = useRef(null);
   const [activeUsersOpen, setActiveUsersOpen] = useState(false);
   const [activeUsers, setActiveUsers] = useState([]);
+  const [reviewDrafts, setReviewDrafts] = useState({});
   const lastLocalStaffEditRef = useRef(0);
   const [quizState, setQuizState] = useState({
     role: { started: false, score: null, answers: {} },
@@ -1174,6 +1175,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       core: { started: false, score: null, answers: {} },
       permission: { started: false, score: null, answers: {} },
     });
+    setReviewDrafts({});
   }, [selected?.id]);
 
   async function saveStaffMember(member) {
@@ -1419,7 +1421,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       category,
       score,
       passed,
-      reviewer: null,
+      reviewStatus: 'pending',
+      reviewNote: '',
+      reviewedBy: null,
+      reviewedAt: null,
       items: items.map(item => ({
         id: item.id,
         title: item.title,
@@ -1457,6 +1462,25 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     updateSelected({
       permissions: { ...selected.permissions, ...Object.fromEntries(keys.map(k => [k, true])) },
       quizHistory,
+    });
+  }
+
+  function updateQuizReview(attemptId, patch) {
+    if (!selected || !canEdit) return;
+    const nextHistory = (selected.quizHistory || []).map(attempt =>
+      attempt.id === attemptId ? { ...attempt, ...patch } : attempt
+    );
+    updateSelected({ quizHistory: nextHistory });
+  }
+
+  function applyQuizReview(attemptId, status) {
+    const reviewerName = profile?.username || authUser?.email?.split('@')[0] || 'Reviewer';
+    const note = reviewDrafts[attemptId] ?? '';
+    updateQuizReview(attemptId, {
+      reviewStatus: status,
+      reviewNote: note.trim(),
+      reviewedBy: reviewerName,
+      reviewedAt: new Date().toISOString(),
     });
   }
 
@@ -2348,6 +2372,20 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                           {attempt.score}% {attempt.passed ? 'Pass' : 'Fail'}
                         </Badge>
                       </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                        <Badge className={
+                          attempt.reviewStatus === 'approved'
+                            ? 'border-emerald-500/35 bg-emerald-500/15 text-emerald-200'
+                            : attempt.reviewStatus === 'needs_retake'
+                              ? 'border-amber-500/35 bg-amber-500/15 text-amber-200'
+                              : 'border-white/10 bg-white/10 text-zinc-300'
+                        }>
+                          Review: {attempt.reviewStatus || 'pending'}
+                        </Badge>
+                        {attempt.reviewedBy && (
+                          <span className="text-zinc-500">By {attempt.reviewedBy}{attempt.reviewedAt ? ` · ${new Date(attempt.reviewedAt).toLocaleString()}` : ''}</span>
+                        )}
+                      </div>
                       <div className="mt-3 space-y-2">
                         {(attempt.items || []).map(item => (
                           <div key={`${attempt.id}-${item.id}`} className="rounded-lg border border-white/10 bg-black/25 p-2 text-xs">
@@ -2357,6 +2395,33 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                           </div>
                         ))}
                       </div>
+                      {canEdit && (
+                        <div className="mt-3 space-y-2 rounded-lg border border-white/10 bg-black/25 p-2">
+                          <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Trainer Review Note</div>
+                          <Textarea
+                            value={reviewDrafts[attempt.id] ?? attempt.reviewNote ?? ''}
+                            onChange={(e) => setReviewDrafts(prev => ({ ...prev, [attempt.id]: e.target.value }))}
+                            className="min-h-[72px] border-white/10 bg-black/30 text-white"
+                            placeholder="Add review note, coaching points, or retake reason..."
+                          />
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              onClick={() => applyQuizReview(attempt.id, 'approved')}
+                              className="rounded-xl border border-emerald-400/40 bg-gradient-to-r from-emerald-600 to-green-500 text-white hover:from-emerald-500 hover:to-green-400"
+                            >
+                              Approve Attempt
+                            </Button>
+                            <Button
+                              type="button"
+                              onClick={() => applyQuizReview(attempt.id, 'needs_retake')}
+                              className="rounded-xl border border-amber-400/40 bg-gradient-to-r from-amber-600 to-orange-500 text-white hover:from-amber-500 hover:to-orange-400"
+                            >
+                              Mark Retake
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </CardContent>
