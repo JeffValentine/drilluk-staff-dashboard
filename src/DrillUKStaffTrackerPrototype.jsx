@@ -679,8 +679,42 @@ function parseAnswerList(answer) {
   return lines.length ? lines : [''];
 }
 
+function parseQuizPayload(answerValue) {
+  if (!answerValue) return { correct: [], wrong: [] };
+  const raw = String(answerValue).trim();
+  if (raw.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(raw);
+      return {
+        correct: Array.isArray(parsed.correct) ? parsed.correct : [],
+        wrong: Array.isArray(parsed.wrong) ? parsed.wrong : [],
+      };
+    } catch {
+      return { correct: parseAnswerList(answerValue), wrong: [] };
+    }
+  }
+  return { correct: parseAnswerList(answerValue), wrong: [] };
+}
+
+function buildQuizPayload(correctAnswers, wrongAnswers) {
+  return JSON.stringify({
+    correct: (correctAnswers || []).map(v => v.trim()).filter(Boolean),
+    wrong: (wrongAnswers || []).map(v => v.trim()).filter(Boolean),
+  });
+}
+
+function shuffleArray(arr) {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
 function accountRoleLabel(role) {
   if (role === 'viewer') return 'Guest';
+  if (role === 'staff_in_training') return 'Staff In Training';
   if (role === 'head_admin') return 'Head Admin';
   if (role === 'admin') return 'Admin';
   if (role === 'trainer') return 'Trainer';
@@ -718,6 +752,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const canManageUsers = profile?.role === 'head_admin';
   const canManageCheckboxes = ['head_admin', 'admin'].includes(profile?.role || '');
   const canDeleteStaff = ['head_admin', 'admin'].includes(profile?.role || '');
+  const isStaffInTraining = profile?.role === 'staff_in_training';
 
   const [staff, setStaff] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -761,6 +796,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [activeUsersOpen, setActiveUsersOpen] = useState(false);
   const [activeUsers, setActiveUsers] = useState([]);
   const lastLocalStaffEditRef = useRef(0);
+  const [quizState, setQuizState] = useState({
+    role: { started: false, score: null, answers: {} },
+    core: { started: false, score: null, answers: {} },
+    permission: { started: false, score: null, answers: {} },
+  });
 
   useEffect(() => {
     setProfileName(profile?.username || '');
@@ -839,6 +879,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       name: row.name,
       role: row.role,
       trainer: row.trainer,
+      traineeUserId: row.trainee_user_id || null,
       profileImage: row.profile_image || '',
       status: row.status,
       strongSides: row.strong_sides || '',
@@ -1015,7 +1056,17 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const dynamicPermissions = useMemo(() => checkboxCatalog.filter(item => item.category === 'permission'), [checkboxCatalog]);
 
   const dynamicQuizMap = useMemo(
-    () => Object.fromEntries(checkboxCatalog.map(item => [item.title, { question: item.question, answer: item.answer, category: item.category === 'role' ? item.role || 'Role' : item.category === 'core' ? 'Core Value' : 'Permission' }])),
+    () => Object.fromEntries(checkboxCatalog.map(item => {
+      const payload = parseQuizPayload(item.answer);
+      return [
+        item.title,
+        {
+          question: item.question,
+          answer: payload.correct.join('\n'),
+          category: item.category === 'role' ? item.role || 'Role' : item.category === 'core' ? 'Core Value' : 'Permission',
+        },
+      ];
+    })),
     [checkboxCatalog]
   );
 
@@ -1066,7 +1117,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     });
   }, [staff, query, filterRole, filterTrainerOnly, filterActiveOnly, filterWarningOnly]);
 
-  const selected = staff.find(s => s.id === selectedId) || staff[0] || null;
+  const traineeRecord = staff.find(s => s.traineeUserId === authUser?.id) || null;
+  const selected = isStaffInTraining ? traineeRecord : (staff.find(s => s.id === selectedId) || staff[0] || null);
 
   const totals = {
     total: staff.length,
@@ -1083,6 +1135,46 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     ? dynamicPermissions.filter(item => itemMatchesRank(item, selected.role)).map(item => item.title)
     : [];
 
+  function checklistPercent(keys, source) {
+    if (!keys.length) return 0;
+    const done = keys.filter(key => Boolean(source?.[key])).length;
+    return Math.round((done / keys.length) * 100);
+  }
+
+  const quizItemsByCategory = useMemo(() => {
+    if (!selected) return { role: [], core: [], permission: [] };
+    const build = (category) =>
+      checkboxCatalog
+        .filter(item => item.category === category && itemMatchesRank(item, selected.role))
+        .map(item => {
+          const payload = parseQuizPayload(item.answer);
+          const primaryCorrect = payload.correct[0] || '';
+          const options = shuffleArray([primaryCorrect, ...payload.wrong.filter(Boolean)].filter(Boolean));
+          return {
+            id: item.id,
+            title: item.title,
+            question: item.question || item.title,
+            correct: primaryCorrect,
+            options,
+          };
+        })
+        .filter(item => item.correct && item.options.length >= 2);
+
+    return {
+      role: build('role'),
+      core: build('core'),
+      permission: build('permission'),
+    };
+  }, [checkboxCatalog, selected]);
+
+  useEffect(() => {
+    setQuizState({
+      role: { started: false, score: null, answers: {} },
+      core: { started: false, score: null, answers: {} },
+      permission: { started: false, score: null, answers: {} },
+    });
+  }, [selected?.id]);
+
   async function saveStaffMember(member) {
     if (!dbReady || !supabase) return;
     lastLocalStaffEditRef.current = Date.now();
@@ -1092,6 +1184,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       name: member.name,
       role: member.role,
       trainer: member.trainer,
+      trainee_user_id: member.traineeUserId || null,
       profile_image: member.profileImage || null,
       status: member.status,
       strong_sides: member.strongSides || '',
@@ -1292,6 +1385,52 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     setAddStaffOpen(true);
   }
 
+  function startQuiz(category) {
+    setQuizState(prev => ({
+      ...prev,
+      [category]: { started: true, score: null, answers: {} },
+    }));
+  }
+
+  function setQuizAnswer(category, itemId, option) {
+    setQuizState(prev => ({
+      ...prev,
+      [category]: {
+        ...prev[category],
+        answers: { ...prev[category].answers, [itemId]: option },
+      },
+    }));
+  }
+
+  function finishQuiz(category) {
+    if (!selected) return;
+    const items = quizItemsByCategory[category] || [];
+    if (!items.length) return;
+
+    const answered = quizState[category].answers || {};
+    const correctCount = items.filter(item => answered[item.id] === item.correct).length;
+    const score = Math.round((correctCount / items.length) * 100);
+    const passed = score >= 90;
+
+    setQuizState(prev => ({
+      ...prev,
+      [category]: { ...prev[category], score },
+    }));
+
+    if (!passed) return;
+
+    const keys = items.map(item => item.title);
+    if (category === 'role') {
+      updateSelected({ checks: { ...selected.checks, ...Object.fromEntries(keys.map(k => [k, true])) } });
+      return;
+    }
+    if (category === 'core') {
+      updateSelected({ values: { ...selected.values, ...Object.fromEntries(keys.map(k => [k, true])) } });
+      return;
+    }
+    updateSelected({ permissions: { ...selected.permissions, ...Object.fromEntries(keys.map(k => [k, true])) } });
+  }
+
   async function addStaff() {
     if (!canEdit || !addStaffForm.name.trim()) return;
     const roleChecks = Object.fromEntries((baseChecksByRole[addStaffForm.role] || []).map(item => [item, false]));
@@ -1364,6 +1503,22 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     if (!file || !canManageUsers) return;
     const avatarUrl = await uploadStaffProfileImage(file, `profile-${userId}`);
     await updateUserAvatar(userId, avatarUrl);
+  }
+
+  async function assignUserToStaff(userId, staffId) {
+    if (!canManageUsers || !dbReady || !supabase) return;
+    await supabase.from('staff_members').update({ trainee_user_id: null }).eq('trainee_user_id', userId);
+    if (staffId === 'none') {
+      setStaff(prev => prev.map(member => (member.traineeUserId === userId ? { ...member, traineeUserId: null } : member)));
+      return;
+    }
+    const numericId = Number(staffId);
+    await supabase.from('staff_members').update({ trainee_user_id: userId }).eq('id', numericId);
+    setStaff(prev => prev.map(member => {
+      if (member.id === numericId) return { ...member, traineeUserId: userId };
+      if (member.traineeUserId === userId) return { ...member, traineeUserId: null };
+      return member;
+    }));
   }
 
   async function restoreDemoStaff() {
@@ -1571,10 +1726,12 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   }
 
   function openCheckboxEditor(item) {
+    const payload = parseQuizPayload(item.answer);
     setCheckboxDraft({
       ...item,
       ranks: item.ranks || parseRankScope(item.role),
-      answers: parseAnswerList(item.answer),
+      answers: payload.correct.length ? payload.correct : [''],
+      falseAnswers: payload.wrong.length ? payload.wrong : [''],
     });
     setCheckboxEditorOpen(true);
   }
@@ -1589,7 +1746,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     const normalized = {
       ...checkboxDraft,
       role: serializeRankScope(checkboxDraft.ranks),
-      answer: (checkboxDraft.answers || []).map(v => v.trim()).filter(Boolean).join('\n'),
+      answer: buildQuizPayload(checkboxDraft.answers || [], checkboxDraft.falseAnswers || []),
     };
     patchCheckboxItem(normalized.id, normalized);
     await saveCheckboxItem(normalized);
@@ -1597,6 +1754,15 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   }
 
   if (!selected) {
+    if (isStaffInTraining) {
+      return (
+        <div className="min-h-screen bg-[#07070b] p-6 text-zinc-200">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+            Your dashboard account is not linked to a staff profile yet. Ask Head Admin to link your account from the Management tab.
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen bg-[#07070b] p-6 text-zinc-200">
         <div className="rounded-2xl border border-white/10 bg-white/5 p-6">No staff records found.</div>
@@ -1694,16 +1860,129 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           </div>
         )}
 
-        <Tabs defaultValue="tracker" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-7 bg-white/5 md:w-[1240px]">
-            <TabsTrigger value="tracker">Tracker</TabsTrigger>
-            <TabsTrigger value="session">Training Session</TabsTrigger>
-            <TabsTrigger value="progression">Progression</TabsTrigger>
-            <TabsTrigger value="resources">Resources</TabsTrigger>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="checkboxes">Checkboxes</TabsTrigger>
-            <TabsTrigger value="management">Management</TabsTrigger>
+        <Tabs defaultValue={isStaffInTraining ? 'myprogress' : 'tracker'} className="space-y-4">
+          <TabsList className={`grid w-full bg-white/5 ${isStaffInTraining ? 'grid-cols-1 md:w-[260px]' : 'grid-cols-7 md:w-[1240px]'}`}>
+            {isStaffInTraining ? (
+              <TabsTrigger value="myprogress">My Progress</TabsTrigger>
+            ) : (
+              <>
+                <TabsTrigger value="tracker">Tracker</TabsTrigger>
+                <TabsTrigger value="session">Training Session</TabsTrigger>
+                <TabsTrigger value="progression">Progression</TabsTrigger>
+                <TabsTrigger value="resources">Resources</TabsTrigger>
+                <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger value="checkboxes">Checkboxes</TabsTrigger>
+                <TabsTrigger value="management">Management</TabsTrigger>
+              </>
+            )}
           </TabsList>
+
+          <TabsContent value="myprogress">
+            <div className="grid gap-4 xl:grid-cols-[380px,1fr]">
+              <Card className="border-white/10 bg-white/5">
+                <CardHeader>
+                  <CardTitle>My Staff Profile</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-black/20 p-3">
+                    <div className="h-14 w-14 overflow-hidden rounded-xl border border-white/10 bg-black/30">
+                      {selected.profileImage ? (
+                        <img src={selected.profileImage} alt={`${selected.name} profile`} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-xs text-zinc-500">No img</div>
+                      )}
+                    </div>
+                    <div>
+                      <div className="text-lg font-semibold text-white">{selected.name}</div>
+                      <div className="mt-1 text-sm text-zinc-400">{selected.role}</div>
+                      <div className="mt-1 text-xs text-zinc-500">Trainer: {selected.trainer}</div>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Role Checklist</div>
+                      <div className="mt-1 text-sm text-white">{checklistPercent((quizItemsByCategory.role || []).map(q => q.title), selected.checks)}%</div>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Core Values</div>
+                      <div className="mt-1 text-sm text-white">{checklistPercent((quizItemsByCategory.core || []).map(q => q.title), selected.values)}%</div>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Permissions</div>
+                      <div className="mt-1 text-sm text-white">{checklistPercent((quizItemsByCategory.permission || []).map(q => q.title), selected.permissions)}%</div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="space-y-4">
+                {[
+                  { id: 'role', label: 'Role Checklist Quiz', source: selected.checks },
+                  { id: 'core', label: 'Core Values Quiz', source: selected.values },
+                  { id: 'permission', label: 'Permissions Quiz', source: selected.permissions },
+                ].map(section => {
+                  const items = quizItemsByCategory[section.id] || [];
+                  const state = quizState[section.id];
+                  const progress = checklistPercent(items.map(item => item.title), section.source);
+                  return (
+                    <Card key={`quiz-${section.id}`} className="border-white/10 bg-white/5">
+                      <CardHeader>
+                        <CardTitle className="flex items-center justify-between">
+                          <span>{section.label}</span>
+                          <Badge className="border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-200">{progress}% complete</Badge>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {!items.length && (
+                          <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">
+                            No quiz items configured for your rank yet.
+                          </div>
+                        )}
+                        {items.length > 0 && !state.started && (
+                          <Button onClick={() => startQuiz(section.id)} className="rounded-xl border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white hover:from-fuchsia-500 hover:to-indigo-500">
+                            Start {section.label}
+                          </Button>
+                        )}
+                        {items.length > 0 && state.started && (
+                          <div className="space-y-3">
+                            {items.map((item, idx) => (
+                              <div key={`q-${section.id}-${item.id}`} className="rounded-xl border border-white/10 bg-black/20 p-3">
+                                <div className="text-sm font-semibold text-white">{idx + 1}. {item.title}</div>
+                                <div className="mt-1 text-xs text-zinc-400">{item.question}</div>
+                                <div className="mt-3 space-y-2">
+                                  {item.options.map(option => (
+                                    <label key={`opt-${item.id}-${option}`} className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/25 px-3 py-2 text-sm text-zinc-200">
+                                      <input
+                                        type="radio"
+                                        name={`quiz-${section.id}-${item.id}`}
+                                        checked={state.answers[item.id] === option}
+                                        onChange={() => setQuizAnswer(section.id, item.id, option)}
+                                      />
+                                      <span>{option}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                            <div className="flex items-center gap-2">
+                              <Button onClick={() => finishQuiz(section.id)} className="rounded-xl border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white hover:from-fuchsia-500 hover:to-indigo-500">
+                                Submit Quiz
+                              </Button>
+                              {state.score !== null && (
+                                <Badge className={state.score >= 90 ? 'border-emerald-500/35 bg-emerald-500/15 text-emerald-200' : 'border-red-500/35 bg-red-500/15 text-red-200'}>
+                                  Score: {state.score}% ({state.score >= 90 ? 'Pass' : 'Fail'})
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          </TabsContent>
 
           <TabsContent value="tracker">
             <div className="grid gap-4 xl:grid-cols-[380px,1fr]">
@@ -2300,7 +2579,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                           </div>
                         )}
                         {managementUsers.map(user => (
-                          <div key={user.id} className="grid gap-3 rounded-xl border border-white/10 bg-black/20 p-3 md:grid-cols-[1.5fr,1fr,1fr,150px]">
+                          <div key={user.id} className="grid gap-3 rounded-xl border border-white/10 bg-black/20 p-3 md:grid-cols-[1.4fr,1fr,1fr,1.2fr,150px]">
                             <div className="flex items-start gap-3">
                               {user.avatar_url ? (
                                 <img src={user.avatar_url} alt={`${user.username || 'user'} avatar`} className="h-10 w-10 rounded-xl border border-white/10 object-cover" />
@@ -2318,6 +2597,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                               <SelectTrigger className="border-white/10 bg-black/30 text-white"><SelectValue /></SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="viewer">viewer</SelectItem>
+                                <SelectItem value="staff_in_training">staff_in_training</SelectItem>
                                 <SelectItem value="trainer">trainer</SelectItem>
                                 <SelectItem value="admin">admin</SelectItem>
                                 <SelectItem value="head_admin">head_admin</SelectItem>
@@ -2342,6 +2622,20 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                                 }}
                               />
                             </div>
+                            <Select
+                              value={(staff.find(member => member.traineeUserId === user.id)?.id?.toString()) || 'none'}
+                              onValueChange={(value) => assignUserToStaff(user.id, value)}
+                            >
+                              <SelectTrigger className="border-white/10 bg-black/30 text-white"><SelectValue placeholder="Linked staff member" /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">No linked staff</SelectItem>
+                                {staff.map(member => (
+                                  <SelectItem key={`link-${member.id}`} value={String(member.id)}>
+                                    {member.name} ({member.role})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                             <Button
                               onClick={() => toggleUserActive(user.id, !user.is_active)}
                               className={user.is_active
@@ -2631,6 +2925,50 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                       onClick={() => setCheckboxDraft(prev => ({ ...prev, answers: [...(prev.answers || ['']), ''] }))}
                     >
                       Add Answer
+                    </Button>
+                  </div>
+                </div>
+                <div className="md:col-span-2">
+                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">False options</div>
+                  <div className="space-y-2">
+                    {(checkboxDraft.falseAnswers || ['']).map((answer, idx) => (
+                      <div key={`${checkboxDraft.id}-false-${idx}`} className="flex gap-2">
+                        <Input
+                          value={answer}
+                          onChange={(e) =>
+                            setCheckboxDraft(prev => {
+                              const next = [...(prev.falseAnswers || [''])];
+                              next[idx] = e.target.value;
+                              return { ...prev, falseAnswers: next };
+                            })
+                          }
+                          className="border-white/10 bg-black/30 text-white"
+                          placeholder={`False option ${idx + 1}`}
+                        />
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="rounded-xl border border-red-500/35 bg-red-500/10 text-red-100 hover:bg-red-500/20"
+                          onClick={() =>
+                            setCheckboxDraft(prev => {
+                              const next = [...(prev.falseAnswers || [''])];
+                              if (next.length <= 1) return prev;
+                              next.splice(idx, 1);
+                              return { ...prev, falseAnswers: next };
+                            })
+                          }
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="rounded-xl border border-fuchsia-400/35 bg-fuchsia-500/10 text-fuchsia-100 hover:bg-fuchsia-500/20"
+                      onClick={() => setCheckboxDraft(prev => ({ ...prev, falseAnswers: [...(prev.falseAnswers || ['']), ''] }))}
+                    >
+                      Add False Option
                     </Button>
                   </div>
                 </div>

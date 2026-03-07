@@ -205,7 +205,7 @@ export default function App() {
   const canAccessDashboard = useMemo(() => {
     if (!session || !profile) return false;
     if (!profile.is_active) return false;
-    return ["head_admin", "admin", "trainer"].includes(profile.role);
+    return ["head_admin", "admin", "trainer", "staff_in_training"].includes(profile.role);
   }, [session, profile]);
 
   async function signIn(email, password) {

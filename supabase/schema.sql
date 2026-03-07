@@ -5,7 +5,7 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   username text unique,
   avatar_url text,
-  role text not null default 'viewer' check (role in ('viewer', 'trainer', 'admin', 'head_admin')),
+  role text not null default 'viewer' check (role in ('viewer', 'staff_in_training', 'trainer', 'admin', 'head_admin')),
   is_active boolean not null default false,
   created_at timestamptz not null default now()
 );
@@ -15,6 +15,7 @@ create table if not exists public.staff_members (
   name text not null,
   role text not null,
   trainer text not null default 'Unassigned',
+  trainee_user_id uuid references auth.users(id),
   profile_image text,
   status text not null default 'In Training',
   strong_sides text not null default '',
@@ -73,6 +74,7 @@ end;
 $$;
 
 alter table public.profiles add column if not exists avatar_url text;
+alter table public.staff_members add column if not exists trainee_user_id uuid references auth.users(id);
 
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
@@ -88,8 +90,10 @@ create or replace function public.current_user_role()
 returns text
 language sql
 stable
+security definer
+set search_path = public
 as $$
-  select role from public.profiles where id = auth.uid()
+  select role from public.profiles where id = auth.uid() limit 1
 $$;
 
 create policy "profiles_self_read"
@@ -113,6 +117,11 @@ create policy "staff_update_trainer_admin"
 on public.staff_members for update
 using (public.current_user_role() in ('trainer', 'admin', 'head_admin'))
 with check (public.current_user_role() in ('trainer', 'admin', 'head_admin'));
+
+create policy "staff_update_own_training"
+on public.staff_members for update
+using (public.current_user_role() = 'staff_in_training' and trainee_user_id = auth.uid())
+with check (public.current_user_role() = 'staff_in_training' and trainee_user_id = auth.uid());
 
 create policy "staff_delete_admin_head"
 on public.staff_members for delete
