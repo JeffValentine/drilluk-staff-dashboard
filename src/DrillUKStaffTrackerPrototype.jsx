@@ -1286,6 +1286,23 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     }
   }
 
+  function buildResetProgressForRole(nextRole) {
+    return {
+      checks: Object.fromEntries((baseChecksByRole[nextRole] || []).map(item => [item, false])),
+      values: Object.fromEntries(
+        dynamicCoreValues
+          .filter(item => itemMatchesRank(item, nextRole))
+          .map(item => [item.title, false])
+      ),
+      permissions: Object.fromEntries(
+        dynamicPermissions
+          .filter(item => itemMatchesRank(item, nextRole))
+          .map(item => [item.title, false])
+      ),
+      signedOff: false,
+    };
+  }
+
   function updateSessionTarget(patch) {
     if (!sessionTarget || !canEdit) return;
     let updated = null;
@@ -1306,10 +1323,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     if (currentIndex >= roles.length - 1) return;
     const nextRole = roles[currentIndex + 1];
     const today = new Date().toISOString().slice(0, 10);
+    const resetProgress = buildResetProgressForRole(nextRole);
     updateSessionTarget({
       role: nextRole,
       promotion: roles[Math.min(currentIndex + 2, roles.length - 1)],
-      checks: Object.fromEntries((baseChecksByRole[nextRole] || []).map(item => [item, false])),
+      ...resetProgress,
       modSince: today,
     });
   }
@@ -1320,10 +1338,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     if (currentIndex <= 0) return;
     const nextRole = roles[currentIndex - 1];
     const today = new Date().toISOString().slice(0, 10);
+    const resetProgress = buildResetProgressForRole(nextRole);
     updateSessionTarget({
       role: nextRole,
       promotion: roles[currentIndex],
-      checks: Object.fromEntries((baseChecksByRole[nextRole] || []).map(item => [item, false])),
+      ...resetProgress,
       modSince: today,
     });
   }
@@ -1411,10 +1430,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     if (currentIndex >= roles.length - 1) return;
     const nextRole = roles[currentIndex + 1];
     const today = new Date().toISOString().slice(0, 10);
+    const resetProgress = buildResetProgressForRole(nextRole);
     updateSelected({
       role: nextRole,
       promotion: roles[Math.min(currentIndex + 2, roles.length - 1)],
-      checks: Object.fromEntries((baseChecksByRole[nextRole] || []).map(item => [item, false])),
+      ...resetProgress,
       modSince: today,
     });
   }
@@ -1425,10 +1445,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     if (currentIndex <= 0) return;
     const nextRole = roles[currentIndex - 1];
     const today = new Date().toISOString().slice(0, 10);
+    const resetProgress = buildResetProgressForRole(nextRole);
     updateSelected({
       role: nextRole,
       promotion: roles[currentIndex],
-      checks: Object.fromEntries((baseChecksByRole[nextRole] || []).map(item => [item, false])),
+      ...resetProgress,
       modSince: today,
     });
   }
@@ -1705,8 +1726,33 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     if (!canManageUsers || !dbReady || !supabase) return;
     const linked = staff.find(member => member.traineeUserId === userId);
     if (!linked) return;
-    await supabase.from('staff_members').update({ role: nextRole }).eq('id', linked.id);
-    setStaff(prev => prev.map(member => (member.id === linked.id ? { ...member, role: nextRole } : member)));
+    const today = new Date().toISOString().slice(0, 10);
+    const nextIndex = roles.indexOf(nextRole);
+    const resetProgress = buildResetProgressForRole(nextRole);
+    const updatePayload = {
+      role: nextRole,
+      role_since: today,
+      promotion: roles[Math.min(nextIndex + 1, roles.length - 1)],
+      checks: resetProgress.checks,
+      values: resetProgress.values,
+      permissions: resetProgress.permissions,
+      signed_off: false,
+    };
+    await supabase.from('staff_members').update(updatePayload).eq('id', linked.id);
+    setStaff(prev => prev.map(member => (
+      member.id === linked.id
+        ? {
+          ...member,
+          role: nextRole,
+          modSince: today,
+          promotion: roles[Math.min(nextIndex + 1, roles.length - 1)],
+          checks: resetProgress.checks,
+          values: resetProgress.values,
+          permissions: resetProgress.permissions,
+          signedOff: false,
+        }
+        : member
+    )));
     await writeAudit('staff.linked_role.update', linked.id, null, { role: nextRole, user_id: userId });
   }
 
