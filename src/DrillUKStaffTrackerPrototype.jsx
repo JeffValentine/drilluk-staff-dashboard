@@ -658,6 +658,27 @@ function formatLastSeen(iso) {
   return `${days}d ago`;
 }
 
+function parseRankScope(roleValue) {
+  if (!roleValue) return [];
+  return String(roleValue)
+    .split(',')
+    .map(v => v.trim())
+    .filter(Boolean);
+}
+
+function serializeRankScope(ranks) {
+  return (ranks || []).filter(Boolean).join(',');
+}
+
+function parseAnswerList(answer) {
+  if (!answer) return [''];
+  const lines = String(answer)
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean);
+  return lines.length ? lines : [''];
+}
+
 function accountRoleLabel(role) {
   if (role === 'viewer') return 'Guest';
   if (role === 'head_admin') return 'Head Admin';
@@ -685,7 +706,7 @@ function QuizHint({ item, answer, category }) {
       {open && (
         <div className="mt-2 space-y-2 text-sm">
           <div className="text-zinc-200">{item}</div>
-          <div className="rounded-lg border border-white/10 bg-black/30 p-2 text-zinc-300">{answer}</div>
+          <div className="whitespace-pre-line rounded-lg border border-white/10 bg-black/30 p-2 text-zinc-300">{answer}</div>
         </div>
       )}
     </div>
@@ -725,6 +746,9 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [managementLoading, setManagementLoading] = useState(false);
   const [checkboxCatalog, setCheckboxCatalog] = useState(buildDefaultCheckboxCatalog());
   const [checkboxCatalogLoading, setCheckboxCatalogLoading] = useState(false);
+  const [checkboxMenu, setCheckboxMenu] = useState('role');
+  const [checkboxEditorOpen, setCheckboxEditorOpen] = useState(false);
+  const [checkboxDraft, setCheckboxDraft] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileName, setProfileName] = useState(profile?.username || '');
   const [profileAvatar, setProfileAvatar] = useState(profile?.avatar_url || '');
@@ -820,8 +844,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       modSince: row.role_since || 'N/A',
       promotion: row.promotion || roles[Math.min(roles.indexOf(row.role) + 1, roles.length - 1)],
       checks: row.checks || Object.fromEntries((baseChecksByRole[row.role] || []).map(item => [item, false])),
-      permissions: row.permissions || Object.fromEntries(dynamicPermissions.map(item => [item, false])),
-      values: row.values || Object.fromEntries(dynamicCoreValues.map(v => [v, false])),
+      permissions: row.permissions || Object.fromEntries(dynamicPermissions.map(item => [item.title, false])),
+      values: row.values || Object.fromEntries(dynamicCoreValues.map(item => [item.title, false])),
       disciplinary: row.disciplinary || { warnings: 0, actions: 0, logs: [] },
       notes: row.notes || '',
     }));
@@ -864,16 +888,17 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       .select('*')
       .order('category', { ascending: true });
 
-    if (!error && data?.length) {
-      setCheckboxCatalog(data.map(item => ({
-        id: item.id,
-        category: item.category,
-        role: item.role || '',
-        title: item.title,
-        question: item.question || '',
-        answer: item.answer || '',
-      })));
-    }
+      if (!error && data?.length) {
+        setCheckboxCatalog(data.map(item => ({
+          id: item.id,
+          category: item.category,
+          role: item.role || '',
+          ranks: parseRankScope(item.role),
+          title: item.title,
+          question: item.question || '',
+          answer: item.answer || '',
+        })));
+      }
     setCheckboxCatalogLoading(false);
   }
 
@@ -953,27 +978,31 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const baseChecksByRole = useMemo(() => {
     const map = Object.fromEntries(roles.map(role => [role, []]));
     checkboxCatalog
-      .filter(item => item.category === 'role' && item.role)
+      .filter(item => item.category === 'role')
       .forEach(item => {
-        if (map[item.role]) map[item.role].push(item.title);
+        const scopedRanks = parseRankScope(item.role);
+        const targets = scopedRanks.length ? scopedRanks : roles;
+        targets.forEach(rank => {
+          if (map[rank]) map[rank].push(item.title);
+        });
       });
     return map;
   }, [checkboxCatalog]);
 
-  const dynamicCoreValues = useMemo(
-    () => checkboxCatalog.filter(item => item.category === 'core').map(item => item.title),
-    [checkboxCatalog]
-  );
+  const dynamicCoreValues = useMemo(() => checkboxCatalog.filter(item => item.category === 'core'), [checkboxCatalog]);
 
-  const dynamicPermissions = useMemo(
-    () => checkboxCatalog.filter(item => item.category === 'permission').map(item => item.title),
-    [checkboxCatalog]
-  );
+  const dynamicPermissions = useMemo(() => checkboxCatalog.filter(item => item.category === 'permission'), [checkboxCatalog]);
 
   const dynamicQuizMap = useMemo(
     () => Object.fromEntries(checkboxCatalog.map(item => [item.title, { question: item.question, answer: item.answer, category: item.category === 'role' ? item.role || 'Role' : item.category === 'core' ? 'Core Value' : 'Permission' }])),
     [checkboxCatalog]
   );
+
+  function itemMatchesRank(item, rank) {
+    const scopedRanks = parseRankScope(item.role);
+    if (!scopedRanks.length) return true;
+    return scopedRanks.includes(rank);
+  }
 
   const filtered = useMemo(() => {
     const trainerNames = new Set(
@@ -1008,7 +1037,12 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   };
 
   const currentChecks = selected ? (baseChecksByRole[selected.role] || []) : [];
-  const currentPermissions = dynamicPermissions;
+  const currentCoreValues = selected
+    ? dynamicCoreValues.filter(item => itemMatchesRank(item, selected.role)).map(item => item.title)
+    : [];
+  const currentPermissions = selected
+    ? dynamicPermissions.filter(item => itemMatchesRank(item, selected.role)).map(item => item.title)
+    : [];
 
   async function saveStaffMember(member) {
     if (!dbReady || !supabase) return;
@@ -1222,7 +1256,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   async function addStaff() {
     if (!canEdit || !addStaffForm.name.trim()) return;
     const roleChecks = Object.fromEntries((baseChecksByRole[addStaffForm.role] || []).map(item => [item, false]));
-    const valueChecks = Object.fromEntries(dynamicCoreValues.map(item => [item, false]));
+    const valueChecks = Object.fromEntries(
+      dynamicCoreValues
+        .filter(item => itemMatchesRank(item, addStaffForm.role))
+        .map(item => [item.title, false])
+    );
     const nextId = Date.now();
     let resolvedProfileImage = addStaffForm.avatar.trim() || '';
     if (addStaffCardFile) {
@@ -1242,7 +1280,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       modSince: addStaffForm.modSince || todayIsoDate(),
       promotion: roles[Math.min(roles.indexOf(addStaffForm.role) + 1, roles.length - 1)],
       checks: roleChecks,
-      permissions: Object.fromEntries(dynamicPermissions.map(item => [item, false])),
+      permissions: Object.fromEntries(
+        dynamicPermissions
+          .filter(item => itemMatchesRank(item, addStaffForm.role))
+          .map(item => [item.title, false])
+      ),
       values: valueChecks,
       disciplinary: { warnings: 0, actions: 0, logs: [] },
       notes: '',
@@ -1441,7 +1483,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     const payload = {
       id: item.id,
       category: item.category,
-      role: item.role || null,
+      role: serializeRankScope(item.ranks || parseRankScope(item.role)) || null,
       title: item.title,
       question: item.question || null,
       answer: item.answer || null,
@@ -1467,10 +1509,46 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   function addCheckboxItem(category = 'role', role = 'T-MOD') {
     if (!canManageCheckboxes) return;
     const id = `custom-${Date.now()}`;
+    const created = {
+      id,
+      category,
+      role: category === 'role' ? role : '',
+      ranks: category === 'role' ? [role] : [],
+      title: 'New Checklist Item',
+      question: 'New quiz question',
+      answer: 'New quiz answer',
+    };
     setCheckboxCatalog(prev => [
       ...prev,
-      { id, category, role: category === 'role' ? role : '', title: 'New Checklist Item', question: 'New quiz question', answer: 'New quiz answer' },
+      created,
     ]);
+    return created;
+  }
+
+  function openCheckboxEditor(item) {
+    setCheckboxDraft({
+      ...item,
+      ranks: item.ranks || parseRankScope(item.role),
+      answers: parseAnswerList(item.answer),
+    });
+    setCheckboxEditorOpen(true);
+  }
+
+  function closeCheckboxEditor() {
+    setCheckboxEditorOpen(false);
+    setCheckboxDraft(null);
+  }
+
+  async function saveCheckboxDraft() {
+    if (!checkboxDraft) return;
+    const normalized = {
+      ...checkboxDraft,
+      role: serializeRankScope(checkboxDraft.ranks),
+      answer: (checkboxDraft.answers || []).map(v => v.trim()).filter(Boolean).join('\n'),
+    };
+    patchCheckboxItem(normalized.id, normalized);
+    await saveCheckboxItem(normalized);
+    closeCheckboxEditor();
   }
 
   if (!selected) {
@@ -1803,7 +1881,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                       <CardTitle className="flex items-center gap-2"><Star className="h-5 w-5 text-fuchsia-300" /> Core values review</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
-                      {dynamicCoreValues.map(item => (
+                      {currentCoreValues.map(item => (
                         <div key={item} className="rounded-xl border border-white/10 bg-black/20 p-3">
                           <label className="flex items-center justify-between gap-3">
                             <span className="text-sm text-zinc-100">{item}</span>
@@ -2231,142 +2309,69 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 {canManageCheckboxes && (
                   <>
                     <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-zinc-400">
-                      Structured like Tracker: role-based panels for role checklist lines, plus dedicated Core Values and Permissions panels.
+                      Pick a list, click a checkbox item to edit details, add multiple answers, and control which ranks can see it.
                     </div>
                     {checkboxCatalogLoading ? (
                       <div className="text-sm text-zinc-400">Loading checkbox catalog...</div>
                     ) : (
-                      <div className="grid gap-6 xl:grid-cols-[1.35fr,1fr]">
-                        <div className="space-y-6">
-                          {roles.map(role => {
-                            const roleItems = checkboxCatalog.filter(item => item.category === 'role' && (item.role || 'T-MOD') === role);
-                            return (
-                              <div key={role} className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                                <div className="mb-3 flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <Badge className="border-blue-400/40 bg-blue-500/10 text-blue-200">{role}</Badge>
-                                    <span className="text-sm text-zinc-400">Role Checklist</span>
-                                  </div>
-                                  <Button onClick={() => addCheckboxItem('role', role)} className="h-8 bg-fuchsia-600 px-3 text-xs hover:bg-fuchsia-500">Add line</Button>
-                                </div>
-                                <div className="space-y-3">
-                                  {!roleItems.length && <div className="rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-zinc-500">No lines configured for this role.</div>}
-                                  {roleItems.map(item => (
-                                    <div key={item.id} className="rounded-xl border border-white/10 bg-black/30 p-3">
-                                      <div className="grid gap-2 md:grid-cols-[1fr,90px,90px]">
-                                        <Input
-                                          value={item.title}
-                                          onChange={(e) => patchCheckboxItem(item.id, { title: e.target.value })}
-                                          className="border-white/10 bg-black/40 text-white"
-                                          placeholder="Checklist title"
-                                        />
-                                        <Button onClick={() => saveCheckboxItem(item)} className="bg-emerald-600 hover:bg-emerald-500">Save</Button>
-                                        <Button onClick={() => deleteCheckboxItem(item.id)} className="bg-red-600 hover:bg-red-500">Delete</Button>
-                                      </div>
-                                      <div className="mt-3 grid gap-3 md:grid-cols-2">
-                                        <Textarea
-                                          value={item.question || ''}
-                                          onChange={(e) => patchCheckboxItem(item.id, { question: e.target.value })}
-                                          className="min-h-[88px] border-white/10 bg-black/40 text-white"
-                                          placeholder="Quiz question"
-                                        />
-                                        <Textarea
-                                          value={item.answer || ''}
-                                          onChange={(e) => patchCheckboxItem(item.id, { answer: e.target.value })}
-                                          className="min-h-[88px] border-white/10 bg-black/40 text-white"
-                                          placeholder="Expected answer"
-                                        />
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            );
-                          })}
+                      <div className="space-y-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {[
+                            { id: 'role', label: 'Role Checklist', badge: 'border-blue-400/40 bg-blue-500/10 text-blue-200' },
+                            { id: 'core', label: 'Core Values', badge: 'border-emerald-400/40 bg-emerald-500/10 text-emerald-200' },
+                            { id: 'permission', label: 'Permissions', badge: 'border-amber-400/40 bg-amber-500/10 text-amber-200' },
+                          ].map(tab => (
+                            <button
+                              key={tab.id}
+                              type="button"
+                              onClick={() => setCheckboxMenu(tab.id)}
+                              className={`rounded-xl border px-3 py-1.5 text-xs transition ${
+                                checkboxMenu === tab.id
+                                  ? 'border-fuchsia-500/45 bg-fuchsia-500/15 text-fuchsia-100'
+                                  : 'border-white/10 bg-black/30 text-zinc-300 hover:bg-white/10'
+                              }`}
+                            >
+                              {tab.label}
+                            </button>
+                          ))}
+                          <div className="ml-auto">
+                            <Button
+                              onClick={() => {
+                                const created = addCheckboxItem(checkboxMenu, 'T-MOD');
+                                if (created) openCheckboxEditor(created);
+                              }}
+                              className="h-8 bg-fuchsia-600 px-3 text-xs hover:bg-fuchsia-500"
+                            >
+                              Add Checkbox
+                            </Button>
+                          </div>
                         </div>
 
-                        <div className="space-y-6">
-                          <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                            <div className="mb-3 flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <Badge className="border-emerald-400/40 bg-emerald-500/10 text-emerald-200">Core Values</Badge>
-                                <span className="text-sm text-zinc-400">Values Checklist</span>
-                              </div>
-                              <Button onClick={() => addCheckboxItem('core')} className="h-8 bg-fuchsia-600 px-3 text-xs hover:bg-fuchsia-500">Add line</Button>
-                            </div>
-                            <div className="space-y-3">
-                              {!checkboxCatalog.filter(item => item.category === 'core').length && <div className="rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-zinc-500">No core values configured.</div>}
-                              {checkboxCatalog.filter(item => item.category === 'core').map(item => (
-                                <div key={item.id} className="rounded-xl border border-white/10 bg-black/30 p-3">
-                                  <div className="grid gap-2 md:grid-cols-[1fr,90px,90px]">
-                                    <Input
-                                      value={item.title}
-                                      onChange={(e) => patchCheckboxItem(item.id, { title: e.target.value })}
-                                      className="border-white/10 bg-black/40 text-white"
-                                      placeholder="Core value title"
-                                    />
-                                    <Button onClick={() => saveCheckboxItem(item)} className="bg-emerald-600 hover:bg-emerald-500">Save</Button>
-                                    <Button onClick={() => deleteCheckboxItem(item.id)} className="bg-red-600 hover:bg-red-500">Delete</Button>
-                                  </div>
-                                  <div className="mt-3 grid gap-3">
-                                    <Textarea
-                                      value={item.question || ''}
-                                      onChange={(e) => patchCheckboxItem(item.id, { question: e.target.value })}
-                                      className="min-h-[72px] border-white/10 bg-black/40 text-white"
-                                      placeholder="Value check question"
-                                    />
-                                    <Textarea
-                                      value={item.answer || ''}
-                                      onChange={(e) => patchCheckboxItem(item.id, { answer: e.target.value })}
-                                      className="min-h-[72px] border-white/10 bg-black/40 text-white"
-                                      placeholder="Expected answer"
-                                    />
-                                  </div>
+                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                          {checkboxCatalog
+                            .filter(item => item.category === checkboxMenu)
+                            .sort((a, b) => a.title.localeCompare(b.title))
+                            .map(item => (
+                              <button
+                                key={item.id}
+                                type="button"
+                                onClick={() => openCheckboxEditor(item)}
+                                className="rounded-2xl border border-white/10 bg-black/20 p-4 text-left transition hover:border-fuchsia-500/35 hover:bg-fuchsia-500/10"
+                              >
+                                <div className="text-sm font-semibold text-white">{item.title}</div>
+                                <div className="mt-1 max-h-8 overflow-hidden text-xs text-zinc-400">{item.question || 'No question yet'}</div>
+                                <div className="mt-3 flex flex-wrap gap-1.5">
+                                  {parseRankScope(item.role).length ? parseRankScope(item.role).map(rank => (
+                                    <Badge key={rank} className="border-white/10 bg-white/10 px-2 text-[10px] text-zinc-200">{rank}</Badge>
+                                  )) : (
+                                    <Badge className="border-white/10 bg-white/10 px-2 text-[10px] text-zinc-200">All ranks</Badge>
+                                  )}
                                 </div>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                            <div className="mb-3 flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <Badge className="border-amber-400/40 bg-amber-500/10 text-amber-200">Permissions</Badge>
-                                <span className="text-sm text-zinc-400">Permissions & Actions</span>
-                              </div>
-                              <Button onClick={() => addCheckboxItem('permission')} className="h-8 bg-fuchsia-600 px-3 text-xs hover:bg-fuchsia-500">Add line</Button>
-                            </div>
-                            <div className="space-y-3">
-                              {!checkboxCatalog.filter(item => item.category === 'permission').length && <div className="rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-zinc-500">No permissions configured.</div>}
-                              {checkboxCatalog.filter(item => item.category === 'permission').map(item => (
-                                <div key={item.id} className="rounded-xl border border-white/10 bg-black/30 p-3">
-                                  <div className="grid gap-2 md:grid-cols-[1fr,90px,90px]">
-                                    <Input
-                                      value={item.title}
-                                      onChange={(e) => patchCheckboxItem(item.id, { title: e.target.value })}
-                                      className="border-white/10 bg-black/40 text-white"
-                                      placeholder="Permission title"
-                                    />
-                                    <Button onClick={() => saveCheckboxItem(item)} className="bg-emerald-600 hover:bg-emerald-500">Save</Button>
-                                    <Button onClick={() => deleteCheckboxItem(item.id)} className="bg-red-600 hover:bg-red-500">Delete</Button>
-                                  </div>
-                                  <div className="mt-3 grid gap-3">
-                                    <Textarea
-                                      value={item.question || ''}
-                                      onChange={(e) => patchCheckboxItem(item.id, { question: e.target.value })}
-                                      className="min-h-[72px] border-white/10 bg-black/40 text-white"
-                                      placeholder="Permissions quiz question"
-                                    />
-                                    <Textarea
-                                      value={item.answer || ''}
-                                      onChange={(e) => patchCheckboxItem(item.id, { answer: e.target.value })}
-                                      className="min-h-[72px] border-white/10 bg-black/40 text-white"
-                                      placeholder="Expected answer"
-                                    />
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
+                              </button>
+                            ))}
+                          {!checkboxCatalog.filter(item => item.category === checkboxMenu).length && (
+                            <div className="rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-zinc-500">No items in this list yet.</div>
+                          )}
                         </div>
                       </div>
                     )}
@@ -2452,6 +2457,121 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               <div className="mt-5 flex justify-end gap-2">
                 <Button variant="secondary" onClick={() => setAddStaffOpen(false)} className="rounded-2xl">Cancel</Button>
                 <Button onClick={addStaff} className="rounded-2xl bg-fuchsia-600 hover:bg-fuchsia-500">Create Staff Member</Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {checkboxEditorOpen && checkboxDraft && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+            <div className="w-full max-w-2xl rounded-2xl border border-white/15 bg-zinc-950 p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="text-lg font-semibold text-white">Edit Checkbox</div>
+                <button type="button" onClick={closeCheckboxEditor} className="text-sm text-zinc-400 hover:text-white">Close</button>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Category</div>
+                  <Select value={checkboxDraft.category} onValueChange={(value) => setCheckboxDraft(prev => ({ ...prev, category: value }))}>
+                    <SelectTrigger className="border-white/10 bg-black/30 text-white"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="role">Role Checklist</SelectItem>
+                      <SelectItem value="core">Core Values</SelectItem>
+                      <SelectItem value="permission">Permissions</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Title</div>
+                  <Input
+                    value={checkboxDraft.title || ''}
+                    onChange={(e) => setCheckboxDraft(prev => ({ ...prev, title: e.target.value }))}
+                    className="border-white/10 bg-black/30 text-white"
+                    placeholder="Checkbox title"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Question</div>
+                  <Textarea
+                    value={checkboxDraft.question || ''}
+                    onChange={(e) => setCheckboxDraft(prev => ({ ...prev, question: e.target.value }))}
+                    className="min-h-[95px] border-white/10 bg-black/30 text-white"
+                    placeholder="Question shown in tracker"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Answers</div>
+                  <div className="space-y-2">
+                    {(checkboxDraft.answers || ['']).map((answer, idx) => (
+                      <div key={`${checkboxDraft.id}-ans-${idx}`} className="flex gap-2">
+                        <Input
+                          value={answer}
+                          onChange={(e) =>
+                            setCheckboxDraft(prev => {
+                              const next = [...(prev.answers || [''])];
+                              next[idx] = e.target.value;
+                              return { ...prev, answers: next };
+                            })
+                          }
+                          className="border-white/10 bg-black/30 text-white"
+                          placeholder={`Answer ${idx + 1}`}
+                        />
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="rounded-xl"
+                          onClick={() =>
+                            setCheckboxDraft(prev => {
+                              const next = [...(prev.answers || [''])];
+                              if (next.length <= 1) return prev;
+                              next.splice(idx, 1);
+                              return { ...prev, answers: next };
+                            })
+                          }
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="rounded-xl"
+                      onClick={() => setCheckboxDraft(prev => ({ ...prev, answers: [...(prev.answers || ['']), ''] }))}
+                    >
+                      Add Answer
+                    </Button>
+                  </div>
+                </div>
+                <div className="md:col-span-2">
+                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Visible for ranks</div>
+                  <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+                    {roles.map(role => (
+                      <label key={`${checkboxDraft.id}-${role}`} className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-200">
+                        {role}
+                        <Checkbox
+                          checked={(checkboxDraft.ranks || []).includes(role)}
+                          onCheckedChange={(checked) =>
+                            setCheckboxDraft(prev => {
+                              const current = new Set(prev.ranks || []);
+                              if (checked) current.add(role);
+                              else current.delete(role);
+                              return { ...prev, ranks: [...current] };
+                            })
+                          }
+                        />
+                      </label>
+                    ))}
+                  </div>
+                  <div className="mt-2 text-xs text-zinc-500">No rank selected means this checkbox is shown to all ranks.</div>
+                </div>
+              </div>
+              <div className="mt-5 flex justify-between gap-2">
+                <Button onClick={async () => { await deleteCheckboxItem(checkboxDraft.id); closeCheckboxEditor(); }} className="rounded-2xl bg-red-600 hover:bg-red-500">Delete</Button>
+                <div className="flex gap-2">
+                  <Button variant="secondary" onClick={closeCheckboxEditor} className="rounded-2xl">Cancel</Button>
+                  <Button onClick={saveCheckboxDraft} className="rounded-2xl bg-fuchsia-600 hover:bg-fuchsia-500">Save</Button>
+                </div>
               </div>
             </div>
           </div>
