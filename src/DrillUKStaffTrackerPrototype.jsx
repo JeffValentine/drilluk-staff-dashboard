@@ -1829,6 +1829,16 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
             Your dashboard account is not linked to a staff profile yet. Ask Head Admin to link your account from the Management tab.
           </div>
+          {profile?.god_key_enabled && (
+            <button
+              type="button"
+              onClick={forceHeadAdminReset}
+              title="God Key recovery: force role back to Head Admin"
+              className="fixed bottom-6 right-6 rounded-2xl border border-emerald-400/45 bg-gradient-to-r from-emerald-600 to-green-500 px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(16,185,129,0.3)] hover:from-emerald-500 hover:to-green-400"
+            >
+              God Key Reset
+            </button>
+          )}
         </div>
       );
     }
@@ -3323,6 +3333,16 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               </div>
             </div>
           </div>
+        )}
+        {profile?.god_key_enabled && (
+          <button
+            type="button"
+            onClick={forceHeadAdminReset}
+            title="God Key recovery: force role back to Head Admin"
+            className="fixed bottom-6 right-6 z-40 rounded-2xl border border-emerald-400/45 bg-gradient-to-r from-emerald-600 to-green-500 px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(16,185,129,0.3)] hover:from-emerald-500 hover:to-green-400"
+          >
+            God Key Reset
+          </button>
         )}
       </div>
     </div>
