@@ -744,6 +744,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [filterWarningOnly, setFilterWarningOnly] = useState(false);
   const [managementUsers, setManagementUsers] = useState([]);
   const [managementLoading, setManagementLoading] = useState(false);
+  const [managementError, setManagementError] = useState('');
   const [checkboxCatalog, setCheckboxCatalog] = useState(buildDefaultCheckboxCatalog());
   const [checkboxCatalogLoading, setCheckboxCatalogLoading] = useState(false);
   const [checkboxMenu, setCheckboxMenu] = useState('role');
@@ -864,20 +865,37 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   async function refreshManagementUsersFromDb() {
     if (!dbReady || !supabase || !canManageUsers) return;
     setManagementLoading(true);
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, username, role, is_active, avatar_url')
-      .order('username', { ascending: true });
-    if (error?.code === '42703') {
-      const { data: fallbackData } = await supabase
+    setManagementError('');
+    try {
+      const { data, error } = await supabase
         .from('profiles')
-        .select('id, username, role, is_active')
+        .select('id, username, role, is_active, avatar_url')
         .order('username', { ascending: true });
-      setManagementUsers((fallbackData || []).map(u => ({ ...u, avatar_url: null })));
-    } else {
+
+      if (error?.code === '42703') {
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('profiles')
+          .select('id, username, role, is_active')
+          .order('username', { ascending: true });
+        if (fallbackError) {
+          setManagementUsers([]);
+          setManagementError(fallbackError.message || 'Failed to load users.');
+          return;
+        }
+        setManagementUsers((fallbackData || []).map(u => ({ ...u, avatar_url: null })));
+        return;
+      }
+
+      if (error) {
+        setManagementUsers([]);
+        setManagementError(error.message || 'Failed to load users.');
+        return;
+      }
+
       setManagementUsers(data || []);
+    } finally {
+      setManagementLoading(false);
     }
-    setManagementLoading(false);
   }
 
   async function refreshCheckboxCatalogFromDb() {
@@ -2244,6 +2262,16 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                       <div className="text-sm text-zinc-400">Loading users...</div>
                     ) : (
                       <div className="space-y-3">
+                        {managementError && (
+                          <div className="rounded-xl border border-red-500/35 bg-red-500/10 p-3 text-sm text-red-200">
+                            {managementError}
+                          </div>
+                        )}
+                        {!managementError && !managementUsers.length && (
+                          <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">
+                            No users returned from profiles yet.
+                          </div>
+                        )}
                         {managementUsers.map(user => (
                           <div key={user.id} className="grid gap-3 rounded-xl border border-white/10 bg-black/20 p-3 md:grid-cols-[1.5fr,1fr,1.2fr,140px]">
                             <div className="flex items-start gap-3">
