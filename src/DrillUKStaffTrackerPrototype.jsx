@@ -748,6 +748,9 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [checkboxCatalog, setCheckboxCatalog] = useState(buildDefaultCheckboxCatalog());
   const [checkboxCatalogLoading, setCheckboxCatalogLoading] = useState(false);
   const [checkboxMenu, setCheckboxMenu] = useState('role');
+  const [checkboxFilterOpen, setCheckboxFilterOpen] = useState(false);
+  const [checkboxQuery, setCheckboxQuery] = useState('');
+  const [checkboxRankFilter, setCheckboxRankFilter] = useState('All');
   const [checkboxEditorOpen, setCheckboxEditorOpen] = useState(false);
   const [checkboxDraft, setCheckboxDraft] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -1015,6 +1018,24 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     () => Object.fromEntries(checkboxCatalog.map(item => [item.title, { question: item.question, answer: item.answer, category: item.category === 'role' ? item.role || 'Role' : item.category === 'core' ? 'Core Value' : 'Permission' }])),
     [checkboxCatalog]
   );
+
+  const filteredCheckboxItems = useMemo(() => {
+    const q = checkboxQuery.trim().toLowerCase();
+    return checkboxCatalog
+      .filter(item => item.category === checkboxMenu)
+      .filter(item => {
+        if (!q) return true;
+        const haystack = [item.title, item.question, item.answer].filter(Boolean).join(' ').toLowerCase();
+        return haystack.includes(q);
+      })
+      .filter(item => {
+        if (checkboxRankFilter === 'All') return true;
+        const scopedRanks = parseRankScope(item.role);
+        if (!scopedRanks.length) return true;
+        return scopedRanks.includes(checkboxRankFilter);
+      })
+      .sort((a, b) => a.title.localeCompare(b.title));
+  }, [checkboxCatalog, checkboxMenu, checkboxQuery, checkboxRankFilter]);
 
   function itemMatchesRank(item, rank) {
     const scopedRanks = parseRankScope(item.role);
@@ -2379,6 +2400,13 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                             </button>
                           ))}
                           <div className="ml-auto">
+                            <button
+                              type="button"
+                              onClick={() => setCheckboxFilterOpen(v => !v)}
+                              className="mr-2 rounded-xl border border-white/10 bg-black/30 px-3 py-1.5 text-xs text-zinc-300 hover:bg-white/10"
+                            >
+                              Filters
+                            </button>
                             <Button
                               onClick={() => {
                                 const created = addCheckboxItem(checkboxMenu, 'T-MOD');
@@ -2391,11 +2419,30 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                           </div>
                         </div>
 
+                        {checkboxFilterOpen && (
+                          <div className="grid gap-3 rounded-2xl border border-white/10 bg-black/25 p-3 md:grid-cols-[1fr,180px,120px]">
+                            <div className="relative">
+                              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+                              <Input
+                                value={checkboxQuery}
+                                onChange={(e) => setCheckboxQuery(e.target.value)}
+                                placeholder="Search title, question, or answers..."
+                                className="border-white/10 bg-black/30 pl-9 text-white placeholder:text-zinc-500"
+                              />
+                            </div>
+                            <Select value={checkboxRankFilter} onValueChange={setCheckboxRankFilter}>
+                              <SelectTrigger className="border-white/10 bg-black/30 text-white"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="All">All ranks</SelectItem>
+                                {roles.map(role => <SelectItem key={`cb-rank-${role}`} value={role}>{role}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                            <Badge className="justify-center border-white/10 bg-white/10 text-zinc-200">{filteredCheckboxItems.length} shown</Badge>
+                          </div>
+                        )}
+
                         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                          {checkboxCatalog
-                            .filter(item => item.category === checkboxMenu)
-                            .sort((a, b) => a.title.localeCompare(b.title))
-                            .map(item => (
+                          {filteredCheckboxItems.map(item => (
                               <button
                                 key={item.id}
                                 type="button"
@@ -2413,7 +2460,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                                 </div>
                               </button>
                             ))}
-                          {!checkboxCatalog.filter(item => item.category === checkboxMenu).length && (
+                          {!filteredCheckboxItems.length && (
                             <div className="rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-zinc-500">No items in this list yet.</div>
                           )}
                         </div>
