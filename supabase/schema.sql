@@ -1,0 +1,144 @@
+-- Run in Supabase SQL editor
+create extension if not exists pgcrypto;
+
+create table if not exists public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  username text unique,
+  avatar_url text,
+  role text not null default 'viewer' check (role in ('viewer', 'trainer', 'admin', 'head_admin')),
+  is_active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.staff_members (
+  id bigint primary key,
+  name text not null,
+  role text not null,
+  trainer text not null default 'Unassigned',
+  profile_image text,
+  status text not null default 'In Training',
+  strong_sides text not null default '',
+  attention_points text not null default '',
+  signed_off boolean not null default false,
+  staff_since text not null default 'N/A',
+  role_since text not null default 'N/A',
+  promotion text,
+  checks jsonb not null default '{}'::jsonb,
+  values jsonb not null default '{}'::jsonb,
+  permissions jsonb not null default '{}'::jsonb,
+  disciplinary jsonb not null default '{"warnings":0,"actions":0,"logs":[]}'::jsonb,
+  notes text not null default '',
+  updated_by uuid references auth.users(id),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.audit_logs (
+  id uuid primary key default gen_random_uuid(),
+  actor_id uuid references auth.users(id),
+  action text not null,
+  target_id text,
+  before_value jsonb,
+  after_value jsonb,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.checkbox_catalog (
+  id text primary key,
+  category text not null check (category in ('role', 'core', 'permission')),
+  role text,
+  title text not null,
+  question text,
+  answer text,
+  updated_by uuid references auth.users(id),
+  updated_at timestamptz not null default now()
+);
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id, username, role, is_active)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data ->> 'username', split_part(new.email, '@', 1)),
+    'viewer',
+    true
+  )
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+alter table public.profiles add column if not exists avatar_url text;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+after insert on auth.users
+for each row execute procedure public.handle_new_user();
+
+alter table public.profiles enable row level security;
+alter table public.staff_members enable row level security;
+alter table public.audit_logs enable row level security;
+alter table public.checkbox_catalog enable row level security;
+
+create or replace function public.current_user_role()
+returns text
+language sql
+stable
+as $$
+  select role from public.profiles where id = auth.uid()
+$$;
+
+create policy "profiles_self_read"
+on public.profiles for select
+using (id = auth.uid() or public.current_user_role() = 'head_admin');
+
+create policy "profiles_head_admin_update"
+on public.profiles for update
+using (public.current_user_role() = 'head_admin')
+with check (public.current_user_role() = 'head_admin');
+
+create policy "staff_read_authenticated"
+on public.staff_members for select
+using (auth.uid() is not null);
+
+create policy "staff_write_trainer_admin"
+on public.staff_members for insert
+with check (public.current_user_role() in ('trainer', 'admin', 'head_admin'));
+
+create policy "staff_update_trainer_admin"
+on public.staff_members for update
+using (public.current_user_role() in ('trainer', 'admin', 'head_admin'))
+with check (public.current_user_role() in ('trainer', 'admin', 'head_admin'));
+
+create policy "staff_delete_admin_head"
+on public.staff_members for delete
+using (public.current_user_role() in ('admin', 'head_admin'));
+
+create policy "audit_insert_authenticated"
+on public.audit_logs for insert
+with check (auth.uid() is not null);
+
+create policy "audit_read_admin_head"
+on public.audit_logs for select
+using (public.current_user_role() in ('admin', 'head_admin'));
+
+create policy "checkbox_catalog_read_authenticated"
+on public.checkbox_catalog for select
+using (auth.uid() is not null);
+
+create policy "checkbox_catalog_write_admin_head"
+on public.checkbox_catalog for insert
+with check (public.current_user_role() in ('admin', 'head_admin'));
+
+create policy "checkbox_catalog_update_admin_head"
+on public.checkbox_catalog for update
+using (public.current_user_role() in ('admin', 'head_admin'))
+with check (public.current_user_role() in ('admin', 'head_admin'));
+
+create policy "checkbox_catalog_delete_admin_head"
+on public.checkbox_catalog for delete
+using (public.current_user_role() in ('admin', 'head_admin'));
