@@ -1198,7 +1198,14 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         .map(item => {
           const payload = parseQuizPayload(item.answer);
           const primaryCorrect = payload.correct[0] || '';
-          const options = shuffleArray([primaryCorrect, ...payload.wrong.filter(Boolean)].filter(Boolean));
+          const fallbackWrong = [
+            'Handle without checking policy first.',
+            'Skip documentation and close it quickly.',
+            'Apply this action in every case by default.',
+          ];
+          const wrongPool = [...payload.wrong.filter(Boolean), ...fallbackWrong]
+            .filter(option => option && option !== primaryCorrect);
+          const options = shuffleArray([primaryCorrect, ...wrongPool.slice(0, 3)].filter(Boolean));
           return {
             id: item.id,
             title: item.title,
@@ -1207,7 +1214,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
             options,
           };
         })
-        .filter(item => item.correct && item.options.length >= 2);
+        .filter(item => item.correct);
 
     return {
       role: build('role'),
