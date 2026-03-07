@@ -2384,7 +2384,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                                 const created = addCheckboxItem(checkboxMenu, 'T-MOD');
                                 if (created) openCheckboxEditor(created);
                               }}
-                              className="h-8 bg-fuchsia-600 px-3 text-xs hover:bg-fuchsia-500"
+                              className="h-8 rounded-xl border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-600 to-indigo-600 px-3 text-xs text-white shadow-[0_0_0_1px_rgba(255,255,255,0.06)] hover:from-fuchsia-500 hover:to-indigo-500"
                             >
                               Add Checkbox
                             </Button>
@@ -2563,7 +2563,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                         <Button
                           type="button"
                           variant="secondary"
-                          className="rounded-xl"
+                          className="rounded-xl border border-red-500/35 bg-red-500/10 text-red-100 hover:bg-red-500/20"
                           onClick={() =>
                             setCheckboxDraft(prev => {
                               const next = [...(prev.answers || [''])];
@@ -2580,7 +2580,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                     <Button
                       type="button"
                       variant="secondary"
-                      className="rounded-xl"
+                      className="rounded-xl border border-fuchsia-400/35 bg-fuchsia-500/10 text-fuchsia-100 hover:bg-fuchsia-500/20"
                       onClick={() => setCheckboxDraft(prev => ({ ...prev, answers: [...(prev.answers || ['']), ''] }))}
                     >
                       Add Answer
@@ -2611,10 +2611,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 </div>
               </div>
               <div className="mt-5 flex justify-between gap-2">
-                <Button onClick={async () => { await deleteCheckboxItem(checkboxDraft.id); closeCheckboxEditor(); }} className="rounded-2xl bg-red-600 hover:bg-red-500">Delete</Button>
+                <Button onClick={async () => { await deleteCheckboxItem(checkboxDraft.id); closeCheckboxEditor(); }} className="rounded-2xl border border-red-400/40 bg-gradient-to-r from-red-700 to-red-600 text-white hover:from-red-600 hover:to-red-500">Delete</Button>
                 <div className="flex gap-2">
-                  <Button variant="secondary" onClick={closeCheckboxEditor} className="rounded-2xl">Cancel</Button>
-                  <Button onClick={saveCheckboxDraft} className="rounded-2xl bg-fuchsia-600 hover:bg-fuchsia-500">Save</Button>
+                  <Button variant="secondary" onClick={closeCheckboxEditor} className="rounded-2xl border border-white/15 bg-black/25 text-zinc-100 hover:bg-white/10">Cancel</Button>
+                  <Button onClick={saveCheckboxDraft} className="rounded-2xl border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white hover:from-fuchsia-500 hover:to-indigo-500">Save</Button>
                 </div>
               </div>
             </div>
