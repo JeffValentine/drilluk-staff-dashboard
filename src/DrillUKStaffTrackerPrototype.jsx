@@ -2121,16 +2121,18 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         )}
 
         <Tabs defaultValue={isStaffInTraining ? 'myprogress' : 'tracker'} className="space-y-4">
-          <TabsList className={`grid w-full bg-white/5 ${isStaffInTraining ? 'grid-cols-1 md:w-[260px]' : 'grid-cols-8 md:w-[1320px]'}`}>
+          <TabsList className={`grid w-full bg-white/5 ${isStaffInTraining ? 'grid-cols-2 md:w-[520px]' : 'grid-cols-7 md:w-[1220px]'}`}>
             {isStaffInTraining ? (
-              <TabsTrigger value="myprogress">My Progress</TabsTrigger>
+              <>
+                <TabsTrigger value="myprogress">My Progress</TabsTrigger>
+                <TabsTrigger value="hub">Overview & Resources</TabsTrigger>
+              </>
             ) : (
               <>
                 <TabsTrigger value="tracker">Tracker</TabsTrigger>
                 <TabsTrigger value="session">Training Session</TabsTrigger>
                 <TabsTrigger value="progression">Progression</TabsTrigger>
-                <TabsTrigger value="resources">Resources</TabsTrigger>
-                <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger value="hub">Overview & Resources</TabsTrigger>
                 <TabsTrigger value="checkboxes">Checkboxes</TabsTrigger>
                 <TabsTrigger value="management">Management</TabsTrigger>
                 <TabsTrigger value="discipline">Discipline</TabsTrigger>
@@ -2709,45 +2711,67 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
             </Card>
           </TabsContent>
 
-          <TabsContent value="resources">
-            <div className="grid gap-6 xl:grid-cols-[1.05fr,0.95fr]">
+          <TabsContent value="hub">
+            <div className="grid items-start gap-4 xl:grid-cols-[1.18fr,0.82fr]">
               <Card className="border-white/10 bg-white/5">
                 <CardHeader>
-                  <CardTitle>Drill UK quick resources</CardTitle>
+                  <CardTitle>Overview & Resources</CardTitle>
                 </CardHeader>
-                <CardContent className="grid gap-3 md:grid-cols-2">
-                  {quickLinks.map(link => (
-                    <a
-                      key={link.label}
-                      href={link.href}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="group rounded-2xl border border-white/10 bg-black/20 p-4 transition hover:border-fuchsia-500/30 hover:bg-fuchsia-500/10"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="rounded-xl border border-white/10 bg-white/5 p-2">
-                            <link.icon className="h-4 w-4 text-fuchsia-300" />
-                          </div>
-                          <div>
-                            <div className="font-medium text-white">{link.label}</div>
-                            <div className="text-xs text-zinc-400">Open official Drill UK resource</div>
-                          </div>
-                        </div>
-                        <ExternalLink className="h-4 w-4 text-zinc-500 transition group-hover:text-fuchsia-300" />
+                <CardContent className="space-y-4">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {[
+                      'One record per staff member instead of one crowded worksheet tab',
+                      'Checkboxes for training checks and values replace manual ticks',
+                      'Quiz prompts are tied directly to checks for live testing',
+                      'Fast filtering, trainer assignment, and progression tracking',
+                    ].map(text => (
+                      <div key={text} className="rounded-2xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-200">
+                        {text}
                       </div>
-                    </a>
-                  ))}
+                    ))}
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-2">
+                    {quickLinks.map(link => (
+                      <a
+                        key={link.label}
+                        href={link.href}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="group rounded-xl border border-white/10 bg-black/25 p-3 transition hover:border-fuchsia-500/30 hover:bg-fuchsia-500/10"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <div className="rounded-lg border border-white/10 bg-white/5 p-1.5">
+                              <link.icon className="h-3.5 w-3.5 text-fuchsia-300" />
+                            </div>
+                            <div className="text-sm font-medium text-white">{link.label}</div>
+                          </div>
+                          <ExternalLink className="h-3.5 w-3.5 text-zinc-500 transition group-hover:text-fuchsia-300" />
+                        </div>
+                      </a>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
 
               <Card className="border-white/10 bg-white/5">
                 <CardHeader>
-                  <CardTitle>Live server context to train around</CardTitle>
+                  <CardTitle>Design Language</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  {siteSignals.map(signal => (
-                    <div key={signal.title} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <CardContent className="space-y-2.5 text-sm text-zinc-300">
+                  <div className="rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/10 p-3">Dark black base with Drill UK purple glow accents.</div>
+                  <div className="rounded-xl border border-white/10 bg-black/20 p-3">Card-based layout for quick scanning during training.</div>
+                  <div className="rounded-xl border border-white/10 bg-black/20 p-3">Aligned to live Drill UK support, rules, and training flow.</div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-white/10 bg-white/5">
+                <CardHeader>
+                  <CardTitle>Live Server Context</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2.5">
+                  {siteSignals.slice(0, 3).map(signal => (
+                    <div key={signal.title} className="rounded-xl border border-white/10 bg-black/20 p-3">
                       <div className="mb-1 text-sm font-semibold text-white">{signal.title}</div>
                       <div className="text-sm text-zinc-300">{signal.text}</div>
                     </div>
@@ -2755,122 +2779,58 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 </CardContent>
               </Card>
 
-              <Card className="border-white/10 bg-white/5 xl:col-span-2">
+              <Card className="border-white/10 bg-white/5">
                 <CardHeader>
-                  <CardTitle>Meet The Team card showcase (Malia, MB, Loco)</CardTitle>
+                  <CardTitle>Rule Training Pack</CardTitle>
                 </CardHeader>
-                <CardContent className="grid gap-4 md:grid-cols-3">
-                  {teamCardShowcase.map(member => (
-                    <div
-                      key={member.name}
-                      className="overflow-hidden rounded-2xl border border-fuchsia-500/20 bg-black/30"
-                    >
-                      <img
-                        src={member.cardArt}
-                        alt={`${member.name} staff card`}
-                        className="h-[290px] w-full object-cover object-top"
-                        loading="lazy"
-                      />
-                      <div className="space-y-3 p-4">
-                        <div className="flex items-center justify-between">
-                          <div className="text-base font-semibold text-white">{member.name}</div>
-                          <Badge className="border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-200">{member.rarity}</Badge>
-                        </div>
-                        <div className="text-xs uppercase tracking-[0.2em] text-zinc-400">{member.role}</div>
-                        <div className="grid grid-cols-3 gap-2 text-xs">
-                          <div className="rounded-lg border border-white/10 bg-black/40 p-2 text-center">
-                            <div className="text-zinc-400">Support</div>
-                            <div className="mt-1 font-semibold text-white">{member.stats.support}</div>
-                          </div>
-                          <div className="rounded-lg border border-white/10 bg-black/40 p-2 text-center">
-                            <div className="text-zinc-400">Reviews</div>
-                            <div className="mt-1 font-semibold text-white">{member.stats.reviews}</div>
-                          </div>
-                          <div className="rounded-lg border border-white/10 bg-black/40 p-2 text-center">
-                            <div className="text-zinc-400">Lead</div>
-                            <div className="mt-1 font-semibold text-white">{member.stats.leadership}</div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-
-              <Card className="border-white/10 bg-white/5 xl:col-span-2">
-                <CardHeader>
-                  <CardTitle>Rule training pack</CardTitle>
-                </CardHeader>
-                <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                <CardContent className="space-y-2.5">
                   {[
-                    {
-                      title: 'Reports first',
-                      text: 'Staff training should reinforce report-first workflow, with clip review baked into moderation sessions.',
-                      icon: FileVideo,
-                    },
-                    {
-                      title: 'No RDM / valid RP reason',
-                      text: 'Use this as a constant quiz topic for trainees when reviewing force-based incidents.',
-                      icon: Swords,
-                    },
-                    {
-                      title: 'Unbiased reviews',
-                      text: 'Build escalation habits around second opinions when situations are messy or disputed.',
-                      icon: Gavel,
-                    },
+                    { title: 'Reports first', text: 'Use report-first workflow with clip review in moderation sessions.', icon: FileVideo },
+                    { title: 'No RDM / valid RP reason', text: 'Keep this as a recurring quiz topic for force incidents.', icon: Swords },
+                    { title: 'Unbiased reviews', text: 'Require second opinions on messy or disputed cases.', icon: Gavel },
                   ].map(item => (
-                    <div key={item.title} className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/5 p-4">
-                      <div className="mb-3 flex items-center gap-2 text-fuchsia-200">
+                    <div key={item.title} className="rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/5 p-3">
+                      <div className="mb-1.5 flex items-center gap-2 text-fuchsia-200">
                         <item.icon className="h-4 w-4" />
-                        <span className="font-medium">{item.title}</span>
+                        <span className="text-sm font-medium">{item.title}</span>
                       </div>
                       <div className="text-sm text-zinc-300">{item.text}</div>
                     </div>
                   ))}
                 </CardContent>
               </Card>
-            </div>
-          </TabsContent>
 
-          <TabsContent value="overview">
-            <div className="grid gap-6 lg:grid-cols-3">
-              <Card className="border-white/10 bg-white/5 lg:col-span-2">
+              <Card className="border-white/10 bg-white/5 xl:col-span-2">
                 <CardHeader>
-                  <CardTitle>What this now replaces from the Excel version</CardTitle>
+                  <CardTitle>Meet The Team Showcase</CardTitle>
                 </CardHeader>
-                <CardContent className="grid gap-3 md:grid-cols-2">
-                  {[
-                    'One record per staff member instead of one crowded worksheet tab',
-                    'Checkboxes for training checks and values instead of manually ticking cells',
-                    'Built-in question prompts tied to checks so trainers can test rule knowledge live',
-                    'Faster searching, filtering, trainer assignment, and promotion tracking',
-                    'Quick links to rules, commands, FAQ, keybinds, team page, and support resources',
-                    'Expandable to add history logs, review dates, permissions, and real saved data later',
-                  ].map(text => (
-                    <div
-                      key={text}
-                      className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-zinc-200"
-                    >
-                      {text}
+                <CardContent className="grid gap-3 md:grid-cols-3">
+                  {teamCardShowcase.map(member => (
+                    <div key={member.name} className="overflow-hidden rounded-2xl border border-fuchsia-500/20 bg-black/30">
+                      <img src={member.cardArt} alt={`${member.name} staff card`} className="h-[230px] w-full object-cover object-top" loading="lazy" />
+                      <div className="space-y-2 p-3">
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm font-semibold text-white">{member.name}</div>
+                          <Badge className="border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-200">{member.rarity}</Badge>
+                        </div>
+                        <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-400">{member.role}</div>
+                        <div className="grid grid-cols-3 gap-1.5 text-[11px]">
+                          <div className="rounded-lg border border-white/10 bg-black/40 p-1.5 text-center">
+                            <div className="text-zinc-400">Support</div>
+                            <div className="font-semibold text-white">{member.stats.support}</div>
+                          </div>
+                          <div className="rounded-lg border border-white/10 bg-black/40 p-1.5 text-center">
+                            <div className="text-zinc-400">Reviews</div>
+                            <div className="font-semibold text-white">{member.stats.reviews}</div>
+                          </div>
+                          <div className="rounded-lg border border-white/10 bg-black/40 p-1.5 text-center">
+                            <div className="text-zinc-400">Lead</div>
+                            <div className="font-semibold text-white">{member.stats.leadership}</div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   ))}
-                </CardContent>
-              </Card>
-
-              <Card className="border-white/10 bg-white/5">
-                <CardHeader>
-                  <CardTitle>Design language</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 text-sm text-zinc-300">
-                  <div className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/10 p-4">
-                    Dark black base with Drill UK purple glow accents.
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    Card-based layout for quick scanning during training.
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    Now shaped around the live Drill UK website, support messaging, and rules flow.
-                  </div>
                 </CardContent>
               </Card>
             </div>
