@@ -636,6 +636,12 @@ function roleColor(role) {
   return 'bg-rose-500/15 text-rose-300 border-rose-500/30';
 }
 
+function nameSizeClass(name = '') {
+  if (name.length > 20) return 'text-xs';
+  if (name.length > 14) return 'text-sm';
+  return 'text-lg';
+}
+
 function accountRoleLabel(role) {
   if (role === 'viewer') return 'Guest';
   if (role === 'head_admin') return 'Head Admin';
@@ -1520,7 +1526,12 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                             </div>
                             <div>
                               <div className="flex items-center gap-2">
-                                <div className="text-lg font-semibold">{member.name}</div>
+                                <div
+                                  className={`${nameSizeClass(member.name)} max-w-[140px] truncate font-semibold`}
+                                  title={member.name}
+                                >
+                                  {member.name}
+                                </div>
                                 <Badge className={`${roleColor(member.role)} max-w-[92px] overflow-hidden text-ellipsis whitespace-nowrap px-2 text-[10px]`}>{member.role}</Badge>
                               </div>
                               <div className="mt-1 text-sm text-zinc-400">Trainer: {member.trainer}</div>
@@ -1555,7 +1566,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <div className="flex items-center gap-3">
-                          <h2 className="text-2xl font-bold">{selected.name}</h2>
+                          <h2 className="max-w-[340px] truncate text-2xl font-bold" title={selected.name}>{selected.name}</h2>
                           <Badge className={roleColor(selected.role)}>{selected.role}</Badge>
                           <Badge className={statusColor(selected.status)}>{selected.status}</Badge>
                           {selected.disciplinary?.warnings > 0 && (
