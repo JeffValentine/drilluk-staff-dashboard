@@ -889,8 +889,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         .map(s => s.trainer)
         .filter(name => name && name !== 'Unassigned' && name !== 'Head Team')
     );
-
-    return staff.filter(s =>
+    const roleOrder = new Map(roles.map((role, index) => [role, index]));
+    const list = staff.filter(s =>
       (s.name.toLowerCase().includes(query.toLowerCase()) ||
       s.role.toLowerCase().includes(query.toLowerCase()) ||
       s.status.toLowerCase().includes(query.toLowerCase())) &&
@@ -899,6 +899,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       (!filterActiveOnly || s.status === 'Active') &&
       (!filterWarningOnly || (s.disciplinary?.warnings || 0) > 0 || (s.disciplinary?.actions || 0) > 0)
     );
+    return list.sort((a, b) => {
+      const rankDiff = (roleOrder.get(a.role) ?? 999) - (roleOrder.get(b.role) ?? 999);
+      if (rankDiff !== 0) return rankDiff;
+      return a.name.localeCompare(b.name);
+    });
   }, [staff, query, filterRole, filterTrainerOnly, filterActiveOnly, filterWarningOnly]);
 
   const selected = staff.find(s => s.id === selectedId) || staff[0] || null;
@@ -1516,18 +1521,18 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                             <div>
                               <div className="flex items-center gap-2">
                                 <div className="text-lg font-semibold">{member.name}</div>
-                                <Badge className={roleColor(member.role)}>{member.role}</Badge>
+                                <Badge className={`${roleColor(member.role)} max-w-[92px] overflow-hidden text-ellipsis whitespace-nowrap px-2 text-[10px]`}>{member.role}</Badge>
                               </div>
                               <div className="mt-1 text-sm text-zinc-400">Trainer: {member.trainer}</div>
                             </div>
                           </div>
-                          <div className="space-y-1">
-                            <Badge className={statusColor(member.status)}>{member.status}</Badge>
+                          <div className="flex max-w-[130px] flex-col items-end gap-1">
+                            <Badge className={`${statusColor(member.status)} max-w-full overflow-hidden text-ellipsis whitespace-nowrap px-2 text-[10px]`}>{member.status}</Badge>
                             {member.disciplinary?.warnings > 0 && (
-                              <Badge className="border-red-500/40 bg-red-500/15 text-red-300">Warning - {member.disciplinary.warnings}</Badge>
+                              <Badge className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap border-red-500/40 bg-red-500/15 px-2 text-[10px] text-red-300">Warning - {member.disciplinary.warnings}</Badge>
                             )}
                             {member.disciplinary?.actions > 0 && (
-                              <Badge className="border-red-600/50 bg-red-600/20 text-red-200">Disciplinary Action - {member.disciplinary.actions}</Badge>
+                              <Badge className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap border-red-600/50 bg-red-600/20 px-2 text-[10px] text-red-200">Disciplinary Action - {member.disciplinary.actions}</Badge>
                             )}
                           </div>
                         </div>
