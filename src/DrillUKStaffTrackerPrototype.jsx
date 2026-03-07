@@ -1369,17 +1369,17 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         </div>
         <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <div className="mb-2 flex items-center gap-3">
+            <div className="mb-2 flex flex-wrap items-center gap-3">
               <div className="rounded-2xl border border-fuchsia-500/30 bg-fuchsia-500/10 p-2">
                 <Shield className="h-6 w-6 text-fuchsia-300" />
               </div>
               <img src="/assets/logos/drilluk-logo.png" alt="Drill UK logo" className="h-10 w-10 rounded-xl border border-white/10 bg-black/20 object-cover mix-blend-screen" />
               <Badge className="border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-200 hover:bg-fuchsia-500/10">Drill UK Staff System</Badge>
-              <Badge className="max-w-[120px] overflow-hidden text-ellipsis whitespace-nowrap border-white/10 bg-white/10 px-2 text-[10px] text-zinc-200">
+              <Badge className="border-white/10 bg-white/10 px-2 text-[10px] text-zinc-200">
                 {accountRoleLabel(profile?.role)}
               </Badge>
               <Badge
-                className="max-w-[140px] overflow-hidden text-ellipsis whitespace-nowrap border-white/10 bg-white/10 px-2 text-[10px] text-zinc-200"
+                className="border-white/10 bg-white/10 px-2 text-[10px] text-zinc-200"
                 title={profile?.username || authUser?.email?.split('@')[0] || 'Guest'}
               >
                 {profile?.username || authUser?.email?.split('@')[0] || 'Guest'}
@@ -1539,19 +1539,19 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                                 >
                                   {member.name}
                                 </div>
-                                <Badge className={`${roleColor(member.role)} max-w-[92px] overflow-hidden text-ellipsis whitespace-nowrap px-2 text-[10px]`}>{member.role}</Badge>
                               </div>
                               <div className="mt-1 text-sm text-zinc-400">Trainer: {member.trainer}</div>
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                <Badge className={`${roleColor(member.role)} px-2 text-[10px]`}>{member.role}</Badge>
+                                <Badge className={`${statusColor(member.status)} px-2 text-[10px]`}>{member.status}</Badge>
+                                {member.disciplinary?.warnings > 0 && (
+                                  <Badge className="border-red-500/40 bg-red-500/15 px-2 text-[10px] text-red-300">Warning - {member.disciplinary.warnings}</Badge>
+                                )}
+                                {member.disciplinary?.actions > 0 && (
+                                  <Badge className="border-red-600/50 bg-red-600/20 px-2 text-[10px] text-red-200">Disciplinary Action - {member.disciplinary.actions}</Badge>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                          <div className="flex w-[106px] shrink-0 flex-col items-end gap-1">
-                            <Badge className={`${statusColor(member.status)} w-full justify-center overflow-hidden text-ellipsis whitespace-nowrap px-2 text-[10px]`}>{member.status}</Badge>
-                            {member.disciplinary?.warnings > 0 && (
-                              <Badge className="w-full justify-center overflow-hidden text-ellipsis whitespace-nowrap border-red-500/40 bg-red-500/15 px-2 text-[10px] text-red-300">Warning - {member.disciplinary.warnings}</Badge>
-                            )}
-                            {member.disciplinary?.actions > 0 && (
-                              <Badge className="w-full justify-center overflow-hidden text-ellipsis whitespace-nowrap border-red-600/50 bg-red-600/20 px-2 text-[10px] text-red-200">Disciplinary Action - {member.disciplinary.actions}</Badge>
-                            )}
                           </div>
                         </div>
                         <div className="mt-4">
