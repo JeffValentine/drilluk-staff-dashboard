@@ -716,12 +716,62 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileName, setProfileName] = useState(profile?.username || '');
   const [profileAvatar, setProfileAvatar] = useState(profile?.avatar_url || '');
+  const [profileAvatarFile, setProfileAvatarFile] = useState(null);
+  const ownProfileFileInputRef = useRef(null);
+  const [activeUsersOpen, setActiveUsersOpen] = useState(false);
+  const [activeUsers, setActiveUsers] = useState([]);
   const lastLocalStaffEditRef = useRef(0);
 
   useEffect(() => {
     setProfileName(profile?.username || '');
     setProfileAvatar(profile?.avatar_url || '');
+    setProfileAvatarFile(null);
   }, [profile]);
+
+  useEffect(() => {
+    if (!dbReady || !supabase || !authUser?.id) return;
+
+    const channel = supabase.channel('dashboard_online_presence', {
+      config: { presence: { key: authUser.id } },
+    });
+
+    const syncActiveUsers = () => {
+      const state = channel.presenceState();
+      const rows = Object.entries(state).map(([id, metas]) => {
+        const latest = metas[metas.length - 1] || {};
+        return {
+          id,
+          username: latest.username || latest.email?.split('@')?.[0] || 'Guest',
+          email: latest.email || '',
+          role: latest.role || 'Guest',
+          avatar_url: latest.avatar_url || null,
+        };
+      });
+      rows.sort((a, b) => a.username.localeCompare(b.username));
+      setActiveUsers(rows);
+    };
+
+    channel
+      .on('presence', { event: 'sync' }, syncActiveUsers)
+      .on('presence', { event: 'join' }, syncActiveUsers)
+      .on('presence', { event: 'leave' }, syncActiveUsers)
+      .subscribe(async (status) => {
+        if (status !== 'SUBSCRIBED') return;
+        await channel.track({
+          id: authUser.id,
+          username: profile?.username || authUser.email?.split('@')[0] || 'Guest',
+          email: authUser.email || '',
+          role: accountRoleLabel(profile?.role),
+          avatar_url: profile?.avatar_url || null,
+          at: new Date().toISOString(),
+        });
+      });
+
+    return () => {
+      channel.untrack();
+      supabase.removeChannel(channel);
+    };
+  }, [dbReady, authUser?.id, authUser?.email, profile?.username, profile?.role, profile?.avatar_url]);
 
   async function refreshStaffFromDb() {
     if (!dbReady || !supabase) return;
@@ -1334,11 +1384,29 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   async function saveOwnProfile() {
     if (!dbReady || !supabase || !profile?.id) return;
+
+    let nextAvatar = profileAvatar || null;
+    if (profileAvatarFile) {
+      const extRaw = (profileAvatarFile.name?.split('.').pop() || 'png').toLowerCase();
+      const safeExt = extRaw.replace(/[^a-z0-9]/g, '') || 'png';
+      const path = `profiles/${profile.id}/${Date.now()}.${safeExt}`;
+      const { error } = await supabase.storage
+        .from('staff-cards')
+        .upload(path, profileAvatarFile, { upsert: true, contentType: profileAvatarFile.type || 'image/png' });
+
+      if (!error) {
+        const { data } = supabase.storage.from('staff-cards').getPublicUrl(path);
+        nextAvatar = data?.publicUrl || nextAvatar;
+      }
+    }
+
     await supabase
       .from('profiles')
-      .update({ username: profileName || null, avatar_url: profileAvatar || null })
+      .update({ username: profileName || null, avatar_url: nextAvatar || null })
       .eq('id', profile.id);
-    await writeAudit('profile.update', profile.id, null, { username: profileName || null, avatar_url: profileAvatar || null });
+    await writeAudit('profile.update', profile.id, null, { username: profileName || null, avatar_url: nextAvatar || null });
+    setProfileAvatar(nextAvatar || '');
+    setProfileAvatarFile(null);
     setProfileOpen(false);
     onProfileRefresh?.();
   }
@@ -1418,6 +1486,16 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           </div>
           <div className="flex items-start gap-3 md:w-[560px] md:justify-end">
             <div className="flex flex-col items-center gap-2">
+              {canManageUsers && (
+                <button
+                  type="button"
+                  onClick={() => setActiveUsersOpen(true)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/35 bg-emerald-500/12 px-3 py-1.5 text-xs text-emerald-200 hover:bg-emerald-500/20"
+                >
+                  <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                  Active {activeUsers.length}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setProfileOpen(true)}
@@ -2408,13 +2486,66 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                   <Input value={profileName} onChange={(e) => setProfileName(e.target.value)} className="border-white/10 bg-black/30 text-white" placeholder="Your display name" />
                 </div>
                 <div>
-                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Avatar URL</div>
-                  <Input value={profileAvatar} onChange={(e) => setProfileAvatar(e.target.value)} className="border-white/10 bg-black/30 text-white" placeholder="https://... or /assets/..." />
+                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Profile image</div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => ownProfileFileInputRef.current?.click()}
+                      className="rounded-xl border border-white/15 bg-black/25 text-zinc-100 hover:bg-white/10"
+                    >
+                      Select image
+                    </Button>
+                    <span className="text-xs text-zinc-500">
+                      {profileAvatarFile ? profileAvatarFile.name : 'No file selected'}
+                    </span>
+                  </div>
+                  <input
+                    ref={ownProfileFileInputRef}
+                    type="file"
+                    accept="image/png,image/webp,image/jpeg"
+                    onChange={(e) => setProfileAvatarFile(e.target.files?.[0] || null)}
+                    className="hidden"
+                  />
                 </div>
                 <div className="flex justify-end gap-2">
                   <Button variant="secondary" onClick={() => setProfileOpen(false)} className="rounded-2xl">Cancel</Button>
                   <Button onClick={saveOwnProfile} className="rounded-2xl bg-fuchsia-600 hover:bg-fuchsia-500">Save Profile</Button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {canManageUsers && activeUsersOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+            <div className="w-full max-w-lg rounded-2xl border border-emerald-500/30 bg-zinc-950 p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="text-lg font-semibold text-white">Active Users</div>
+                <button type="button" onClick={() => setActiveUsersOpen(false)} className="text-sm text-zinc-400 hover:text-white">Close</button>
+              </div>
+              <div className="space-y-2">
+                {!activeUsers.length && (
+                  <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">No active users detected.</div>
+                )}
+                {activeUsers.map(user => (
+                  <div key={user.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 p-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      {user.avatar_url ? (
+                        <img src={user.avatar_url} alt={`${user.username} avatar`} className="h-9 w-9 rounded-lg border border-white/10 object-cover" />
+                      ) : (
+                        <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-black/30 text-sm font-semibold text-zinc-200">
+                          {(user.username?.[0] || 'G').toUpperCase()}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-white">{user.username}</div>
+                        <div className="truncate text-xs text-zinc-500">{user.email || user.id}</div>
+                      </div>
+                    </div>
+                    <Badge className="border-emerald-500/35 bg-emerald-500/15 text-emerald-200">{user.role}</Badge>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
