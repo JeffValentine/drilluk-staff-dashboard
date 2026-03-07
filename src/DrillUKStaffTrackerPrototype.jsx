@@ -646,6 +646,18 @@ function todayIsoDate() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function formatLastSeen(iso) {
+  if (!iso) return 'Unknown';
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.max(0, Math.floor(diffMs / 60000));
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 function accountRoleLabel(role) {
   if (role === 'viewer') return 'Guest';
   if (role === 'head_admin') return 'Head Admin';
@@ -745,12 +757,14 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           email: latest.email || '',
           role: latest.role || 'Guest',
           avatar_url: latest.avatar_url || null,
+          last_seen_at: latest.at || null,
         };
       });
-      rows.sort((a, b) => a.username.localeCompare(b.username));
+      rows.sort((a, b) => new Date(b.last_seen_at || 0).getTime() - new Date(a.last_seen_at || 0).getTime());
       setActiveUsers(rows);
     };
 
+    let heartbeat;
     channel
       .on('presence', { event: 'sync' }, syncActiveUsers)
       .on('presence', { event: 'join' }, syncActiveUsers)
@@ -765,9 +779,20 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           avatar_url: profile?.avatar_url || null,
           at: new Date().toISOString(),
         });
+        heartbeat = setInterval(() => {
+          channel.track({
+            id: authUser.id,
+            username: profile?.username || authUser.email?.split('@')[0] || 'Guest',
+            email: authUser.email || '',
+            role: accountRoleLabel(profile?.role),
+            avatar_url: profile?.avatar_url || null,
+            at: new Date().toISOString(),
+          });
+        }, 30000);
       });
 
     return () => {
+      if (heartbeat) clearInterval(heartbeat);
       channel.untrack();
       supabase.removeChannel(channel);
     };
@@ -2541,6 +2566,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                       <div className="min-w-0">
                         <div className="truncate text-sm font-semibold text-white">{user.username}</div>
                         <div className="truncate text-xs text-zinc-500">{user.email || user.id}</div>
+                        <div className="mt-0.5 text-[11px] text-zinc-500">Last seen: {formatLastSeen(user.last_seen_at)}</div>
                       </div>
                     </div>
                     <Badge className="border-emerald-500/35 bg-emerald-500/15 text-emerald-200">{user.role}</Badge>
