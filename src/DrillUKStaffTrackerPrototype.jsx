@@ -1339,6 +1339,12 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     await writeAudit('user.avatar.update', userId, null, { avatar_url: avatarUrl || null });
   }
 
+  async function handleManagementAvatarFile(userId, file) {
+    if (!file || !canManageUsers) return;
+    const avatarUrl = await uploadStaffProfileImage(file, `profile-${userId}`);
+    await updateUserAvatar(userId, avatarUrl);
+  }
+
   async function restoreDemoStaff() {
     if (!canManageUsers || !dbReady || !supabase) return;
 
@@ -2254,7 +2260,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                   <>
                     <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-zinc-400 md:flex-row md:items-center md:justify-between">
                       <span>Manage trainer/admin access here. All changes are protected and audit logged.</span>
-                      <Button onClick={restoreDemoStaff} className="bg-fuchsia-600 hover:bg-fuchsia-500">
+                      <Button onClick={restoreDemoStaff} className="rounded-xl border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-600 to-indigo-600 px-4 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.06)] hover:from-fuchsia-500 hover:to-indigo-500">
                         Restore Demo Staff
                       </Button>
                     </div>
@@ -2273,7 +2279,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                           </div>
                         )}
                         {managementUsers.map(user => (
-                          <div key={user.id} className="grid gap-3 rounded-xl border border-white/10 bg-black/20 p-3 md:grid-cols-[1.5fr,1fr,1.2fr,140px]">
+                          <div key={user.id} className="grid gap-3 rounded-xl border border-white/10 bg-black/20 p-3 md:grid-cols-[1.5fr,1fr,1fr,150px]">
                             <div className="flex items-start gap-3">
                               {user.avatar_url ? (
                                 <img src={user.avatar_url} alt={`${user.username || 'user'} avatar`} className="h-10 w-10 rounded-xl border border-white/10 object-cover" />
@@ -2296,20 +2302,30 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                                 <SelectItem value="head_admin">head_admin</SelectItem>
                               </SelectContent>
                             </Select>
-                            <div className="flex gap-2">
-                              <Input
-                                value={user.avatar_url || ''}
-                                onChange={(e) => setManagementUsers(prev => prev.map(u => (u.id === user.id ? { ...u, avatar_url: e.target.value } : u)))}
-                                placeholder="Avatar URL"
-                                className="border-white/10 bg-black/30 text-white"
-                              />
-                              <Button onClick={() => updateUserAvatar(user.id, user.avatar_url || null)} className="bg-fuchsia-600 hover:bg-fuchsia-500">
-                                Save
+                            <div className="flex items-center gap-2">
+                              <Button
+                                type="button"
+                                onClick={() => document.getElementById(`mgmt-avatar-${user.id}`)?.click()}
+                                className="rounded-xl border border-white/15 bg-black/30 px-3 text-xs text-zinc-100 hover:bg-white/10"
+                              >
+                                Edit profile picture
                               </Button>
+                              <input
+                                id={`mgmt-avatar-${user.id}`}
+                                type="file"
+                                accept="image/png,image/webp,image/jpeg"
+                                className="hidden"
+                                onChange={(e) => {
+                                  handleManagementAvatarFile(user.id, e.target.files?.[0]);
+                                  e.target.value = '';
+                                }}
+                              />
                             </div>
                             <Button
                               onClick={() => toggleUserActive(user.id, !user.is_active)}
-                              className={user.is_active ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-red-600 hover:bg-red-500'}
+                              className={user.is_active
+                                ? 'rounded-xl border border-emerald-400/40 bg-gradient-to-r from-emerald-600 to-green-500 px-3 text-white hover:from-emerald-500 hover:to-green-400'
+                                : 'rounded-xl border border-red-400/40 bg-gradient-to-r from-red-700 to-red-600 px-3 text-white hover:from-red-600 hover:to-red-500'}
                             >
                               {user.is_active ? 'Active' : 'Disabled'}
                             </Button>
