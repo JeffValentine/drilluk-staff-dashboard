@@ -960,17 +960,30 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       .select('*')
       .order('category', { ascending: true });
 
-      if (!error && data?.length) {
-        setCheckboxCatalog(data.map(item => ({
-          id: item.id,
-          category: item.category,
-          role: item.role || '',
-          ranks: parseRankScope(item.role),
-          title: item.title,
-          question: item.question || '',
-          answer: item.answer || '',
-        })));
-      }
+    if (!error) {
+      const defaults = buildDefaultCheckboxCatalog();
+      const dbRows = (data || []).map(item => ({
+        id: item.id,
+        category: item.category,
+        role: item.role || '',
+        ranks: parseRankScope(item.role),
+        title: item.title,
+        question: item.question || '',
+        answer: item.answer || '',
+      }));
+
+      const mergedById = new Map(defaults.map(item => [item.id, item]));
+      dbRows.forEach(item => {
+        const existing = mergedById.get(item.id);
+        mergedById.set(item.id, existing ? { ...existing, ...item } : item);
+      });
+      const merged = Array.from(mergedById.values()).sort((a, b) => {
+        const categoryDiff = String(a.category).localeCompare(String(b.category));
+        if (categoryDiff !== 0) return categoryDiff;
+        return String(a.title).localeCompare(String(b.title));
+      });
+      setCheckboxCatalog(merged);
+    }
     setCheckboxCatalogLoading(false);
   }
 
