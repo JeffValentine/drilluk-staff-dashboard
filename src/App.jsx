@@ -25,7 +25,7 @@ function LoginScreen({ error, info, onSignIn, onSignUp }) {
           <p className="mt-2 text-sm text-zinc-400">
             {mode === "signin"
               ? "Sign in to access the protected Drill-UK dashboard."
-              : "Create an account. New users are automatically tagged as Guest."}
+              : "Create an account. New users are pending approval by Head of Staff."}
           </p>
           {!isSupabaseConfigured && (
             <div className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
@@ -80,6 +80,31 @@ function LoginScreen({ error, info, onSignIn, onSignUp }) {
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function PendingApprovalScreen({ profile, onSignOut }) {
+  return (
+    <div className="min-h-screen bg-[#07070b] text-white">
+      <div className="mx-auto flex min-h-screen w-full max-w-md items-center px-6">
+        <div className="w-full rounded-2xl border border-white/10 bg-white/5 p-6">
+          <h1 className="font-display text-2xl font-bold">Approval Pending</h1>
+          <p className="mt-2 text-sm text-zinc-400">
+            You are awaiting approval by the Head of Staff before dashboard access is granted.
+          </p>
+          <div className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
+            Account: {profile?.username || "Guest"} ({profile?.role || "viewer"})
+          </div>
+          <button
+            className="mt-4 h-10 w-full rounded-md border border-white/15 bg-black/25 text-sm text-zinc-200 hover:bg-white/10"
+            type="button"
+            onClick={onSignOut}
+          >
+            Sign out
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -145,7 +170,7 @@ export default function App() {
         id: session.user.id,
         username: session.user.email?.split("@")[0] ?? "user",
         role: "viewer",
-        is_active: true,
+        is_active: false,
         avatar_url: null,
       };
       setProfile(fallback);
@@ -162,7 +187,7 @@ export default function App() {
   const canAccessDashboard = useMemo(() => {
     if (!session || !profile) return false;
     if (!profile.is_active) return false;
-    return ["head_admin", "admin", "trainer", "viewer"].includes(profile.role);
+    return ["head_admin", "admin", "trainer"].includes(profile.role);
   }, [session, profile]);
 
   async function signIn(email, password) {
@@ -192,7 +217,7 @@ export default function App() {
       return;
     }
 
-    setInfo("Account created. You can now sign in (or confirm email if your project requires verification).");
+    setInfo("Account created. After sign-in, your account will stay locked until Head of Staff approval.");
   }
 
   async function signOut() {
@@ -204,8 +229,16 @@ export default function App() {
     return <div className="min-h-screen bg-zinc-950 text-zinc-200 p-6">Loading...</div>;
   }
 
-  if (!session || !canAccessDashboard) {
+  if (!session) {
     return <LoginScreen error={error} info={info} onSignIn={signIn} onSignUp={signUp} />;
+  }
+
+  if (!profile) {
+    return <div className="min-h-screen bg-zinc-950 p-6 text-zinc-200">Loading account...</div>;
+  }
+
+  if (!canAccessDashboard) {
+    return <PendingApprovalScreen profile={profile} onSignOut={signOut} />;
   }
 
   return (

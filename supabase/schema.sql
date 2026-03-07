@@ -6,7 +6,7 @@ create table if not exists public.profiles (
   username text unique,
   avatar_url text,
   role text not null default 'viewer' check (role in ('viewer', 'trainer', 'admin', 'head_admin')),
-  is_active boolean not null default true,
+  is_active boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -65,7 +65,7 @@ begin
     new.id,
     coalesce(new.raw_user_meta_data ->> 'username', split_part(new.email, '@', 1)),
     'viewer',
-    true
+    false
   )
   on conflict (id) do nothing;
   return new;
