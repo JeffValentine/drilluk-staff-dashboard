@@ -1701,6 +1701,15 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     }));
   }
 
+  async function updateLinkedStaffRank(userId, nextRole) {
+    if (!canManageUsers || !dbReady || !supabase) return;
+    const linked = staff.find(member => member.traineeUserId === userId);
+    if (!linked) return;
+    await supabase.from('staff_members').update({ role: nextRole }).eq('id', linked.id);
+    setStaff(prev => prev.map(member => (member.id === linked.id ? { ...member, role: nextRole } : member)));
+    await writeAudit('staff.linked_role.update', linked.id, null, { role: nextRole, user_id: userId });
+  }
+
   async function restoreDemoStaff() {
     if (!canManageUsers || !dbReady || !supabase) return;
 
@@ -2860,8 +2869,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                             No users returned from profiles yet.
                           </div>
                         )}
-                        {managementUsers.map(user => (
-                          <div key={user.id} className="grid gap-3 rounded-xl border border-white/10 bg-black/20 p-3 md:grid-cols-[1.35fr,1fr,1fr,1.05fr,0.8fr,150px]">
+                        {managementUsers.map(user => {
+                          const linkedStaff = staff.find(member => member.traineeUserId === user.id) || null;
+                          return (
+                          <div key={user.id} className="grid gap-3 rounded-xl border border-white/10 bg-black/20 p-3 md:grid-cols-[1.35fr,1fr,1fr,1.25fr,0.8fr,150px]">
                             <div className="flex items-start gap-3">
                               {user.avatar_url ? (
                                 <img src={user.avatar_url} alt={`${user.username || 'user'} avatar`} className="h-10 w-10 rounded-xl border border-white/10 object-cover" />
@@ -2911,20 +2922,48 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                                 }}
                               />
                             </div>
-                            <Select
-                              value={(staff.find(member => member.traineeUserId === user.id)?.id?.toString()) || 'none'}
-                              onValueChange={(value) => assignUserToStaff(user.id, value)}
-                            >
-                              <SelectTrigger className="border-white/10 bg-black/30 text-white"><SelectValue placeholder="Linked staff member" /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">No linked staff</SelectItem>
-                                {staff.map(member => (
-                                  <SelectItem key={`link-${member.id}`} value={String(member.id)}>
-                                    {member.name} ({member.role})
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            <div className="space-y-2">
+                              <div>
+                                <div className="mb-1 text-[10px] uppercase tracking-[0.18em] text-zinc-500">Current rank</div>
+                                <Select
+                                  value={linkedStaff?.role || 'none'}
+                                  onValueChange={(value) => {
+                                    if (value === 'none') return;
+                                    updateLinkedStaffRank(user.id, value);
+                                  }}
+                                  disabled={!linkedStaff}
+                                >
+                                  <SelectTrigger className="border-white/10 bg-black/30 text-white">
+                                    <SelectValue placeholder="No linked profile" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">No linked profile</SelectItem>
+                                    {roles.map(role => (
+                                      <SelectItem key={`linked-rank-${user.id}-${role}`} value={role}>
+                                        {role}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div>
+                                <div className="mb-1 text-[10px] uppercase tracking-[0.18em] text-zinc-500">Profile</div>
+                                <Select
+                                  value={linkedStaff?.id?.toString() || 'none'}
+                                  onValueChange={(value) => assignUserToStaff(user.id, value)}
+                                >
+                                  <SelectTrigger className="border-white/10 bg-black/30 text-white"><SelectValue placeholder="Linked staff profile" /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">No linked staff</SelectItem>
+                                    {staff.map(member => (
+                                      <SelectItem key={`link-${member.id}`} value={String(member.id)}>
+                                        {member.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
                             <label className="flex items-center justify-between rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-zinc-200">
                               Grant God Key
                               <Checkbox
@@ -2941,7 +2980,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                               {user.is_active ? 'Active' : 'Disabled'}
                             </Button>
                           </div>
-                        ))}
+                        )})}
                       </div>
                     )}
                   </>
