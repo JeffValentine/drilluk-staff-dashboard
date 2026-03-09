@@ -38,6 +38,12 @@ const drillRosterSeed = [
   { rank: 'Team Lead', name: 'Scouse' },
 ];
 
+function formatRosterSeedForInput() {
+  return drillRosterSeed
+    .map((entry, index) => `${index + 1} ${entry.rank}    ${entry.name}`)
+    .join('\n');
+}
+
 const baseChecks = {
   'T-MOD': [
     'Report-first enforcement',
@@ -1012,6 +1018,44 @@ function mapRosterRankToRole(rankLabel) {
   return 'T-MOD';
 }
 
+function parseRosterInputText(inputText) {
+  const lines = String(inputText || '')
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean);
+
+  const parsed = [];
+  lines.forEach(line => {
+    let rank = '';
+    let name = '';
+    const numbered = line.match(/^\d+\s+(.+?)\s{2,}(.+)$/);
+    const plain = line.match(/^(.+?)\s{2,}(.+)$/);
+    const dashed = line.match(/^(.+?)\s*-\s*(.+)$/);
+
+    if (numbered) {
+      rank = numbered[1];
+      name = numbered[2];
+    } else if (plain) {
+      rank = plain[1];
+      name = plain[2];
+    } else if (dashed) {
+      rank = dashed[1];
+      name = dashed[2];
+    }
+
+    if (!name || !rank) return;
+    parsed.push({ rank: rank.trim(), name: name.trim() });
+  });
+
+  const seen = new Set();
+  return parsed.filter(entry => {
+    const key = entry.name.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function QuizHint({ item, answer, category }) {
   const [open, setOpen] = useState(false);
 
@@ -1099,6 +1143,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [reviewDrafts, setReviewDrafts] = useState({});
   const lastLocalStaffEditRef = useRef(0);
   const isOwnerSession = (authUser?.email || '').toLowerCase() === SITE_OWNER_EMAIL;
+  const [rosterSyncOpen, setRosterSyncOpen] = useState(false);
+  const [rosterSyncText, setRosterSyncText] = useState(formatRosterSeedForInput());
   const [rankDisplayNames, setRankDisplayNames] = useState(defaultRankDisplayNames);
   const [rankDrafts, setRankDrafts] = useState(defaultRankDisplayNames);
   const [rankDisplayLoading, setRankDisplayLoading] = useState(false);
@@ -2071,8 +2117,13 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   async function syncMissingRosterProfiles() {
     if (!canManageUsers) return;
+    const rosterRows = parseRosterInputText(rosterSyncText);
+    if (!rosterRows.length) {
+      window.alert('No valid roster rows found. Paste lines like: "1 Junior Associate    Begoshi"');
+      return;
+    }
     const existingNames = new Set(staff.map(member => String(member.name || '').trim().toLowerCase()));
-    const missing = drillRosterSeed.filter(entry => !existingNames.has(String(entry.name || '').trim().toLowerCase()));
+    const missing = rosterRows.filter(entry => !existingNames.has(String(entry.name || '').trim().toLowerCase()));
     if (!missing.length) {
       window.alert('All listed roster members already have tracker profiles.');
       return;
@@ -2118,6 +2169,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     await Promise.all(additions.map(member => saveStaffMember(member)));
     await writeAudit('staff.roster_sync', 'bulk', null, { added: additions.map(m => ({ name: m.name, role: m.role })) });
     window.alert(`Added ${additions.length} missing roster profile(s).`);
+    setRosterSyncOpen(false);
   }
 
   async function updateUserRole(userId, nextRole) {
@@ -3445,7 +3497,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                     <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-zinc-400 md:flex-row md:items-center md:justify-between">
                       <span>Manage trainer/admin access here. All changes are protected and audit logged.</span>
                       <div className="flex flex-wrap items-center gap-2">
-                        <Button onClick={syncMissingRosterProfiles} className="rounded-xl border border-cyan-400/40 bg-gradient-to-r from-cyan-600 to-sky-600 px-4 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.06)] hover:from-cyan-500 hover:to-sky-500">
+                        <Button onClick={() => setRosterSyncOpen(true)} className="rounded-xl border border-cyan-400/40 bg-gradient-to-r from-cyan-600 to-sky-600 px-4 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.06)] hover:from-cyan-500 hover:to-sky-500">
                           Sync Missing Roster
                         </Button>
                         <Button onClick={restoreDemoStaff} className="rounded-xl border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-600 to-indigo-600 px-4 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.06)] hover:from-fuchsia-500 hover:to-indigo-500">
@@ -3895,6 +3947,34 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
             </Card>
           </TabsContent>
         </Tabs>
+
+        {rosterSyncOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+            <div className="w-full max-w-3xl rounded-2xl border border-cyan-500/35 bg-zinc-950 p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="text-lg font-semibold text-white">Sync Missing Roster Profiles</div>
+                <button type="button" onClick={() => setRosterSyncOpen(false)} className="text-sm text-zinc-400 hover:text-white">Close</button>
+              </div>
+              <div className="space-y-3">
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-zinc-300">
+                  Copy and paste your current staff list here. This only adds names missing from tracker.
+                </div>
+                <Textarea
+                  value={rosterSyncText}
+                  onChange={(e) => setRosterSyncText(e.target.value)}
+                  className="min-h-[260px] border-white/10 bg-black/30 text-white"
+                  placeholder="1 Junior Associate    Begoshi"
+                />
+                <div className="flex justify-end gap-2">
+                  <Button variant="secondary" onClick={() => setRosterSyncOpen(false)} className="rounded-2xl">Cancel</Button>
+                  <Button onClick={syncMissingRosterProfiles} className="rounded-2xl border border-cyan-400/40 bg-gradient-to-r from-cyan-600 to-sky-600 text-white hover:from-cyan-500 hover:to-sky-500">
+                    Sync Missing Profiles
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {addStaffOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
