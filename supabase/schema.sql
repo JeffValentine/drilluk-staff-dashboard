@@ -208,7 +208,7 @@ begin
     raise exception 'Insufficient permissions';
   end if;
 
-  generated_token := upper(encode(gen_random_bytes(10), 'hex'));
+  generated_token := upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 20));
   expiry_time := case
     when coalesce(valid_for_hours, 0) > 0 then now() + make_interval(hours => valid_for_hours)
     else null
