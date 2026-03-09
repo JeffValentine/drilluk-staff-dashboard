@@ -1150,17 +1150,82 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [rankDisplayNames, setRankDisplayNames] = useState(defaultRankDisplayNames);
   const [rankDrafts, setRankDrafts] = useState(defaultRankDisplayNames);
   const [rankDisplayLoading, setRankDisplayLoading] = useState(false);
+  const [syncPausedByEdit, setSyncPausedByEdit] = useState(false);
+  const [inputEditingActive, setInputEditingActive] = useState(false);
+  const [pendingSyncFlags, setPendingSyncFlags] = useState({
+    staff: false,
+    profiles: false,
+    checkbox: false,
+    ranks: false,
+  });
+  const syncPauseTimerRef = useRef(null);
+  const syncLockedRef = useRef(false);
+  const pendingSyncRef = useRef({
+    staff: false,
+    profiles: false,
+    checkbox: false,
+    ranks: false,
+  });
   const [quizState, setQuizState] = useState({
     role: { started: false, score: null, answers: {} },
     core: { started: false, score: null, answers: {} },
     permission: { started: false, score: null, answers: {} },
   });
+  const isEditOverlayOpen = checkboxEditorOpen || addStaffOpen || rosterSyncOpen || profileOpen || disciplineOpen || sessionNotesOpen || sessionActionsOpen;
+  const isSyncLocked = syncPausedByEdit || inputEditingActive || isEditOverlayOpen;
+  const hasQueuedSync = pendingSyncFlags.staff || pendingSyncFlags.profiles || pendingSyncFlags.checkbox || pendingSyncFlags.ranks;
+
+  function holdRealtimeSync(ms = 2500) {
+    setSyncPausedByEdit(true);
+    if (syncPauseTimerRef.current) clearTimeout(syncPauseTimerRef.current);
+    syncPauseTimerRef.current = setTimeout(() => {
+      setSyncPausedByEdit(false);
+      syncPauseTimerRef.current = null;
+    }, ms);
+  }
+
+  function isEditableTarget(node) {
+    if (!node || !(node instanceof Element)) return false;
+    const inputNode = node.closest('input, textarea, [contenteditable="true"], [role="textbox"]');
+    if (!inputNode) return false;
+    if (inputNode.tagName.toLowerCase() === 'textarea') return true;
+    if (inputNode.tagName.toLowerCase() === 'input') {
+      const type = String(inputNode.getAttribute('type') || 'text').toLowerCase();
+      if (['checkbox', 'radio', 'submit', 'button', 'hidden', 'file', 'range', 'color'].includes(type)) return false;
+      if (inputNode.hasAttribute('readonly') || inputNode.hasAttribute('disabled')) return false;
+      return true;
+    }
+    return true;
+  }
 
   useEffect(() => {
     setProfileName(profile?.username || '');
     setProfileAvatar(profile?.avatar_url || '');
     setProfileAvatarFile(null);
   }, [profile]);
+
+  useEffect(() => {
+    function onFocusIn(event) {
+      setInputEditingActive(isEditableTarget(event.target));
+    }
+
+    function onFocusOut() {
+      setTimeout(() => setInputEditingActive(isEditableTarget(document.activeElement)), 0);
+    }
+
+    window.addEventListener('focusin', onFocusIn, true);
+    window.addEventListener('focusout', onFocusOut, true);
+    return () => {
+      window.removeEventListener('focusin', onFocusIn, true);
+      window.removeEventListener('focusout', onFocusOut, true);
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (syncPauseTimerRef.current) clearTimeout(syncPauseTimerRef.current);
+    };
+  }, []);
 
   const rankLabel = (role) => rankDisplayNames[role] || role;
 
@@ -1373,6 +1438,37 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     setRankDisplayLoading(false);
   }
 
+  function setPendingSync(key, value) {
+    pendingSyncRef.current[key] = value;
+    setPendingSyncFlags(prev => (prev[key] === value ? prev : { ...prev, [key]: value }));
+  }
+
+  async function requestRefresh(key) {
+    if (syncLockedRef.current) {
+      setPendingSync(key, true);
+      return;
+    }
+
+    if (key === 'staff') await refreshStaffFromDb();
+    if (key === 'profiles') await refreshManagementUsersFromDb();
+    if (key === 'checkbox') await refreshCheckboxCatalogFromDb();
+    if (key === 'ranks') await refreshRankDisplayNamesFromDb();
+    setPendingSync(key, false);
+  }
+
+  async function flushPendingRefreshes() {
+    const pending = pendingSyncRef.current;
+    if (pending.staff) await requestRefresh('staff');
+    if (pending.profiles) await requestRefresh('profiles');
+    if (pending.checkbox) await requestRefresh('checkbox');
+    if (pending.ranks) await requestRefresh('ranks');
+  }
+
+  useEffect(() => {
+    syncLockedRef.current = isSyncLocked;
+    if (!isSyncLocked) flushPendingRefreshes();
+  }, [isSyncLocked]);
+
   useEffect(() => {
     if (!dbReady || !supabase) {
       setStaff(initialStaff);
@@ -1400,7 +1496,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       .channel('staff_members_sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'staff_members' }, (payload) => {
         if (payload?.eventType === 'UPDATE' && payload?.new?.updated_by === authUser?.id) return;
-        refreshStaffFromDb();
+        requestRefresh('staff');
       })
       .subscribe();
 
@@ -1419,7 +1515,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     const channel = supabase
       .channel('profiles_sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
-        refreshManagementUsersFromDb();
+        requestRefresh('profiles');
       })
       .subscribe();
     return () => {
@@ -1438,7 +1534,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       .channel('checkbox_catalog_sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'checkbox_catalog' }, (payload) => {
         if (payload?.eventType === 'UPDATE' && payload?.new?.updated_by === authUser?.id) return;
-        refreshCheckboxCatalogFromDb();
+        requestRefresh('checkbox');
       })
       .subscribe();
     return () => {
@@ -1456,7 +1552,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     const channel = supabase
       .channel('rank_display_names_sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rank_display_names' }, () => {
-        refreshRankDisplayNamesFromDb();
+        requestRefresh('ranks');
       })
       .subscribe();
     return () => {
@@ -1693,6 +1789,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   async function saveStaffMember(member) {
     if (!dbReady || !supabase) return;
     lastLocalStaffEditRef.current = Date.now();
+    holdRealtimeSync(2600);
 
     const payload = {
       id: member.id,
@@ -2472,6 +2569,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   async function saveCheckboxItem(item) {
     if (!canManageCheckboxes || !dbReady || !supabase) return;
+    holdRealtimeSync(2600);
     const payload = {
       id: item.id,
       category: item.category,
@@ -2487,6 +2585,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   async function saveRankDisplayName(rankKey) {
     if (!dbReady || !supabase) return;
+    holdRealtimeSync(2000);
     const nextName = (rankDrafts[rankKey] || rankKey).trim() || rankKey;
     await supabase.from('rank_display_names').upsert({
       rank_key: rankKey,
@@ -2751,6 +2850,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         {!canEdit && (
           <div className="mb-4 rounded-xl border border-amber-500/35 bg-amber-500/10 p-3 text-sm text-amber-200">
             Read-only mode: your account role can view data but cannot edit staff records.
+          </div>
+        )}
+        {isSyncLocked && hasQueuedSync && (
+          <div className="mb-4 rounded-xl border border-cyan-500/35 bg-cyan-500/10 p-3 text-sm text-cyan-100">
+            Live updates paused while you edit. Pending changes from other users will sync once you finish.
           </div>
         )}
 
