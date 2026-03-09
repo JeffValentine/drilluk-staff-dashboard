@@ -15,7 +15,6 @@ import { supabase } from '@/lib/supabase';
 const roles = ['T-MOD', 'MOD', 'S-MOD', 'ADMIN', 'S-ADMIN', 'HEAD-ADMIN'];
 const SITE_OWNER_EMAIL = 'justappletje@gmail.com';
 const defaultRankDisplayNames = Object.fromEntries(roles.map(role => [role, role]));
-const FALSE_OPTION_REPAIR_VERSION = 'v5';
 
 const baseChecks = {
   'T-MOD': [
@@ -624,6 +623,10 @@ function completionPercent(record) {
   return total ? Math.round((done / total) * 100) : 0;
 }
 
+function emptyManualChecks() {
+  return { checks: {}, values: {}, permissions: {} };
+}
+
 function statusColor(status) {
   if (status === 'Active') return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
   if (status === 'Reviewing Others') return 'bg-blue-500/15 text-blue-300 border-blue-500/30';
@@ -1059,7 +1062,6 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [activeUsers, setActiveUsers] = useState([]);
   const [reviewDrafts, setReviewDrafts] = useState({});
   const lastLocalStaffEditRef = useRef(0);
-  const falseOptionRepairRanRef = useRef('');
   const isOwnerSession = (authUser?.email || '').toLowerCase() === SITE_OWNER_EMAIL;
   const [rankDisplayNames, setRankDisplayNames] = useState(defaultRankDisplayNames);
   const [rankDrafts, setRankDrafts] = useState(defaultRankDisplayNames);
@@ -1377,13 +1379,6 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       supabase.removeChannel(channel);
     };
   }, [dbReady, authUser?.id]);
-
-  useEffect(() => {
-    if (!dbReady || !supabase || !canManageCheckboxes) return;
-    if (!checkboxCatalog.length || falseOptionRepairRanRef.current === FALSE_OPTION_REPAIR_VERSION) return;
-    falseOptionRepairRanRef.current = FALSE_OPTION_REPAIR_VERSION;
-    repairWeakFalseOptionsAcrossCatalog();
-  }, [dbReady, canManageCheckboxes, checkboxCatalog.length]);
 
   const baseChecksByRole = useMemo(() => {
     const map = Object.fromEntries(roles.map(role => [role, []]));
