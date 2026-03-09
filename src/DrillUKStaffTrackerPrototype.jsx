@@ -1919,6 +1919,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   async function writeAudit(action, targetId, beforeValue, afterValue) {
     if (!dbReady || !supabase || !authUser?.id) return;
+    if (action === 'staff.toggle') return;
     await supabase.from('audit_logs').insert({
       actor_id: authUser.id,
       action,
@@ -3944,7 +3945,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                     )}
                     {!auditError && auditLogs.length > 0 && (
                       <div className="space-y-2">
-                        {auditLogs.map(log => {
+                        {auditLogs.filter(log => log.action !== 'staff.toggle').map(log => {
                           const actor = managementUsers.find(user => user.id === log.actor_id);
                           const changedFields = log.after_value && typeof log.after_value === 'object' && !Array.isArray(log.after_value)
                             ? Object.keys(log.after_value).slice(0, 5)
