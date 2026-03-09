@@ -6,6 +6,7 @@ create table if not exists public.profiles (
   username text unique,
   avatar_url text,
   god_key_enabled boolean not null default false,
+  last_seen_at timestamptz,
   role text not null default 'viewer' check (role in ('viewer', 'staff_in_training', 'trainer', 'admin', 'head_admin')),
   is_active boolean not null default false,
   created_at timestamptz not null default now()
@@ -77,6 +78,7 @@ $$;
 
 alter table public.profiles add column if not exists avatar_url text;
 alter table public.profiles add column if not exists god_key_enabled boolean not null default false;
+alter table public.profiles add column if not exists last_seen_at timestamptz;
 alter table public.staff_members add column if not exists trainee_user_id uuid references auth.users(id);
 alter table public.staff_members add column if not exists quiz_history jsonb not null default '[]'::jsonb;
 
@@ -109,6 +111,20 @@ set search_path = public
 as $$
   select coalesce((select god_key_enabled from public.profiles where id = auth.uid() limit 1), false)
 $$;
+
+create or replace function public.touch_last_seen()
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  update public.profiles
+  set last_seen_at = now()
+  where id = auth.uid()
+$$;
+
+revoke all on function public.touch_last_seen() from public;
+grant execute on function public.touch_last_seen() to authenticated;
 
 create or replace function public.admin_delete_user(target_user uuid)
 returns void

@@ -751,6 +751,7 @@ function QuizHint({ item, answer, category }) {
 export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSignOut, dbReady, onProfileRefresh }) {
   const canEdit = ['head_admin', 'admin', 'trainer'].includes(profile?.role || '');
   const canManageUsers = profile?.role === 'head_admin' || Boolean(profile?.god_key_enabled);
+  const canViewPresence = profile?.role === 'head_admin';
   const canManageCheckboxes = ['head_admin', 'admin'].includes(profile?.role || '');
   const canDeleteStaff = ['head_admin', 'admin'].includes(profile?.role || '');
   const isStaffInTraining = profile?.role === 'staff_in_training';
@@ -803,6 +804,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [profileAvatarFile, setProfileAvatarFile] = useState(null);
   const ownProfileFileInputRef = useRef(null);
   const [activeUsersOpen, setActiveUsersOpen] = useState(false);
+  const [offlineUsersOpen, setOfflineUsersOpen] = useState(false);
   const [activeUsers, setActiveUsers] = useState([]);
   const [reviewDrafts, setReviewDrafts] = useState({});
   const lastLocalStaffEditRef = useRef(0);
@@ -850,6 +852,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       .on('presence', { event: 'leave' }, syncActiveUsers)
       .subscribe(async (status) => {
         if (status !== 'SUBSCRIBED') return;
+        await supabase.rpc('touch_last_seen');
         await channel.track({
           id: authUser.id,
           username: profile?.username || authUser.email?.split('@')[0] || 'Guest',
@@ -859,6 +862,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           at: new Date().toISOString(),
         });
         heartbeat = setInterval(() => {
+          supabase.rpc('touch_last_seen');
           channel.track({
             id: authUser.id,
             username: profile?.username || authUser.email?.split('@')[0] || 'Guest',
@@ -876,6 +880,14 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       supabase.removeChannel(channel);
     };
   }, [dbReady, authUser?.id, authUser?.email, profile?.username, profile?.role, profile?.avatar_url]);
+
+  const offlineUsers = useMemo(() => {
+    if (!canViewPresence) return [];
+    const activeIds = new Set(activeUsers.map(user => user.id));
+    return (managementUsers || [])
+      .filter(user => !activeIds.has(user.id))
+      .sort((a, b) => new Date(b.last_seen_at || 0).getTime() - new Date(a.last_seen_at || 0).getTime());
+  }, [canViewPresence, activeUsers, managementUsers]);
 
   async function refreshStaffFromDb() {
     if (!dbReady || !supabase) return;
@@ -925,7 +937,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     try {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, username, role, is_active, avatar_url, god_key_enabled')
+      .select('id, username, role, is_active, avatar_url, god_key_enabled, last_seen_at')
       .order('username', { ascending: true });
 
       if (error?.code === '42703') {
@@ -942,6 +954,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           ...u,
           avatar_url: null,
           god_key_enabled: false,
+          last_seen_at: null,
           is_developer: isOwnerSession && u.id === authUser?.id,
         })));
         return;
@@ -2098,15 +2111,25 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           </div>
           <div className="flex items-start gap-3 md:w-[560px] md:justify-end">
             <div className="flex flex-col items-center gap-2">
-              {canManageUsers && (
-                <button
-                  type="button"
-                  onClick={() => setActiveUsersOpen(true)}
-                  className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/35 bg-emerald-500/12 px-3 py-1.5 text-xs text-emerald-200 hover:bg-emerald-500/20"
-                >
-                  <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                  Active {activeUsers.length}
-                </button>
+              {canViewPresence && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveUsersOpen(true)}
+                    className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/35 bg-emerald-500/12 px-3 py-1.5 text-xs text-emerald-200 hover:bg-emerald-500/20"
+                  >
+                    <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                    Active {activeUsers.length}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOfflineUsersOpen(true)}
+                    className="inline-flex items-center gap-2 rounded-xl border border-zinc-500/35 bg-zinc-500/12 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-500/20"
+                  >
+                    <span className="h-2 w-2 rounded-full bg-zinc-300" />
+                    Offline {offlineUsers.length}
+                  </button>
+                </div>
               )}
               <button
                 type="button"
@@ -3695,7 +3718,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           </div>
         )}
 
-        {canManageUsers && activeUsersOpen && (
+        {canViewPresence && activeUsersOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
             <div className="w-full max-w-lg rounded-2xl border border-emerald-500/30 bg-zinc-950 p-5">
               <div className="mb-4 flex items-center justify-between">
@@ -3723,6 +3746,40 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                       </div>
                     </div>
                     <Badge className="border-emerald-500/35 bg-emerald-500/15 text-emerald-200">{user.role}</Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+        {canViewPresence && offlineUsersOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+            <div className="w-full max-w-lg rounded-2xl border border-zinc-500/30 bg-zinc-950 p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="text-lg font-semibold text-white">Offline Users</div>
+                <button type="button" onClick={() => setOfflineUsersOpen(false)} className="text-sm text-zinc-400 hover:text-white">Close</button>
+              </div>
+              <div className="space-y-2">
+                {!offlineUsers.length && (
+                  <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">No offline users detected.</div>
+                )}
+                {offlineUsers.map(user => (
+                  <div key={`offline-${user.id}`} className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 p-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      {user.avatar_url ? (
+                        <img src={user.avatar_url} alt={`${user.username} avatar`} className="h-9 w-9 rounded-lg border border-white/10 object-cover" />
+                      ) : (
+                        <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-black/30 text-sm font-semibold text-zinc-200">
+                          {(user.username?.[0] || 'G').toUpperCase()}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-white">{user.username || 'Unknown'}</div>
+                        <div className="truncate text-xs text-zinc-500">{user.id}</div>
+                        <div className="mt-0.5 text-[11px] text-zinc-500">Last seen: {formatLastSeen(user.last_seen_at)}</div>
+                      </div>
+                    </div>
+                    <Badge className="border-zinc-500/35 bg-zinc-500/15 text-zinc-200">{user.role || 'viewer'}</Badge>
                   </div>
                 ))}
               </div>
