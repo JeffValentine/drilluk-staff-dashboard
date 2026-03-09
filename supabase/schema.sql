@@ -110,6 +110,41 @@ as $$
   select coalesce((select god_key_enabled from public.profiles where id = auth.uid() limit 1), false)
 $$;
 
+create or replace function public.admin_delete_user(target_user uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  if target_user is null then
+    raise exception 'target_user is required';
+  end if;
+
+  if target_user = auth.uid() then
+    raise exception 'Cannot delete your own account from management';
+  end if;
+
+  if not (public.current_user_role() = 'head_admin' or public.current_user_has_god_key() = true) then
+    raise exception 'Insufficient permissions';
+  end if;
+
+  update public.staff_members
+  set trainee_user_id = null
+  where trainee_user_id = target_user;
+
+  delete from public.profiles where id = target_user;
+  delete from auth.users where id = target_user;
+end;
+$$;
+
+revoke all on function public.admin_delete_user(uuid) from public;
+grant execute on function public.admin_delete_user(uuid) to authenticated;
+
 create policy "profiles_self_read"
 on public.profiles for select
 using (id = auth.uid() or public.current_user_role() = 'head_admin');

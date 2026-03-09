@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Plus, Shield, GraduationCap, CheckCircle2, Users, ArrowUpRight, ClipboardList, Star, HelpCircle, ExternalLink, BookOpen, MessageSquareWarning, Gavel, Swords, FileVideo, Radio, LifeBuoy, ShieldAlert, Upload } from 'lucide-react';
+import { Search, Plus, Shield, GraduationCap, CheckCircle2, Users, ArrowUpRight, ClipboardList, Star, HelpCircle, ExternalLink, BookOpen, MessageSquareWarning, Gavel, Swords, FileVideo, Radio, LifeBuoy, ShieldAlert, Upload, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -1686,6 +1686,25 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     await writeAudit('user.active.update', userId, null, { is_active: isActive });
   }
 
+  async function deleteManagedUser(userId) {
+    if (!canManageUsers || !dbReady || !supabase) return;
+    if (userId === profile?.id) {
+      window.alert('You cannot delete your own account from this screen.');
+      return;
+    }
+    const confirmed = window.confirm('Permanently delete this dashboard account? This removes login access, email/password auth, and profile data.');
+    if (!confirmed) return;
+
+    const { error } = await supabase.rpc('admin_delete_user', { target_user: userId });
+    if (error) {
+      window.alert(`Delete failed: ${error.message}`);
+      return;
+    }
+    setManagementUsers(prev => prev.filter(u => u.id !== userId));
+    setStaff(prev => prev.map(member => (member.traineeUserId === userId ? { ...member, traineeUserId: null } : member)));
+    await writeAudit('user.delete', userId, null, { deleted: true });
+  }
+
   async function updateUserAvatar(userId, avatarUrl) {
     if (!canManageUsers || !dbReady || !supabase) return;
     await supabase.from('profiles').update({ avatar_url: avatarUrl || null }).eq('id', userId);
@@ -2897,7 +2916,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                         {managementUsers.map(user => {
                           const linkedStaff = staff.find(member => member.traineeUserId === user.id) || null;
                           return (
-                          <div key={user.id} className="grid gap-2 rounded-xl border border-white/10 bg-black/20 p-2.5 md:grid-cols-[1.35fr,0.95fr,1fr,1.9fr,0.78fr,140px] md:items-center">
+                          <div key={user.id} className="grid gap-2 rounded-xl border border-white/10 bg-black/20 p-2.5 md:grid-cols-[1.35fr,0.95fr,1fr,1.9fr,0.78fr,220px] md:items-center">
                             <div className="flex items-start gap-3">
                               {user.avatar_url ? (
                                 <img src={user.avatar_url} alt={`${user.username || 'user'} avatar`} className="h-10 w-10 rounded-xl border border-white/10 object-cover" />
@@ -2996,14 +3015,22 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                                 onCheckedChange={(checked) => toggleGodKey(user.id, Boolean(checked))}
                               />
                             </label>
-                            <Button
-                              onClick={() => toggleUserActive(user.id, !user.is_active)}
-                              className={user.is_active
-                                ? 'rounded-xl border border-emerald-400/40 bg-gradient-to-r from-emerald-600 to-green-500 px-3 text-white hover:from-emerald-500 hover:to-green-400'
-                                : 'rounded-xl border border-red-400/40 bg-gradient-to-r from-red-700 to-red-600 px-3 text-white hover:from-red-600 hover:to-red-500'}
-                            >
-                              {user.is_active ? 'Active' : 'Disabled'}
-                            </Button>
+                            <div className="grid grid-cols-2 gap-2">
+                              <Button
+                                onClick={() => toggleUserActive(user.id, !user.is_active)}
+                                className={user.is_active
+                                  ? 'rounded-xl border border-emerald-400/40 bg-gradient-to-r from-emerald-600 to-green-500 px-3 text-white hover:from-emerald-500 hover:to-green-400'
+                                  : 'rounded-xl border border-red-400/40 bg-gradient-to-r from-red-700 to-red-600 px-3 text-white hover:from-red-600 hover:to-red-500'}
+                              >
+                                {user.is_active ? 'Active' : 'Disabled'}
+                              </Button>
+                              <Button
+                                onClick={() => deleteManagedUser(user.id)}
+                                className="rounded-xl border border-red-500/45 bg-gradient-to-r from-red-700 to-red-600 px-3 text-white hover:from-red-600 hover:to-red-500"
+                              >
+                                <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete
+                              </Button>
+                            </div>
                           </div>
                         )})}
                       </div>
