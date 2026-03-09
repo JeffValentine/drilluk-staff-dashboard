@@ -15,6 +15,7 @@ import { supabase } from '@/lib/supabase';
 const roles = ['T-MOD', 'MOD', 'S-MOD', 'ADMIN', 'S-ADMIN', 'HEAD-ADMIN'];
 const SITE_OWNER_EMAIL = 'justappletje@gmail.com';
 const defaultRankDisplayNames = Object.fromEntries(roles.map(role => [role, role]));
+const FALSE_OPTION_REPAIR_VERSION = 'v2';
 
 const baseChecks = {
   'T-MOD': [
@@ -784,11 +785,27 @@ function buildRuleAlignedFalseAnswers({ title = '', question = '', correct = '',
       ],
     },
     {
-      keys: ['nlr', 'fearrp', 'value life', 'metagaming', 'powergaming'],
+      keys: ['nlr', 'fearrp', 'value life'],
       wrong: [
         'FearRP only applies when a weapon is already pointed at the head.',
         'Players can ignore danger if they think they can win the fight.',
         'NLR/FearRP standards can be ignored during intense scenes.',
+      ],
+    },
+    {
+      keys: ['metagaming', 'meta gaming', 'outside info', 'ooc info', 'out of character'],
+      wrong: [
+        'Outside information is fine if it helps keep RP moving quickly.',
+        'Using Discord or stream info is allowed if no one reports it.',
+        'Metagaming only matters when there is direct combat.',
+      ],
+    },
+    {
+      keys: ['powergaming', 'power gaming', 'forced emote', 'forced action'],
+      wrong: [
+        'Powergaming is acceptable if your character has authority.',
+        'Forcing outcomes is fine when your role is higher rank.',
+        'Powergaming only applies to police and gang scenarios.',
       ],
     },
   ];
@@ -929,7 +946,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [activeUsers, setActiveUsers] = useState([]);
   const [reviewDrafts, setReviewDrafts] = useState({});
   const lastLocalStaffEditRef = useRef(0);
-  const falseOptionRepairRanRef = useRef(false);
+  const falseOptionRepairRanRef = useRef('');
   const isOwnerSession = (authUser?.email || '').toLowerCase() === SITE_OWNER_EMAIL;
   const [rankDisplayNames, setRankDisplayNames] = useState(defaultRankDisplayNames);
   const [rankDrafts, setRankDrafts] = useState(defaultRankDisplayNames);
@@ -1250,8 +1267,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   useEffect(() => {
     if (!dbReady || !supabase || !canManageCheckboxes) return;
-    if (!checkboxCatalog.length || falseOptionRepairRanRef.current) return;
-    falseOptionRepairRanRef.current = true;
+    if (!checkboxCatalog.length || falseOptionRepairRanRef.current === FALSE_OPTION_REPAIR_VERSION) return;
+    falseOptionRepairRanRef.current = FALSE_OPTION_REPAIR_VERSION;
     repairWeakFalseOptionsAcrossCatalog();
   }, [dbReady, canManageCheckboxes, checkboxCatalog.length]);
 
