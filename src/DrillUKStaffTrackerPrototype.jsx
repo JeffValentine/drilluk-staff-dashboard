@@ -3691,6 +3691,19 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 </div>
                 <div className="md:col-span-2">
                   <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Visible for ranks</div>
+                  <div className="mb-2">
+                    <label className="flex items-center justify-between rounded-xl border border-fuchsia-400/30 bg-fuchsia-500/10 px-3 py-2 text-sm text-fuchsia-100">
+                      All ranks
+                      <Checkbox
+                        checked={!(checkboxDraft.ranks || []).length}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setCheckboxDraft(prev => ({ ...prev, ranks: [] }));
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
                   <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
                     {roles.map(role => (
                       <label key={`${checkboxDraft.id}-${role}`} className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-200">
