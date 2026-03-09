@@ -1006,6 +1006,22 @@ function accountRoleLabel(role) {
   return role || 'Guest';
 }
 
+function accountRoleColor(role) {
+  if (role === 'head_admin') return 'bg-rose-500/15 text-rose-300 border-rose-500/30';
+  if (role === 'admin') return 'bg-amber-500/15 text-amber-300 border-amber-500/30';
+  if (role === 'trainer') return 'bg-blue-500/15 text-blue-300 border-blue-500/30';
+  if (role === 'staff_in_training') return 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30';
+  return 'bg-zinc-500/15 text-zinc-300 border-zinc-500/30';
+}
+
+function accountRoleSortValue(role) {
+  if (role === 'head_admin') return 0;
+  if (role === 'admin') return 1;
+  if (role === 'trainer') return 2;
+  if (role === 'staff_in_training') return 3;
+  return 4;
+}
+
 function mapRosterRankToRole(rankLabel) {
   const rank = String(rankLabel || '').trim().toLowerCase();
   if (rank.includes('junior associate')) return 'T-MOD';
@@ -1364,7 +1380,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           god_key_enabled: false,
           last_seen_at: null,
           is_developer: isOwnerSession && u.id === authUser?.id,
-        })));
+        })).sort((a, b) => {
+          const rankDiff = accountRoleSortValue(a.role) - accountRoleSortValue(b.role);
+          if (rankDiff !== 0) return rankDiff;
+          return String(a.username || '').localeCompare(String(b.username || ''));
+        }));
         return;
       }
 
@@ -1377,7 +1397,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       setManagementUsers((data || []).map(u => ({
         ...u,
         is_developer: isOwnerSession && u.id === authUser?.id,
-      })));
+      })).sort((a, b) => {
+        const rankDiff = accountRoleSortValue(a.role) - accountRoleSortValue(b.role);
+        if (rankDiff !== 0) return rankDiff;
+        return String(a.username || '').localeCompare(String(b.username || ''));
+      }));
     } finally {
       setManagementLoading(false);
     }
@@ -3693,6 +3717,9 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                               <div>
                                 <div className="flex items-center gap-2">
                                   <div className="text-sm font-semibold text-white">{user.username || user.id}</div>
+                                  <Badge className={`${accountRoleColor(user.role)} px-1.5 text-[10px]`}>
+                                    {accountRoleLabel(user.role)}
+                                  </Badge>
                                   {user.god_key_enabled && (
                                     <Badge className="border-emerald-500/40 bg-emerald-500/15 px-1.5 text-[10px] text-emerald-200">
                                       God Key
