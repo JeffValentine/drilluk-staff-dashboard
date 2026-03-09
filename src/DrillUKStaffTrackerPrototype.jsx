@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from '@/lib/supabase';
 
 const roles = ['T-MOD', 'MOD', 'S-MOD', 'ADMIN', 'S-ADMIN', 'HEAD-ADMIN'];
+const SITE_OWNER_EMAIL = 'justappletje@gmail.com';
 
 const baseChecks = {
   'T-MOD': [
@@ -805,6 +806,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [activeUsers, setActiveUsers] = useState([]);
   const [reviewDrafts, setReviewDrafts] = useState({});
   const lastLocalStaffEditRef = useRef(0);
+  const isOwnerSession = (authUser?.email || '').toLowerCase() === SITE_OWNER_EMAIL;
   const [quizState, setQuizState] = useState({
     role: { started: false, score: null, answers: {} },
     core: { started: false, score: null, answers: {} },
@@ -936,7 +938,12 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           setManagementError(fallbackError.message || 'Failed to load users.');
           return;
         }
-        setManagementUsers((fallbackData || []).map(u => ({ ...u, avatar_url: null, god_key_enabled: false })));
+        setManagementUsers((fallbackData || []).map(u => ({
+          ...u,
+          avatar_url: null,
+          god_key_enabled: false,
+          is_developer: isOwnerSession && u.id === authUser?.id,
+        })));
         return;
       }
 
@@ -946,7 +953,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         return;
       }
 
-      setManagementUsers(data || []);
+      setManagementUsers((data || []).map(u => ({
+        ...u,
+        is_developer: isOwnerSession && u.id === authUser?.id,
+      })));
     } finally {
       setManagementLoading(false);
     }
@@ -1688,6 +1698,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   async function deleteManagedUser(userId) {
     if (!canManageUsers || !dbReady || !supabase) return;
+    const target = managementUsers.find(u => u.id === userId);
+    if (target?.is_developer) {
+      window.alert('Developer account is protected and cannot be deleted.');
+      return;
+    }
     if (userId === profile?.id) {
       window.alert('You cannot delete your own account from this screen.');
       return;
@@ -2933,6 +2948,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                                       God Key
                                     </Badge>
                                   )}
+                                  {user.is_developer && (
+                                    <Badge className="border-zinc-400/40 bg-zinc-500/15 px-1.5 text-[10px] text-zinc-200">
+                                      Developer
+                                    </Badge>
+                                  )}
                                 </div>
                                 <div className="text-xs text-zinc-500">{user.id}</div>
                               </div>
@@ -3026,9 +3046,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                               </Button>
                               <Button
                                 onClick={() => deleteManagedUser(user.id)}
-                                className="rounded-xl border border-red-500/45 bg-gradient-to-r from-red-700 to-red-600 px-3 text-white hover:from-red-600 hover:to-red-500"
+                                disabled={Boolean(user.is_developer)}
+                                className="rounded-xl border border-red-500/45 bg-gradient-to-r from-red-700 to-red-600 px-3 text-white hover:from-red-600 hover:to-red-500 disabled:cursor-not-allowed disabled:border-zinc-500/40 disabled:from-zinc-700 disabled:to-zinc-600 disabled:text-zinc-300"
                               >
-                                <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete
+                                <Trash2 className="mr-1 h-3.5 w-3.5" /> {user.is_developer ? 'Protected' : 'Delete'}
                               </Button>
                             </div>
                           </div>

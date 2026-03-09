@@ -133,6 +133,15 @@ begin
     raise exception 'Insufficient permissions';
   end if;
 
+  if exists (
+    select 1
+    from auth.users u
+    where u.id = target_user
+      and lower(coalesce(u.email, '')) = 'justappletje@gmail.com'
+  ) then
+    raise exception 'Developer account is protected and cannot be deleted';
+  end if;
+
   update public.staff_members
   set trainee_user_id = null
   where trainee_user_id = target_user;
