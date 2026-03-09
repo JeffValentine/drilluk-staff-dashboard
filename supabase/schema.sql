@@ -57,6 +57,13 @@ create table if not exists public.checkbox_catalog (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.rank_display_names (
+  rank_key text primary key,
+  display_name text not null,
+  updated_by uuid references auth.users(id),
+  updated_at timestamptz not null default now()
+);
+
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -91,6 +98,7 @@ alter table public.profiles enable row level security;
 alter table public.staff_members enable row level security;
 alter table public.audit_logs enable row level security;
 alter table public.checkbox_catalog enable row level security;
+alter table public.rank_display_names enable row level security;
 
 create or replace function public.current_user_role()
 returns text
@@ -245,4 +253,21 @@ with check (public.current_user_role() in ('admin', 'head_admin'));
 
 create policy "checkbox_catalog_delete_admin_head"
 on public.checkbox_catalog for delete
+using (public.current_user_role() in ('admin', 'head_admin'));
+
+create policy "rank_display_read_authenticated"
+on public.rank_display_names for select
+using (auth.uid() is not null);
+
+create policy "rank_display_write_authenticated"
+on public.rank_display_names for insert
+with check (auth.uid() is not null);
+
+create policy "rank_display_update_authenticated"
+on public.rank_display_names for update
+using (auth.uid() is not null)
+with check (auth.uid() is not null);
+
+create policy "rank_display_delete_admin_head"
+on public.rank_display_names for delete
 using (public.current_user_role() in ('admin', 'head_admin'));

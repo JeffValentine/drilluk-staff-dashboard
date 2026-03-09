@@ -14,6 +14,7 @@ import { supabase } from '@/lib/supabase';
 
 const roles = ['T-MOD', 'MOD', 'S-MOD', 'ADMIN', 'S-ADMIN', 'HEAD-ADMIN'];
 const SITE_OWNER_EMAIL = 'justappletje@gmail.com';
+const defaultRankDisplayNames = Object.fromEntries(roles.map(role => [role, role]));
 
 const baseChecks = {
   'T-MOD': [
@@ -809,6 +810,9 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [reviewDrafts, setReviewDrafts] = useState({});
   const lastLocalStaffEditRef = useRef(0);
   const isOwnerSession = (authUser?.email || '').toLowerCase() === SITE_OWNER_EMAIL;
+  const [rankDisplayNames, setRankDisplayNames] = useState(defaultRankDisplayNames);
+  const [rankDrafts, setRankDrafts] = useState(defaultRankDisplayNames);
+  const [rankDisplayLoading, setRankDisplayLoading] = useState(false);
   const [quizState, setQuizState] = useState({
     role: { started: false, score: null, answers: {} },
     core: { started: false, score: null, answers: {} },
@@ -820,6 +824,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     setProfileAvatar(profile?.avatar_url || '');
     setProfileAvatarFile(null);
   }, [profile]);
+
+  const rankLabel = (role) => rankDisplayNames[role] || role;
 
   useEffect(() => {
     if (!dbReady || !supabase || !authUser?.id) return;
@@ -1010,6 +1016,26 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     setCheckboxCatalogLoading(false);
   }
 
+  async function refreshRankDisplayNamesFromDb() {
+    if (!dbReady || !supabase) return;
+    setRankDisplayLoading(true);
+    const { data, error } = await supabase
+      .from('rank_display_names')
+      .select('rank_key, display_name');
+
+    if (!error) {
+      const merged = { ...defaultRankDisplayNames };
+      (data || []).forEach(row => {
+        if (row.rank_key && roles.includes(row.rank_key)) {
+          merged[row.rank_key] = row.display_name || row.rank_key;
+        }
+      });
+      setRankDisplayNames(merged);
+      setRankDrafts(merged);
+    }
+    setRankDisplayLoading(false);
+  }
+
   useEffect(() => {
     if (!dbReady || !supabase) {
       setStaff(initialStaff);
@@ -1076,6 +1102,24 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       .on('postgres_changes', { event: '*', schema: 'public', table: 'checkbox_catalog' }, (payload) => {
         if (payload?.eventType === 'UPDATE' && payload?.new?.updated_by === authUser?.id) return;
         refreshCheckboxCatalogFromDb();
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [dbReady, authUser?.id]);
+
+  useEffect(() => {
+    if (!dbReady || !supabase) return;
+    refreshRankDisplayNamesFromDb();
+  }, [dbReady, authUser?.id]);
+
+  useEffect(() => {
+    if (!dbReady || !supabase) return;
+    const channel = supabase
+      .channel('rank_display_names_sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rank_display_names' }, () => {
+        refreshRankDisplayNamesFromDb();
       })
       .subscribe();
     return () => {
@@ -1994,6 +2038,19 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     await writeAudit('checkbox_catalog.save', item.id, null, payload);
   }
 
+  async function saveRankDisplayName(rankKey) {
+    if (!dbReady || !supabase) return;
+    const nextName = (rankDrafts[rankKey] || rankKey).trim() || rankKey;
+    await supabase.from('rank_display_names').upsert({
+      rank_key: rankKey,
+      display_name: nextName,
+      updated_by: authUser?.id || null,
+    });
+    setRankDisplayNames(prev => ({ ...prev, [rankKey]: nextName }));
+    setRankDrafts(prev => ({ ...prev, [rankKey]: nextName }));
+    await writeAudit('rank_display.update', rankKey, null, { display_name: nextName });
+  }
+
   async function deleteCheckboxItem(itemId) {
     if (!canManageCheckboxes) return;
     setCheckboxCatalog(prev => prev.filter(item => item.id !== itemId));
@@ -2193,7 +2250,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         )}
 
         <Tabs defaultValue={isStaffInTraining ? 'myprogress' : 'tracker'} className="space-y-4">
-          <TabsList className={`grid w-full bg-white/5 ${isStaffInTraining ? 'grid-cols-2 md:w-[520px]' : 'grid-cols-7 md:w-[1220px]'}`}>
+          <TabsList className={`grid w-full bg-white/5 ${isStaffInTraining ? 'grid-cols-2 md:w-[520px]' : 'grid-cols-8 md:w-[1360px]'}`}>
             {isStaffInTraining ? (
               <>
                 <TabsTrigger value="myprogress">My Progress</TabsTrigger>
@@ -2207,6 +2264,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 <TabsTrigger value="hub">Overview & Resources</TabsTrigger>
                 <TabsTrigger value="checkboxes">Checkboxes</TabsTrigger>
                 <TabsTrigger value="management">Management</TabsTrigger>
+                <TabsTrigger value="ranks">Rank Display</TabsTrigger>
                 <TabsTrigger value="discipline">Discipline</TabsTrigger>
               </>
             )}
@@ -2229,7 +2287,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                     </div>
                     <div>
                       <div className="text-lg font-semibold text-white">{selected.name}</div>
-                      <div className="mt-1 text-sm text-zinc-400">{selected.role}</div>
+                      <div className="mt-1 text-sm text-zinc-400">{rankLabel(selected.role)}</div>
                       <div className="mt-1 text-xs text-zinc-500">Trainer: {selected.trainer}</div>
                     </div>
                   </div>
@@ -2348,7 +2406,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                           <SelectTrigger className="border-white/10 bg-black/30 text-white"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="All">All ranks</SelectItem>
-                            {roles.map(role => <SelectItem key={role} value={role}>{role}</SelectItem>)}
+                            {roles.map(role => <SelectItem key={role} value={role}>{rankLabel(role)}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       </div>
@@ -2398,7 +2456,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                               </div>
                               <div className="mt-1 text-sm text-zinc-400">Trainer: {member.trainer}</div>
                               <div className="mt-2 flex flex-wrap gap-1.5">
-                                <Badge className={`${roleColor(member.role)} px-2 text-[10px]`}>{member.role}</Badge>
+                                <Badge className={`${roleColor(member.role)} px-2 text-[10px]`}>{rankLabel(member.role)}</Badge>
                                 <Badge className={`${statusColor(member.status)} px-2 text-[10px]`}>{member.status}</Badge>
                                 {member.disciplinary?.warnings > 0 && (
                                   <Badge className="border-red-500/40 bg-red-500/15 px-2 text-[10px] text-red-300">Warning - {member.disciplinary.warnings}</Badge>
@@ -2430,7 +2488,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                       <div>
                         <div className="flex items-center gap-3">
                           <h2 className="max-w-[340px] truncate text-2xl font-bold" title={selected.name}>{selected.name}</h2>
-                          <Badge className={roleColor(selected.role)}>{selected.role}</Badge>
+                          <Badge className={roleColor(selected.role)}>{rankLabel(selected.role)}</Badge>
                           <Badge className={statusColor(selected.status)}>{selected.status}</Badge>
                           {selected.disciplinary?.warnings > 0 && (
                             <Badge className="border-red-500/40 bg-red-500/15 text-red-300">Warning - {selected.disciplinary.warnings}</Badge>
@@ -2500,7 +2558,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                           {[
                             ['Trainer', selected.trainer],
                             ['Staff Since', selected.staffSince],
-                            [`${selected.role} Since`, selected.modSince],
+                            [`${rankLabel(selected.role)} Since`, selected.modSince],
                             ['Signed Off', selected.signedOff ? 'Yes' : 'No'],
                           ].map(([label, value]) => (
                             <div key={label} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5">
@@ -2603,7 +2661,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                         <SelectContent>
                           <SelectItem value="All">All ranks</SelectItem>
                           {roles.map(role => (
-                            <SelectItem key={`session-rank-${role}`} value={role}>{role}</SelectItem>
+                            <SelectItem key={`session-rank-${role}`} value={role}>{rankLabel(role)}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -2631,7 +2689,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                         <SelectItem value="none">No selection</SelectItem>
                         {sessionCandidates.map(member => (
                           <SelectItem key={`session-target-${member.id}`} value={String(member.id)}>
-                            {member.name} ({member.role})
+                            {member.name} ({rankLabel(member.role)})
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -2763,7 +2821,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                     return (
                       <div key={role} className="rounded-2xl border border-white/10 bg-black/20 p-4">
                         <div className="mb-3 flex items-center justify-between">
-                          <div className="font-semibold">{role}</div>
+                          <div className="font-semibold">{rankLabel(role)}</div>
                           <Badge className="border-white/10 bg-white/10 text-zinc-200">{inRole.length}</Badge>
                         </div>
                         <div className="space-y-3">
@@ -2885,7 +2943,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                           <div className="text-sm font-semibold text-white">{member.name}</div>
                           <Badge className="border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-200">{member.rarity}</Badge>
                         </div>
-                        <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-400">{member.role}</div>
+                        <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-400">{rankLabel(member.role)}</div>
                         <div className="grid grid-cols-3 gap-1.5 text-[11px]">
                           <div className="rounded-lg border border-white/10 bg-black/40 p-1.5 text-center">
                             <div className="text-zinc-400">Support</div>
@@ -3029,7 +3087,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                                     <SelectItem value="none">No linked profile</SelectItem>
                                     {roles.map(role => (
                                       <SelectItem key={`linked-rank-${user.id}-${role}`} value={role}>
-                                        {role}
+                                        {rankLabel(role)}
                                       </SelectItem>
                                     ))}
                                   </SelectContent>
@@ -3087,6 +3145,42 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
             </Card>
           </TabsContent>
 
+          <TabsContent value="ranks">
+            <Card className="border-white/10 bg-white/5">
+              <CardHeader>
+                <CardTitle>Rank Display Names</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-zinc-400">
+                  Rename how ranks are shown across the dashboard. Internal rank keys stay the same.
+                </div>
+                {rankDisplayLoading && (
+                  <div className="text-sm text-zinc-400">Loading rank display settings...</div>
+                )}
+                <div className="space-y-2">
+                  {roles.map(role => (
+                    <div key={`rank-display-${role}`} className="grid gap-2 rounded-xl border border-white/10 bg-black/20 p-3 md:grid-cols-[160px,1fr,120px] md:items-center">
+                      <Badge className={`${roleColor(role)} w-fit px-2 text-[10px]`}>{role}</Badge>
+                      <Input
+                        value={rankDrafts[role] ?? rankLabel(role)}
+                        onChange={(e) => setRankDrafts(prev => ({ ...prev, [role]: e.target.value }))}
+                        placeholder={role}
+                        className="border-white/10 bg-black/30 text-white"
+                      />
+                      <Button
+                        type="button"
+                        onClick={() => saveRankDisplayName(role)}
+                        className="rounded-xl border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white hover:from-fuchsia-500 hover:to-indigo-500"
+                      >
+                        Save
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           <TabsContent value="discipline">
             <div className="grid gap-6 xl:grid-cols-[0.95fr,1.05fr]">
               <Card className="border-white/10 bg-white/5">
@@ -3102,7 +3196,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                         <SelectContent>
                           <SelectItem value="All">All ranks</SelectItem>
                           {roles.map(role => (
-                            <SelectItem key={`discipline-rank-${role}`} value={role}>{role}</SelectItem>
+                            <SelectItem key={`discipline-rank-${role}`} value={role}>{rankLabel(role)}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -3130,7 +3224,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                         <SelectItem value="none">No selection</SelectItem>
                         {disciplineCandidates.map(member => (
                           <SelectItem key={`discipline-target-${member.id}`} value={String(member.id)}>
-                            {member.name} ({member.role})
+                            {member.name} ({rankLabel(member.role)})
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -3272,7 +3366,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                               <SelectTrigger className="border-white/10 bg-black/30 text-white"><SelectValue /></SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="All">All ranks</SelectItem>
-                                {roles.map(role => <SelectItem key={`cb-rank-${role}`} value={role}>{role}</SelectItem>)}
+                                {roles.map(role => <SelectItem key={`cb-rank-${role}`} value={role}>{rankLabel(role)}</SelectItem>)}
                               </SelectContent>
                             </Select>
                             <Badge className="justify-center border-white/10 bg-white/10 text-zinc-200">{filteredCheckboxItems.length} shown</Badge>
@@ -3333,7 +3427,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                   <Select value={addStaffForm.role} onValueChange={(value) => setAddStaffForm(prev => ({ ...prev, role: value }))}>
                     <SelectTrigger className="border-white/10 bg-black/30 text-white"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {roles.map(role => <SelectItem key={role} value={role}>{role}</SelectItem>)}
+                    {roles.map(role => <SelectItem key={role} value={role}>{rankLabel(role)}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -3521,7 +3615,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                   <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
                     {roles.map(role => (
                       <label key={`${checkboxDraft.id}-${role}`} className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-200">
-                        {role}
+                        {rankLabel(role)}
                         <Checkbox
                           checked={(checkboxDraft.ranks || []).includes(role)}
                           onCheckedChange={(checked) =>
