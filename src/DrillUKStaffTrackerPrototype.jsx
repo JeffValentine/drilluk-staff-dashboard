@@ -1022,6 +1022,24 @@ function accountRoleSortValue(role) {
   return 4;
 }
 
+function inferAuditTab(action) {
+  const normalized = String(action || '').toLowerCase();
+  if (normalized.includes('checkbox')) return 'Checkboxes';
+  if (normalized.includes('rank_display')) return 'Rank Display';
+  if (normalized.includes('user.') || normalized.includes('god_key') || normalized.includes('profile.')) return 'Management';
+  if (normalized.includes('disciplin') || normalized.includes('warning')) return 'Discipline';
+  if (normalized.includes('session') || normalized.includes('quiz')) return 'Training Session';
+  if (normalized.includes('staff.')) return 'Tracker';
+  return 'General';
+}
+
+function formatAuditAction(action) {
+  return String(action || '')
+    .replace(/[._]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function mapRosterRankToRole(rankLabel) {
   const rank = String(rankLabel || '').trim().toLowerCase();
   if (rank.includes('junior associate')) return 'T-MOD';
@@ -1140,6 +1158,9 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [managementUsers, setManagementUsers] = useState([]);
   const [managementLoading, setManagementLoading] = useState(false);
   const [managementError, setManagementError] = useState('');
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditError, setAuditError] = useState('');
   const [latestInviteToken, setLatestInviteToken] = useState('');
   const [inviteTokenCreating, setInviteTokenCreating] = useState(false);
   const [checkboxCatalog, setCheckboxCatalog] = useState(buildDefaultCheckboxCatalog());
@@ -1173,6 +1194,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     profiles: false,
     checkbox: false,
     ranks: false,
+    audit: false,
   });
   const syncPauseTimerRef = useRef(null);
   const syncLockedRef = useRef(false);
@@ -1181,6 +1203,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     profiles: false,
     checkbox: false,
     ranks: false,
+    audit: false,
   });
   const [quizState, setQuizState] = useState({
     role: { started: false, score: null, answers: {} },
@@ -1189,7 +1212,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   });
   const isEditOverlayOpen = checkboxEditorOpen || addStaffOpen || rosterSyncOpen || profileOpen || disciplineOpen || sessionNotesOpen || sessionActionsOpen;
   const isSyncLocked = syncPausedByEdit || inputEditingActive || isEditOverlayOpen;
-  const hasQueuedSync = pendingSyncFlags.staff || pendingSyncFlags.profiles || pendingSyncFlags.checkbox || pendingSyncFlags.ranks;
+  const hasQueuedSync = pendingSyncFlags.staff || pendingSyncFlags.profiles || pendingSyncFlags.checkbox || pendingSyncFlags.ranks || pendingSyncFlags.audit;
 
   function holdRealtimeSync(ms = 2500) {
     setSyncPausedByEdit(true);
@@ -1313,6 +1336,12 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       .sort((a, b) => new Date(b.last_seen_at || 0).getTime() - new Date(a.last_seen_at || 0).getTime());
   }, [canViewPresence, activeUsers, managementUsers]);
 
+  useEffect(() => {
+    if (canViewPresence) return;
+    setActiveUsersOpen(false);
+    setOfflineUsersOpen(false);
+  }, [canViewPresence]);
+
   async function refreshStaffFromDb() {
     if (!dbReady || !supabase) return;
     const { data, error } = await supabase
@@ -1407,6 +1436,28 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     }
   }
 
+  async function refreshAuditLogsFromDb() {
+    if (!dbReady || !supabase || !canManageUsers) return;
+    setAuditLoading(true);
+    setAuditError('');
+    try {
+      const { data, error } = await supabase
+        .from('audit_logs')
+        .select('id, actor_id, action, target_id, before_value, after_value, created_at')
+        .order('created_at', { ascending: false })
+        .limit(250);
+
+      if (error) {
+        setAuditLogs([]);
+        setAuditError(error.message || 'Failed to load audit logs.');
+        return;
+      }
+      setAuditLogs(data || []);
+    } finally {
+      setAuditLoading(false);
+    }
+  }
+
   async function refreshCheckboxCatalogFromDb() {
     if (!dbReady || !supabase) return;
     setCheckboxCatalogLoading(true);
@@ -1477,6 +1528,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     if (key === 'profiles') await refreshManagementUsersFromDb();
     if (key === 'checkbox') await refreshCheckboxCatalogFromDb();
     if (key === 'ranks') await refreshRankDisplayNamesFromDb();
+    if (key === 'audit') await refreshAuditLogsFromDb();
     setPendingSync(key, false);
   }
 
@@ -1486,6 +1538,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     if (pending.profiles) await requestRefresh('profiles');
     if (pending.checkbox) await requestRefresh('checkbox');
     if (pending.ranks) await requestRefresh('ranks');
+    if (pending.audit) await requestRefresh('audit');
   }
 
   useEffect(() => {
@@ -1532,6 +1585,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   useEffect(() => {
     if (!dbReady || !supabase || !canManageUsers) return;
     refreshManagementUsersFromDb();
+  }, [dbReady, canManageUsers]);
+
+  useEffect(() => {
+    if (!dbReady || !supabase || !canManageUsers) return;
+    refreshAuditLogsFromDb();
   }, [dbReady, canManageUsers]);
 
   useEffect(() => {
@@ -1583,6 +1641,19 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       supabase.removeChannel(channel);
     };
   }, [dbReady, authUser?.id]);
+
+  useEffect(() => {
+    if (!dbReady || !supabase || !canManageUsers) return;
+    const channel = supabase
+      .channel('audit_logs_sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'audit_logs' }, () => {
+        requestRefresh('audit');
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [dbReady, canManageUsers]);
 
   const baseChecksByRole = useMemo(() => {
     const map = Object.fromEntries(roles.map(role => [role, []]));
@@ -1858,7 +1929,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   }
 
   function updateSelected(patch) {
-    if (!selected || !canEdit) return;
+    if (!selected || (!canEdit && !isStaffInTraining)) return;
     let updated = null;
     setStaff(prev => prev.map(s => {
       if (s.id !== selected.id) return s;
@@ -2148,6 +2219,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       [category]: { ...prev[category], score },
     }));
     const quizHistory = [attempt, ...(selected.quizHistory || [])].slice(0, 200);
+    writeAudit('quiz.submit', selected.id, null, { category, score, passed });
     if (!passed) {
       updateSelected({ quizHistory });
       return;
@@ -2817,7 +2889,9 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 ))}
               </div>
               {canViewPresence && (
-                <div className="flex items-center gap-2">
+                <div>
+                  <div className="mb-1 text-[10px] uppercase tracking-[0.16em] text-zinc-500">Head admin visibility only</div>
+                  <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setActiveUsersOpen(true)}
@@ -2834,6 +2908,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                     <span className="h-1.5 w-1.5 rounded-full bg-zinc-300" />
                     Offline {offlineUsers.length}
                   </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -2883,7 +2958,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         )}
 
         <Tabs defaultValue={isStaffInTraining ? 'myprogress' : 'tracker'} className="space-y-4">
-          <TabsList className={`grid w-full bg-white/5 ${isStaffInTraining ? 'grid-cols-2 md:w-[520px]' : 'grid-cols-8 md:w-[1360px]'}`}>
+          <TabsList className={`grid w-full bg-white/5 ${isStaffInTraining ? 'grid-cols-2 md:w-[520px]' : 'grid-cols-9 md:w-[1520px]'}`}>
             {isStaffInTraining ? (
               <>
                 <TabsTrigger value="myprogress">My Progress</TabsTrigger>
@@ -2897,6 +2972,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 <TabsTrigger value="hub">Overview & Resources</TabsTrigger>
                 <TabsTrigger value="checkboxes">Checkboxes</TabsTrigger>
                 <TabsTrigger value="management">Management</TabsTrigger>
+                <TabsTrigger value="audit">Audit Log</TabsTrigger>
                 <TabsTrigger value="ranks">Rank Display</TabsTrigger>
                 <TabsTrigger value="discipline">Discipline</TabsTrigger>
               </>
@@ -3839,6 +3915,85 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
             </Card>
           </TabsContent>
 
+          <TabsContent value="audit">
+            <Card className="border-white/10 bg-white/5">
+              <CardHeader>
+                <CardTitle>Management Audit Log</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {!canManageUsers && (
+                  <div className="rounded-xl border border-red-500/35 bg-red-500/10 p-4 text-sm text-red-200">
+                    Head-admin access required for audit log visibility.
+                  </div>
+                )}
+                {canManageUsers && (
+                  <>
+                    <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-zinc-400">
+                      Tracks who changed what, where it was changed, and when.
+                    </div>
+                    {auditLoading && <div className="text-sm text-zinc-400">Loading audit entries...</div>}
+                    {auditError && (
+                      <div className="rounded-xl border border-red-500/35 bg-red-500/10 p-3 text-sm text-red-200">
+                        {auditError}
+                      </div>
+                    )}
+                    {!auditLoading && !auditError && !auditLogs.length && (
+                      <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">
+                        No audit entries yet.
+                      </div>
+                    )}
+                    {!auditError && auditLogs.length > 0 && (
+                      <div className="space-y-2">
+                        {auditLogs.map(log => {
+                          const actor = managementUsers.find(user => user.id === log.actor_id);
+                          const changedFields = log.after_value && typeof log.after_value === 'object' && !Array.isArray(log.after_value)
+                            ? Object.keys(log.after_value).slice(0, 5)
+                            : [];
+                          return (
+                            <div key={log.id} className="grid gap-2 rounded-xl border border-white/10 bg-black/20 p-3 md:grid-cols-[1.2fr,0.8fr,1.2fr,1fr,0.9fr] md:items-center">
+                              <div className="min-w-0">
+                                <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">Actor</div>
+                                <div className="truncate text-sm font-semibold text-white">{actor?.username || log.actor_id || 'Unknown'}</div>
+                              </div>
+                              <div>
+                                <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">Tab</div>
+                                <Badge className="border-fuchsia-500/30 bg-fuchsia-500/12 text-fuchsia-200">{inferAuditTab(log.action)}</Badge>
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">Action</div>
+                                <div className="truncate text-sm text-zinc-200">{formatAuditAction(log.action)}</div>
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">Target</div>
+                                <div className="truncate text-sm text-zinc-300">{log.target_id || '—'}</div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">When</div>
+                                <div className="text-sm text-zinc-300">{log.created_at ? new Date(log.created_at).toLocaleString() : '—'}</div>
+                              </div>
+                              {!!changedFields.length && (
+                                <div className="md:col-span-5">
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">Changed</span>
+                                    {changedFields.map(field => (
+                                      <Badge key={`${log.id}-${field}`} className="border-white/10 bg-white/10 text-[10px] text-zinc-200">
+                                        {field}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           <TabsContent value="ranks">
             <Card className="border-white/10 bg-white/5">
               <CardHeader>
@@ -4600,7 +4755,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
             <div className="w-full max-w-lg rounded-2xl border border-emerald-500/30 bg-zinc-950 p-5">
               <div className="mb-4 flex items-center justify-between">
-                <div className="text-lg font-semibold text-white">Active Users</div>
+                <div>
+                  <div className="text-lg font-semibold text-white">Active Users</div>
+                  <div className="text-[11px] text-zinc-500">Visible to Head Admin only.</div>
+                </div>
                 <button type="button" onClick={() => setActiveUsersOpen(false)} className="text-sm text-zinc-400 hover:text-white">Close</button>
               </div>
               <div className="space-y-2">
@@ -4634,7 +4792,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
             <div className="w-full max-w-lg rounded-2xl border border-zinc-500/30 bg-zinc-950 p-5">
               <div className="mb-4 flex items-center justify-between">
-                <div className="text-lg font-semibold text-white">Offline Users</div>
+                <div>
+                  <div className="text-lg font-semibold text-white">Offline Users</div>
+                  <div className="text-[11px] text-zinc-500">Visible to Head Admin only.</div>
+                </div>
                 <button type="button" onClick={() => setOfflineUsersOpen(false)} className="text-sm text-zinc-400 hover:text-white">Close</button>
               </div>
               <div className="space-y-2">
