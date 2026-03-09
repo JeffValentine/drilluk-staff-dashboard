@@ -2109,78 +2109,80 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
             <h1 className="font-display text-3xl font-bold tracking-tight md:text-4xl">Drill-UK Staff Dashboard</h1>
             <p className="mt-2 max-w-3xl text-sm text-zinc-300 md:text-base">A modern interactive staff panel for promotions and progression by xJeffValentine, with cleaner workflows for training, permissions, and disciplinary tracking.</p>
           </div>
-          <div className="flex items-start gap-3 md:w-[560px] md:justify-end">
-            <div className="flex flex-col items-center gap-2">
+          <div className="flex items-start gap-3 md:w-[620px] md:justify-end">
+            <div className="space-y-2 md:w-[430px]">
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { label: 'Total Staff', value: totals.total, icon: Users },
+                  { label: 'In Training', value: totals.inTraining, icon: GraduationCap },
+                  { label: 'Promo Ready', value: totals.promotionReady, icon: ArrowUpRight },
+                  { label: 'Signed Off', value: totals.signedOff, icon: CheckCircle2 },
+                ].map((item, i) => (
+                  <motion.div key={item.label} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
+                    <Card className="border-white/10 bg-white/5 backdrop-blur-xl">
+                      <CardContent className="flex items-center justify-between p-3">
+                        <div>
+                          <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-400">{item.label}</div>
+                          <div className="mt-0.5 text-xl font-bold">{item.value}</div>
+                        </div>
+                        <item.icon className="h-4.5 w-4.5 text-fuchsia-300" />
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                ))}
+              </div>
               {canViewPresence && (
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setActiveUsersOpen(true)}
-                    className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/35 bg-emerald-500/12 px-3 py-1.5 text-xs text-emerald-200 hover:bg-emerald-500/20"
+                    className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/35 bg-emerald-500/12 px-2.5 py-1 text-[11px] text-emerald-200 hover:bg-emerald-500/20"
                   >
-                    <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
                     Active {activeUsers.length}
                   </button>
                   <button
                     type="button"
                     onClick={() => setOfflineUsersOpen(true)}
-                    className="inline-flex items-center gap-2 rounded-xl border border-zinc-500/35 bg-zinc-500/12 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-500/20"
+                    className="inline-flex items-center gap-2 rounded-lg border border-zinc-500/35 bg-zinc-500/12 px-2.5 py-1 text-[11px] text-zinc-200 hover:bg-zinc-500/20"
                   >
-                    <span className="h-2 w-2 rounded-full bg-zinc-300" />
+                    <span className="h-1.5 w-1.5 rounded-full bg-zinc-300" />
                     Offline {offlineUsers.length}
                   </button>
                 </div>
               )}
+            </div>
+            <div className="flex w-[84px] flex-col items-stretch gap-1.5">
               <button
                 type="button"
                 onClick={() => setProfileOpen(true)}
-                className="rounded-2xl border border-white/15 bg-black/25 p-0 transition hover:border-fuchsia-500/40"
+                className="rounded-xl border border-white/15 bg-black/25 p-0 transition hover:border-fuchsia-500/40"
                 title="Open profile"
               >
                 {profile?.avatar_url ? (
                   <img
                     src={profile.avatar_url}
                     alt="Account logo"
-                    className="h-[86px] w-[86px] rounded-2xl object-cover"
+                    className="h-[74px] w-[74px] rounded-xl object-cover"
                   />
                 ) : (
-                  <div className="flex h-[86px] w-[86px] items-center justify-center rounded-2xl text-2xl font-bold text-zinc-200">
+                  <div className="flex h-[74px] w-[74px] items-center justify-center rounded-xl text-xl font-bold text-zinc-200">
                     {(profile?.username?.[0] || authUser?.email?.[0] || 'G').toUpperCase()}
                   </div>
                 )}
               </button>
-              <button onClick={onSignOut} className="w-full rounded-xl border border-white/15 bg-black/25 px-2 py-1.5 text-xs text-zinc-200 hover:bg-white/10">
+              <button onClick={onSignOut} className="rounded-lg border border-white/15 bg-black/25 px-2 py-1 text-[11px] text-zinc-200 hover:bg-white/10">
                 Sign Out
               </button>
               {profile?.god_key_enabled && (
                 <button
                   type="button"
                   onClick={forceHeadAdminReset}
-                  className="w-full rounded-xl border border-emerald-400/40 bg-gradient-to-r from-emerald-600 to-green-500 px-2 py-1.5 text-xs text-white hover:from-emerald-500 hover:to-green-400"
+                  className="rounded-lg border border-emerald-400/40 bg-gradient-to-r from-emerald-600 to-green-500 px-2 py-1 text-[11px] text-white hover:from-emerald-500 hover:to-green-400"
                 >
-                  God Key: Reset Head Admin
+                  Reset
                 </button>
               )}
-            </div>
-            <div className="grid grid-cols-2 gap-3 md:w-[420px]">
-              {[
-                { label: 'Total Staff', value: totals.total, icon: Users },
-                { label: 'In Training', value: totals.inTraining, icon: GraduationCap },
-                { label: 'Promo Ready', value: totals.promotionReady, icon: ArrowUpRight },
-                { label: 'Signed Off', value: totals.signedOff, icon: CheckCircle2 },
-              ].map((item, i) => (
-                <motion.div key={item.label} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
-                  <Card className="border-white/10 bg-white/5 backdrop-blur-xl">
-                    <CardContent className="flex items-center justify-between p-4">
-                      <div>
-                        <div className="text-xs uppercase tracking-[0.2em] text-zinc-400">{item.label}</div>
-                        <div className="mt-1 text-2xl font-bold">{item.value}</div>
-                      </div>
-                      <item.icon className="h-5 w-5 text-fuchsia-300" />
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
             </div>
           </div>
         </div>
