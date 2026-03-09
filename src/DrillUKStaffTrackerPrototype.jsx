@@ -999,7 +999,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const canEdit = ['head_admin', 'admin', 'trainer'].includes(profile?.role || '');
   const canManageUsers = profile?.role === 'head_admin' || Boolean(profile?.god_key_enabled);
   const canViewPresence = profile?.role === 'head_admin';
-  const canManageCheckboxes = ['head_admin', 'admin'].includes(profile?.role || '');
+  const canManageCheckboxes = canManageUsers || profile?.role === 'admin';
   const canDeleteStaff = ['head_admin', 'admin'].includes(profile?.role || '');
   const isStaffInTraining = profile?.role === 'staff_in_training';
 
@@ -2412,9 +2412,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       correct: primaryCorrect,
       existingWrong: payload.wrong,
     });
+    const normalizedRanks = sortRankScope(item.ranks || parseRankScope(item.role));
     setCheckboxDraft({
       ...item,
-      ranks: item.ranks || parseRankScope(item.role),
+      ranks: normalizedRanks,
       answers: payload.correct.length ? payload.correct : [''],
       falseAnswers: normalizedFalse,
     });
@@ -2435,9 +2436,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       correct: primaryCorrect,
       existingWrong: checkboxDraft.falseAnswers || [],
     });
+    const normalizedRanks = sortRankScope(checkboxDraft.ranks || []);
     const normalized = {
       ...checkboxDraft,
-      role: serializeRankScope(checkboxDraft.ranks),
+      ranks: normalizedRanks,
+      role: serializeRankScope(normalizedRanks),
       answer: buildQuizPayload(checkboxDraft.answers || [], normalizedFalse),
       falseAnswers: normalizedFalse,
     };
@@ -3971,6 +3974,31 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 </div>
                 <div className="md:col-span-2">
                   <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Visible for ranks</div>
+                  {checkboxDraft.category === 'role' && (
+                    <div className="mb-2 grid gap-2 md:grid-cols-[200px,1fr] md:items-center">
+                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Role ruleset</div>
+                      <Select
+                        value={(checkboxDraft.ranks || []).length === 1 ? checkboxDraft.ranks[0] : 'all'}
+                        onValueChange={(value) => {
+                          if (value === 'all') {
+                            setCheckboxDraft(prev => ({ ...prev, ranks: [] }));
+                            return;
+                          }
+                          setCheckboxDraft(prev => ({ ...prev, ranks: [value] }));
+                        }}
+                      >
+                        <SelectTrigger className="border-white/10 bg-black/30 text-white"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All ranks</SelectItem>
+                          {roles.map(role => (
+                            <SelectItem key={`ruleset-rank-${role}`} value={role}>
+                              {rankLabel(role)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   <div className="mb-2">
                     <label className="flex items-center justify-between rounded-xl border border-fuchsia-400/30 bg-fuchsia-500/10 px-3 py-2 text-sm text-fuchsia-100">
                       All ranks
