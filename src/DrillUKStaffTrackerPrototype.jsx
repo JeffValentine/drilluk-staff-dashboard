@@ -735,6 +735,75 @@ function buildQuizPayload(correctAnswers, wrongAnswers) {
   });
 }
 
+function buildRuleAlignedFalseAnswers({ title = '', question = '', correct = '', existingWrong = [] }) {
+  const keywordSource = `${title} ${question} ${correct}`.toLowerCase();
+  const banks = [
+    {
+      keys: ['report', 'clip', 'evidence', 'proof'],
+      wrong: [
+        'Handle the case without a /report if the story sounds believable.',
+        'A short verbal explanation is enough without clips or logs.',
+        'Skip evidence checks if both sides seem upset.',
+      ],
+    },
+    {
+      keys: ['rdm', 'vdm', 'rp reason', 'random deathmatch', 'force'],
+      wrong: [
+        'Force is allowed whenever the player feels disrespected.',
+        'RDM is acceptable if both players are arguing already.',
+        'No RP reason is needed if the situation escalates quickly.',
+      ],
+    },
+    {
+      keys: ['bring', 'teleport', 'freeze', 'revive', 'permission', 'staff action'],
+      wrong: [
+        'Use staff actions first, then check policy afterwards.',
+        'Permissions can be used to speed things up even without context.',
+        'Teleport and freeze can be used for convenience during normal RP.',
+      ],
+    },
+    {
+      keys: ['escalat', 'review', 'bias', 'fair'],
+      wrong: [
+        'Make the decision alone even when the case is unclear.',
+        'Prioritize fast closure over unbiased review.',
+        'Escalation is only needed when both players insist loudly.',
+      ],
+    },
+    {
+      keys: ['nlr', 'fearrp', 'value life', 'metagaming', 'powergaming'],
+      wrong: [
+        'Rule checks can be skipped if the player has no prior punishments.',
+        'Niche rules only apply during staff-led events.',
+        'FearRP and memory rules are optional in high-pressure moments.',
+      ],
+    },
+  ];
+
+  const pickedBank = banks.find(bank => bank.keys.some(key => keywordSource.includes(key)));
+  const generic = [
+    'Act first and document later.',
+    'Ignore policy wording if the outcome feels right.',
+    'Use personal judgment without checking server standards.',
+  ];
+
+  const candidates = [
+    ...existingWrong,
+    ...(pickedBank ? pickedBank.wrong : []),
+    ...generic,
+  ]
+    .map(v => String(v || '').trim())
+    .filter(Boolean)
+    .filter(v => v.toLowerCase() !== String(correct || '').trim().toLowerCase());
+
+  const unique = [...new Set(candidates)];
+  const selected = unique.slice(0, 3);
+  while (selected.length < 3) {
+    selected.push(generic[selected.length]);
+  }
+  return selected;
+}
+
 function shuffleArray(arr) {
   const copy = [...arr];
   for (let i = copy.length - 1; i > 0; i -= 1) {
@@ -1342,14 +1411,13 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         .map(item => {
           const payload = parseQuizPayload(item.answer);
           const primaryCorrect = payload.correct[0] || '';
-          const fallbackWrong = [
-            'Handle without checking policy first.',
-            'Skip documentation and close it quickly.',
-            'Apply this action in every case by default.',
-          ];
-          const wrongPool = [...payload.wrong.filter(Boolean), ...fallbackWrong]
-            .filter(option => option && option !== primaryCorrect);
-          const options = shuffleArray([primaryCorrect, ...wrongPool.slice(0, 3)].filter(Boolean));
+          const falseOptions = buildRuleAlignedFalseAnswers({
+            title: item.title,
+            question: item.question,
+            correct: primaryCorrect,
+            existingWrong: payload.wrong,
+          });
+          const options = shuffleArray([primaryCorrect, ...falseOptions].filter(Boolean));
           return {
             id: item.id,
             title: item.title,
@@ -2149,11 +2217,18 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   function openCheckboxEditor(item) {
     const payload = parseQuizPayload(item.answer);
+    const primaryCorrect = payload.correct[0] || '';
+    const normalizedFalse = buildRuleAlignedFalseAnswers({
+      title: item.title,
+      question: item.question,
+      correct: primaryCorrect,
+      existingWrong: payload.wrong,
+    });
     setCheckboxDraft({
       ...item,
       ranks: item.ranks || parseRankScope(item.role),
       answers: payload.correct.length ? payload.correct : [''],
-      falseAnswers: payload.wrong.length ? payload.wrong : [''],
+      falseAnswers: normalizedFalse,
     });
     setCheckboxEditorOpen(true);
   }
@@ -2165,10 +2240,18 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   async function saveCheckboxDraft() {
     if (!checkboxDraft) return;
+    const primaryCorrect = (checkboxDraft.answers || []).find(answer => String(answer || '').trim()) || '';
+    const normalizedFalse = buildRuleAlignedFalseAnswers({
+      title: checkboxDraft.title,
+      question: checkboxDraft.question,
+      correct: primaryCorrect,
+      existingWrong: checkboxDraft.falseAnswers || [],
+    });
     const normalized = {
       ...checkboxDraft,
       role: serializeRankScope(checkboxDraft.ranks),
-      answer: buildQuizPayload(checkboxDraft.answers || [], checkboxDraft.falseAnswers || []),
+      answer: buildQuizPayload(checkboxDraft.answers || [], normalizedFalse),
+      falseAnswers: normalizedFalse,
     };
     patchCheckboxItem(normalized.id, normalized);
     await saveCheckboxItem(normalized);
