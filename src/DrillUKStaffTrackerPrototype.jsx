@@ -1161,6 +1161,13 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [auditLogs, setAuditLogs] = useState([]);
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditError, setAuditError] = useState('');
+  const [auditQuery, setAuditQuery] = useState('');
+  const [auditTabFilter, setAuditTabFilter] = useState('All');
+  const [auditActorFilter, setAuditActorFilter] = useState('All');
+  const [auditActionFilter, setAuditActionFilter] = useState('All');
+  const [auditDateFilter, setAuditDateFilter] = useState('All');
+  const [auditRequireChanges, setAuditRequireChanges] = useState(false);
+  const [auditFieldQuery, setAuditFieldQuery] = useState('');
   const [latestInviteToken, setLatestInviteToken] = useState('');
   const [inviteTokenCreating, setInviteTokenCreating] = useState(false);
   const [checkboxCatalog, setCheckboxCatalog] = useState(buildDefaultCheckboxCatalog());
@@ -1800,6 +1807,75 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [staff, disciplineRankFilter, disciplineUserQuery]);
   const disciplineTarget = staff.find(member => member.id === disciplineTargetId) || disciplineCandidates[0] || null;
+  const auditActionOptions = useMemo(
+    () => [...new Set((auditLogs || []).map(log => String(log.action || '')).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [auditLogs]
+  );
+  const auditTabOptions = useMemo(
+    () => ['All', ...[...new Set((auditLogs || []).map(log => inferAuditTab(log.action)).filter(Boolean))]],
+    [auditLogs]
+  );
+  const auditActorOptions = useMemo(() => {
+    const seen = new Set();
+    return (auditLogs || [])
+      .map(log => {
+        const actor = managementUsers.find(user => user.id === log.actor_id);
+        return { id: log.actor_id || '', label: actor?.username || log.actor_id || 'Unknown' };
+      })
+      .filter(option => {
+        if (!option.id || seen.has(option.id)) return false;
+        seen.add(option.id);
+        return true;
+      })
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [auditLogs, managementUsers]);
+  const filteredAuditLogs = useMemo(() => {
+    const q = auditQuery.trim().toLowerCase();
+    const fieldNeedle = auditFieldQuery.trim().toLowerCase();
+    const now = Date.now();
+    const cutoff = auditDateFilter === '24h'
+      ? now - 24 * 60 * 60 * 1000
+      : auditDateFilter === '7d'
+        ? now - 7 * 24 * 60 * 60 * 1000
+        : auditDateFilter === '30d'
+          ? now - 30 * 24 * 60 * 60 * 1000
+          : null;
+
+    return (auditLogs || [])
+      .filter(log => log.action !== 'staff.toggle')
+      .filter(log => (auditTabFilter === 'All' ? true : inferAuditTab(log.action) === auditTabFilter))
+      .filter(log => (auditActorFilter === 'All' ? true : log.actor_id === auditActorFilter))
+      .filter(log => (auditActionFilter === 'All' ? true : String(log.action || '') === auditActionFilter))
+      .filter(log => {
+        if (!cutoff) return true;
+        const ts = new Date(log.created_at || 0).getTime();
+        return Number.isFinite(ts) && ts >= cutoff;
+      })
+      .filter(log => {
+        const changedFields = log.after_value && typeof log.after_value === 'object' && !Array.isArray(log.after_value)
+          ? Object.keys(log.after_value)
+          : [];
+        if (auditRequireChanges && !changedFields.length) return false;
+        if (!fieldNeedle) return true;
+        return changedFields.some(field => field.toLowerCase().includes(fieldNeedle));
+      })
+      .filter(log => {
+        if (!q) return true;
+        const actor = managementUsers.find(user => user.id === log.actor_id);
+        const haystack = [
+          log.action,
+          inferAuditTab(log.action),
+          log.target_id,
+          actor?.username,
+          log.actor_id,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(q);
+      })
+      .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+  }, [auditLogs, auditTabFilter, auditActorFilter, auditActionFilter, auditDateFilter, auditRequireChanges, auditFieldQuery, auditQuery, managementUsers]);
 
   useEffect(() => {
     if (!staff.length) {
@@ -3932,20 +4008,101 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                     <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-zinc-400">
                       Tracks who changed what, where it was changed, and when.
                     </div>
+                    <div className="space-y-3 rounded-xl border border-white/10 bg-black/25 p-3">
+                      <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
+                        <Input
+                          value={auditQuery}
+                          onChange={(e) => setAuditQuery(e.target.value)}
+                          placeholder="Search action, tab, actor, target..."
+                          className="border-white/10 bg-black/30 text-white placeholder:text-zinc-500"
+                        />
+                        <Select value={auditActorFilter} onValueChange={setAuditActorFilter}>
+                          <SelectTrigger className="border-white/10 bg-black/30 text-white"><SelectValue placeholder="Actor" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="All">All actors</SelectItem>
+                            {auditActorOptions.map(option => (
+                              <SelectItem key={`audit-actor-${option.id}`} value={option.id}>{option.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Select value={auditActionFilter} onValueChange={setAuditActionFilter}>
+                          <SelectTrigger className="border-white/10 bg-black/30 text-white"><SelectValue placeholder="Action" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="All">All actions</SelectItem>
+                            {auditActionOptions.map(action => (
+                              <SelectItem key={`audit-action-${action}`} value={action}>{formatAuditAction(action)}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Select value={auditDateFilter} onValueChange={setAuditDateFilter}>
+                          <SelectTrigger className="border-white/10 bg-black/30 text-white"><SelectValue placeholder="Date window" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="All">All time</SelectItem>
+                            <SelectItem value="24h">Last 24h</SelectItem>
+                            <SelectItem value="7d">Last 7d</SelectItem>
+                            <SelectItem value="30d">Last 30d</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {auditTabOptions.map(tab => (
+                          <button
+                            key={`audit-tab-${tab}`}
+                            type="button"
+                            onClick={() => setAuditTabFilter(tab)}
+                            className={`rounded-full border px-3 py-1 text-[11px] ${
+                              auditTabFilter === tab
+                                ? 'border-fuchsia-500/40 bg-fuchsia-500/18 text-fuchsia-200'
+                                : 'border-white/12 bg-black/30 text-zinc-300 hover:bg-white/10'
+                            }`}
+                          >
+                            {tab}
+                          </button>
+                        ))}
+                        <label className="ml-2 inline-flex items-center gap-2 rounded-full border border-white/12 bg-black/30 px-3 py-1 text-[11px] text-zinc-300">
+                          <Checkbox checked={auditRequireChanges} onCheckedChange={(checked) => setAuditRequireChanges(Boolean(checked))} />
+                          Has changed fields
+                        </label>
+                        <Input
+                          value={auditFieldQuery}
+                          onChange={(e) => setAuditFieldQuery(e.target.value)}
+                          placeholder="Changed field contains..."
+                          className="h-8 w-[220px] border-white/10 bg-black/30 text-xs text-white placeholder:text-zinc-500"
+                        />
+                        <Badge className="border-white/10 bg-white/10 text-zinc-200">
+                          {filteredAuditLogs.length} results
+                        </Badge>
+                        <Button
+                          type="button"
+                          onClick={() => {
+                            setAuditQuery('');
+                            setAuditTabFilter('All');
+                            setAuditActorFilter('All');
+                            setAuditActionFilter('All');
+                            setAuditDateFilter('All');
+                            setAuditRequireChanges(false);
+                            setAuditFieldQuery('');
+                          }}
+                          className="h-8 rounded-full border border-white/12 bg-black/30 px-3 text-xs text-zinc-200 hover:bg-white/10"
+                        >
+                          Clear filters
+                        </Button>
+                      </div>
+                    </div>
                     {auditLoading && <div className="text-sm text-zinc-400">Loading audit entries...</div>}
                     {auditError && (
                       <div className="rounded-xl border border-red-500/35 bg-red-500/10 p-3 text-sm text-red-200">
                         {auditError}
                       </div>
                     )}
-                    {!auditLoading && !auditError && !auditLogs.length && (
+                    {!auditLoading && !auditError && !filteredAuditLogs.length && (
                       <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">
-                        No audit entries yet.
+                        No audit entries match current filters.
                       </div>
                     )}
-                    {!auditError && auditLogs.length > 0 && (
+                    {!auditError && filteredAuditLogs.length > 0 && (
                       <div className="space-y-2">
-                        {auditLogs.filter(log => log.action !== 'staff.toggle').map(log => {
+                        {filteredAuditLogs.map(log => {
                           const actor = managementUsers.find(user => user.id === log.actor_id);
                           const changedFields = log.after_value && typeof log.after_value === 'object' && !Array.isArray(log.after_value)
                             ? Object.keys(log.after_value).slice(0, 5)
