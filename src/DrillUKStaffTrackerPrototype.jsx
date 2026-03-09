@@ -2621,7 +2621,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                   </CardContent>
                 </Card>
 
-                <div className="grid gap-4 xl:grid-cols-3">
+                <div className="space-y-4">
                   <Card className="border-white/10 bg-white/5">
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2"><ClipboardList className="h-5 w-5 text-fuchsia-300" /> Role checklist</CardTitle>
