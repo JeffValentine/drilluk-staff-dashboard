@@ -662,10 +662,40 @@ function formatLastSeen(iso) {
 
 function parseRankScope(roleValue) {
   if (!roleValue) return [];
+  const aliasMap = {
+    TMOD: 'T-MOD',
+    'T MOD': 'T-MOD',
+    SMOD: 'S-MOD',
+    'S MOD': 'S-MOD',
+    SADMIN: 'S-ADMIN',
+    'S ADMIN': 'S-ADMIN',
+    HEADADMIN: 'HEAD-ADMIN',
+    'HEAD ADMIN': 'HEAD-ADMIN',
+  };
+  const normalize = (raw) => {
+    const trimmed = String(raw || '').trim();
+    if (!trimmed) return '';
+    const upper = trimmed.toUpperCase().replace(/[_-]/g, ' ');
+    const collapsed = upper.replace(/\s+/g, ' ').trim();
+    if (roles.includes(collapsed.replace(/ /g, '-'))) return collapsed.replace(/ /g, '-');
+    if (aliasMap[collapsed]) return aliasMap[collapsed];
+    return trimmed.toUpperCase();
+  };
+
   return String(roleValue)
     .split(',')
-    .map(v => v.trim())
+    .map(v => normalize(v))
     .filter(Boolean);
+}
+
+function sortRankScope(ranks = []) {
+  const roleOrder = new Map(roles.map((role, index) => [role, index]));
+  return [...new Set(ranks)].sort((a, b) => {
+    const aIndex = roleOrder.get(a) ?? 999;
+    const bIndex = roleOrder.get(b) ?? 999;
+    if (aIndex !== bIndex) return aIndex - bIndex;
+    return a.localeCompare(b);
+  });
 }
 
 function serializeRankScope(ranks) {
@@ -1177,20 +1207,16 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         return scopedRanks.includes(checkboxRankFilter);
       })
       .sort((a, b) => {
-        const aRanks = parseRankScope(a.role);
-        const bRanks = parseRankScope(b.role);
+        const aRanks = sortRankScope(parseRankScope(a.role));
+        const bRanks = sortRankScope(parseRankScope(b.role));
 
         const aIsAllRanks = aRanks.length === 0;
         const bIsAllRanks = bRanks.length === 0;
         if (aIsAllRanks && !bIsAllRanks) return -1;
         if (!aIsAllRanks && bIsAllRanks) return 1;
 
-        const aRankIndex = aIsAllRanks
-          ? -1
-          : Math.min(...aRanks.map(rank => roleOrder.get(rank) ?? 999));
-        const bRankIndex = bIsAllRanks
-          ? -1
-          : Math.min(...bRanks.map(rank => roleOrder.get(rank) ?? 999));
+        const aRankIndex = aIsAllRanks ? -1 : (roleOrder.get(aRanks[0]) ?? 999);
+        const bRankIndex = bIsAllRanks ? -1 : (roleOrder.get(bRanks[0]) ?? 999);
         if (aRankIndex !== bRankIndex) return aRankIndex - bRankIndex;
 
         return a.title.localeCompare(b.title);
@@ -3403,8 +3429,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                                 <div className="text-sm font-semibold text-white">{item.title}</div>
                                 <div className="mt-1 max-h-8 overflow-hidden text-xs text-zinc-400">{item.question || 'No question yet'}</div>
                                 <div className="mt-3 flex flex-wrap gap-1.5">
-                                  {parseRankScope(item.role).length ? parseRankScope(item.role).map(rank => (
-                                    <Badge key={rank} className="border-white/10 bg-white/10 px-2 text-[10px] text-zinc-200">{rank}</Badge>
+                                  {sortRankScope(parseRankScope(item.role)).length ? sortRankScope(parseRankScope(item.role)).map(rank => (
+                                    <Badge key={rank} className="border-white/10 bg-white/10 px-2 text-[10px] text-zinc-200">{rankLabel(rank)}</Badge>
                                   )) : (
                                     <Badge className="border-white/10 bg-white/10 px-2 text-[10px] text-zinc-200">All ranks</Badge>
                                   )}
