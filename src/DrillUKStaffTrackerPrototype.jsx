@@ -15,7 +15,7 @@ import { supabase } from '@/lib/supabase';
 const roles = ['T-MOD', 'MOD', 'S-MOD', 'ADMIN', 'S-ADMIN', 'HEAD-ADMIN'];
 const SITE_OWNER_EMAIL = 'justappletje@gmail.com';
 const defaultRankDisplayNames = Object.fromEntries(roles.map(role => [role, role]));
-const FALSE_OPTION_REPAIR_VERSION = 'v4';
+const FALSE_OPTION_REPAIR_VERSION = 'v5';
 
 const baseChecks = {
   'T-MOD': [
@@ -713,7 +713,7 @@ function parseAnswerList(answer) {
 }
 
 function parseQuizPayload(answerValue) {
-  if (!answerValue) return { correct: [], wrong: [] };
+  if (!answerValue) return { correct: [], wrong: [], bracket: null };
   const raw = String(answerValue).trim();
   if (raw.startsWith('{')) {
     try {
@@ -721,18 +721,20 @@ function parseQuizPayload(answerValue) {
       return {
         correct: Array.isArray(parsed.correct) ? parsed.correct : [],
         wrong: Array.isArray(parsed.wrong) ? parsed.wrong : [],
+        bracket: typeof parsed.bracket === 'string' ? parsed.bracket : null,
       };
     } catch {
-      return { correct: parseAnswerList(answerValue), wrong: [] };
+      return { correct: parseAnswerList(answerValue), wrong: [], bracket: null };
     }
   }
-  return { correct: parseAnswerList(answerValue), wrong: [] };
+  return { correct: parseAnswerList(answerValue), wrong: [], bracket: null };
 }
 
-function buildQuizPayload(correctAnswers, wrongAnswers) {
+function buildQuizPayload(correctAnswers, wrongAnswers, bracket = null) {
   return JSON.stringify({
     correct: (correctAnswers || []).map(v => v.trim()).filter(Boolean),
     wrong: (wrongAnswers || []).map(v => v.trim()).filter(Boolean),
+    bracket: bracket || null,
   });
 }
 
@@ -898,7 +900,7 @@ function detectRuleBracket({ title = '', question = '', correct = '' }) {
   return bank?.tag || 'General Policy';
 }
 
-function buildRuleAlignedFalseAnswers({ title = '', question = '', correct = '', existingWrong = [] }) {
+function buildRuleAlignedFalseAnswers({ title = '', question = '', correct = '', existingWrong = [], bracketTag = null }) {
   const keywordSource = `${title} ${question} ${correct}`.toLowerCase();
   const deprecatedWrong = new Set([
     'Rule checks can be skipped if the player has no prior punishments.',
@@ -913,7 +915,9 @@ function buildRuleAlignedFalseAnswers({ title = '', question = '', correct = '',
     .filter(Boolean)
     .filter(v => !deprecatedWrong.has(v));
 
-  const pickedBank = RULE_FALSE_OPTION_BANKS.find(bank => bank.keys.some(key => keywordSource.includes(key)));
+  const pickedBank = bracketTag
+    ? RULE_FALSE_OPTION_BANKS.find(bank => bank.tag === bracketTag)
+    : RULE_FALSE_OPTION_BANKS.find(bank => bank.keys.some(key => keywordSource.includes(key)));
   const generic = keywordSource.includes('where') && keywordSource.includes('allowed')
     ? [
       'Everywhere in the city as long as players agree.',
@@ -1571,6 +1575,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
             question: item.question,
             correct: primaryCorrect,
             existingWrong: payload.wrong,
+            bracketTag: payload.bracket,
           });
           const options = shuffleArray([primaryCorrect, ...falseOptions].filter(Boolean));
           return {
@@ -2350,9 +2355,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         question: item.question,
         correct,
         existingWrong: payload.wrong,
+        bracketTag: payload.bracket,
       });
       if (sameStringArray(payload.wrong, repairedWrong)) return item;
-      const nextAnswer = buildQuizPayload(payload.correct, repairedWrong);
+      const nextAnswer = buildQuizPayload(payload.correct, repairedWrong, payload.bracket);
       updates.push({
         id: item.id,
         category: item.category,
@@ -2411,6 +2417,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       question: item.question,
       correct: primaryCorrect,
       existingWrong: payload.wrong,
+      bracketTag: payload.bracket,
     });
     const normalizedRanks = sortRankScope(item.ranks || parseRankScope(item.role));
     setCheckboxDraft({
@@ -2418,6 +2425,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       ranks: normalizedRanks,
       answers: payload.correct.length ? payload.correct : [''],
       falseAnswers: normalizedFalse,
+      ruleBracket: payload.bracket || '',
     });
     setCheckboxEditorOpen(true);
   }
@@ -2435,13 +2443,14 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       question: checkboxDraft.question,
       correct: primaryCorrect,
       existingWrong: checkboxDraft.falseAnswers || [],
+      bracketTag: checkboxDraft.ruleBracket || null,
     });
     const normalizedRanks = sortRankScope(checkboxDraft.ranks || []);
     const normalized = {
       ...checkboxDraft,
       ranks: normalizedRanks,
       role: serializeRankScope(normalizedRanks),
-      answer: buildQuizPayload(checkboxDraft.answers || [], normalizedFalse),
+      answer: buildQuizPayload(checkboxDraft.answers || [], normalizedFalse, checkboxDraft.ruleBracket || null),
       falseAnswers: normalizedFalse,
     };
     patchCheckboxItem(normalized.id, normalized);
@@ -3874,9 +3883,24 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                     className="min-h-[95px] border-white/10 bg-black/30 text-white"
                     placeholder="Question shown in tracker"
                   />
+                  <div className="mt-2 grid gap-2 md:grid-cols-[220px,1fr] md:items-center">
+                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Answer bracket</div>
+                    <Select
+                      value={checkboxDraft.ruleBracket || 'auto'}
+                      onValueChange={(value) => setCheckboxDraft(prev => ({ ...prev, ruleBracket: value === 'auto' ? '' : value }))}
+                    >
+                      <SelectTrigger className="border-white/10 bg-black/30 text-white"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="auto">Auto detect</SelectItem>
+                        {RULE_FALSE_OPTION_BANKS.map(bank => (
+                          <SelectItem key={`bracket-${bank.tag}`} value={bank.tag}>{bank.tag}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="mt-2">
                     <Badge className="border-cyan-500/30 bg-cyan-500/10 text-cyan-200">
-                      Rule bracket: {detectRuleBracket({
+                      Active bracket: {checkboxDraft.ruleBracket || detectRuleBracket({
                         title: checkboxDraft.title || '',
                         question: checkboxDraft.question || '',
                         correct: (checkboxDraft.answers || [])[0] || '',
@@ -3974,31 +3998,6 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 </div>
                 <div className="md:col-span-2">
                   <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Visible for ranks</div>
-                  {checkboxDraft.category === 'role' && (
-                    <div className="mb-2 grid gap-2 md:grid-cols-[200px,1fr] md:items-center">
-                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Role ruleset</div>
-                      <Select
-                        value={(checkboxDraft.ranks || []).length === 1 ? checkboxDraft.ranks[0] : 'all'}
-                        onValueChange={(value) => {
-                          if (value === 'all') {
-                            setCheckboxDraft(prev => ({ ...prev, ranks: [] }));
-                            return;
-                          }
-                          setCheckboxDraft(prev => ({ ...prev, ranks: [value] }));
-                        }}
-                      >
-                        <SelectTrigger className="border-white/10 bg-black/30 text-white"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All ranks</SelectItem>
-                          {roles.map(role => (
-                            <SelectItem key={`ruleset-rank-${role}`} value={role}>
-                              {rankLabel(role)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
                   <div className="mb-2">
                     <label className="flex items-center justify-between rounded-xl border border-fuchsia-400/30 bg-fuchsia-500/10 px-3 py-2 text-sm text-fuchsia-100">
                       All ranks
