@@ -16,6 +16,28 @@ const roles = ['T-MOD', 'MOD', 'S-MOD', 'ADMIN', 'S-ADMIN', 'HEAD-ADMIN'];
 const SITE_OWNER_EMAIL = 'justappletje@gmail.com';
 const defaultRankDisplayNames = Object.fromEntries(roles.map(role => [role, role]));
 
+const drillRosterSeed = [
+  { rank: 'Junior Associate', name: 'Begoshi' },
+  { rank: 'Junior Associate', name: 'Cailen' },
+  { rank: 'Junior Associate', name: 'Frank' },
+  { rank: 'Junior Associate', name: 'Jordan Adey' },
+  { rank: 'Junior Associate', name: 'Moses' },
+  { rank: 'Junior Associate', name: 'Yeemons' },
+  { rank: 'Support Officer', name: 'Luke' },
+  { rank: 'Support Officer', name: 'Arno' },
+  { rank: 'Support Officer', name: 'Anonymous' },
+  { rank: 'Senior Support Officer', name: 'Brad' },
+  { rank: 'Senior Support Officer', name: 'Xmas' },
+  { rank: 'Senior Support Officer', name: 'Bughl' },
+  { rank: 'Lead Support Officer', name: 'Tony' },
+  { rank: 'Operations Coordinator', name: 'N_orthh' },
+  { rank: 'Operations Coordinator', name: 'arr' },
+  { rank: 'Senior Operations Coordinator', name: 'BennyB' },
+  { rank: 'Team Lead', name: 'Ashton' },
+  { rank: 'Team Lead', name: 'Jay Jay' },
+  { rank: 'Team Lead', name: 'Scouse' },
+];
+
 const baseChecks = {
   'T-MOD': [
     'Report-first enforcement',
@@ -976,6 +998,18 @@ function accountRoleLabel(role) {
   if (role === 'admin') return 'Admin';
   if (role === 'trainer') return 'Trainer';
   return role || 'Guest';
+}
+
+function mapRosterRankToRole(rankLabel) {
+  const rank = String(rankLabel || '').trim().toLowerCase();
+  if (rank.includes('junior associate')) return 'T-MOD';
+  if (rank.includes('support officer') && !rank.includes('senior') && !rank.includes('lead')) return 'MOD';
+  if (rank.includes('senior support officer')) return 'S-MOD';
+  if (rank.includes('lead support officer')) return 'ADMIN';
+  if (rank.includes('operations coordinator') && !rank.includes('senior')) return 'S-ADMIN';
+  if (rank.includes('senior operations coordinator')) return 'HEAD-ADMIN';
+  if (rank.includes('team lead')) return 'HEAD-ADMIN';
+  return 'T-MOD';
 }
 
 function QuizHint({ item, answer, category }) {
@@ -2033,6 +2067,57 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     setAddStaffCardFile(null);
     saveStaffMember(next);
     writeAudit('staff.create', next.id, null, next);
+  }
+
+  async function syncMissingRosterProfiles() {
+    if (!canManageUsers) return;
+    const existingNames = new Set(staff.map(member => String(member.name || '').trim().toLowerCase()));
+    const missing = drillRosterSeed.filter(entry => !existingNames.has(String(entry.name || '').trim().toLowerCase()));
+    if (!missing.length) {
+      window.alert('All listed roster members already have tracker profiles.');
+      return;
+    }
+
+    const baseId = Date.now();
+    const additions = missing.map((entry, index) => {
+      const role = mapRosterRankToRole(entry.rank);
+      const roleChecks = Object.fromEntries((baseChecksByRole[role] || []).map(item => [item, false]));
+      const valueChecks = Object.fromEntries(
+        dynamicCoreValues
+          .filter(item => itemMatchesRank(item, role))
+          .map(item => [item.title, false])
+      );
+      const permissionChecks = Object.fromEntries(
+        dynamicPermissions
+          .filter(item => itemMatchesRank(item, role))
+          .map(item => [item.title, false])
+      );
+      return {
+        id: baseId + index + 1,
+        name: entry.name,
+        role,
+        trainer: 'Unassigned',
+        profileImage: '',
+        status: 'In Training',
+        strongSides: '',
+        attentionPoints: '',
+        signedOff: false,
+        staffSince: todayIsoDate(),
+        modSince: todayIsoDate(),
+        promotion: roles[Math.min(roles.indexOf(role) + 1, roles.length - 1)],
+        checks: roleChecks,
+        permissions: permissionChecks,
+        values: valueChecks,
+        disciplinary: { warnings: 0, actions: 0, logs: [] },
+        quizHistory: [],
+        notes: `Auto-created from roster seed (${entry.rank}).`,
+      };
+    });
+
+    setStaff(prev => [...prev, ...additions]);
+    await Promise.all(additions.map(member => saveStaffMember(member)));
+    await writeAudit('staff.roster_sync', 'bulk', null, { added: additions.map(m => ({ name: m.name, role: m.role })) });
+    window.alert(`Added ${additions.length} missing roster profile(s).`);
   }
 
   async function updateUserRole(userId, nextRole) {
@@ -3359,9 +3444,14 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                   <>
                     <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-zinc-400 md:flex-row md:items-center md:justify-between">
                       <span>Manage trainer/admin access here. All changes are protected and audit logged.</span>
-                      <Button onClick={restoreDemoStaff} className="rounded-xl border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-600 to-indigo-600 px-4 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.06)] hover:from-fuchsia-500 hover:to-indigo-500">
-                        Restore Demo Staff
-                      </Button>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button onClick={syncMissingRosterProfiles} className="rounded-xl border border-cyan-400/40 bg-gradient-to-r from-cyan-600 to-sky-600 px-4 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.06)] hover:from-cyan-500 hover:to-sky-500">
+                          Sync Missing Roster
+                        </Button>
+                        <Button onClick={restoreDemoStaff} className="rounded-xl border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-600 to-indigo-600 px-4 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.06)] hover:from-fuchsia-500 hover:to-indigo-500">
+                          Restore Demo Staff
+                        </Button>
+                      </div>
                     </div>
                     <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-100">
                       <span>God Key (Head Admin): allow emergency self-reset to Head Admin after role testing.</span>
