@@ -15,7 +15,7 @@ import { supabase } from '@/lib/supabase';
 const roles = ['T-MOD', 'MOD', 'S-MOD', 'ADMIN', 'S-ADMIN', 'HEAD-ADMIN'];
 const SITE_OWNER_EMAIL = 'justappletje@gmail.com';
 const defaultRankDisplayNames = Object.fromEntries(roles.map(role => [role, role]));
-const FALSE_OPTION_REPAIR_VERSION = 'v2';
+const FALSE_OPTION_REPAIR_VERSION = 'v3';
 
 const baseChecks = {
   'T-MOD': [
@@ -736,6 +736,159 @@ function buildQuizPayload(correctAnswers, wrongAnswers) {
   });
 }
 
+const RULE_FALSE_OPTION_BANKS = [
+  {
+    tag: 'RDM / Initiation',
+    keys: ['rdm', 'random deathmatch', 'initiation', 'threats/demands', 'valid rp reason', 'revenge rdm'],
+    wrong: [
+      'Force is allowed without RP initiation if tensions are high.',
+      'Revenge RDM is fine if you were attacked first.',
+      'You can skip threats/demands before killing in fast situations.',
+    ],
+  },
+  {
+    tag: 'TOS / Hate Speech',
+    keys: ['racial', 'homophobic', 'transphobic', 'disabilities', 'hate speech', 'slurs'],
+    wrong: [
+      'Slurs are allowed if players claim it is roleplay banter.',
+      'Identity-based insults only matter if someone clips it.',
+      'Disability remarks are acceptable if no direct threat is made.',
+    ],
+  },
+  {
+    tag: 'EMS Protection',
+    keys: ['ems', 'no crimes against ems', 'ambulance', 'medical'],
+    wrong: [
+      'EMS can be robbed if they are alone and off duty.',
+      'Stealing EMS vehicles is allowed during active chases.',
+      'Kidnapping EMS is acceptable if no one is revived yet.',
+    ],
+  },
+  {
+    tag: 'NLR / New Life Rule',
+    keys: ['nlr', 'new life', 'return to the place you died', 'forget everything', 'revenge kill'],
+    wrong: [
+      'After respawn, players can return to the death scene immediately.',
+      'NLR only applies if the player was executed, not downed.',
+      'Players may use old-life memory to continue the same conflict.',
+    ],
+  },
+  {
+    tag: 'OOC Conduct',
+    keys: ['ooc', 'irl threats', 'doxxing', 'suicide threats', 'mentioning rules during active rp'],
+    wrong: [
+      'IRL threats are allowed if both players are angry in OOC chat.',
+      'Rules can be argued mid-scene as long as RP continues.',
+      'Doxxing warnings only apply when personal info is posted publicly.',
+    ],
+  },
+  {
+    tag: 'Server Basics',
+    keys: ['microphone', 'default character', 'combat logging', 'stream sniping', 'advertising', 'soliciting'],
+    wrong: [
+      'Combat logging is acceptable when internet stability is poor.',
+      'Default characters are fine until a player decides to roleplay seriously.',
+      'Advertising other servers is allowed in private conversations.',
+    ],
+  },
+  {
+    tag: 'VDM',
+    keys: ['vdm', 'vehicle deathmatch', 'running people over', 'ramming'],
+    wrong: [
+      'Running someone over is fine if they stand in the road.',
+      'Repeated ramming is allowed to start roleplay quickly.',
+      'VDM only applies if the victim dies instantly.',
+    ],
+  },
+  {
+    tag: 'Fail RP',
+    keys: ['fail rp', 'destroy rp', 'break character'],
+    wrong: [
+      'Breaking character is allowed when explaining rules in scene.',
+      'Fail RP only applies if staff are already spectating.',
+      'Destroying RP is acceptable if it speeds up conflict resolution.',
+    ],
+  },
+  {
+    tag: 'Cop Baiting',
+    keys: ['cop bait', 'police chase', 'initiate roleplay with police', '2 minutes'],
+    wrong: [
+      'Intentional police chases are allowed if no shots are fired.',
+      'Police roleplay can start after fleeing for several minutes.',
+      'Verbal initiation with police is optional in traffic incidents.',
+    ],
+  },
+  {
+    tag: 'Metagaming',
+    keys: ['metagaming', 'meta gaming', 'discord calls', 'ooc info in rp', 'talking while dead', 'outside info'],
+    wrong: [
+      'Using Discord info is acceptable if it helps scene quality.',
+      'Talking while dead is fine when giving teammates directions.',
+      'OOC information may be used in RP if no one reports it.',
+    ],
+  },
+  {
+    tag: 'Powergaming / Exploits',
+    keys: ['powergaming', 'blindfire', 'q-peeking', 'animation exploits', 'greenzones', 'camping', 'baiting'],
+    wrong: [
+      'Powergaming is acceptable when your character has higher status.',
+      'Blindfire/Q-peeking is allowed if both sides are armed.',
+      'Animation exploits are fine if used only once per scene.',
+    ],
+  },
+  {
+    tag: 'KOS / Redzone',
+    keys: ['kos', 'redzone', 'gang turf', 'automatic 2 min initiation', 'rdm is allowed'],
+    wrong: [
+      'KOS is allowed in any downtown area if gangs are present.',
+      'KOS can be used at Pillbox as long as the conflict is heated.',
+      'KOS is valid anywhere after one verbal warning.',
+    ],
+  },
+  {
+    tag: 'Robberies / Hostages',
+    keys: ['robber', 'hostage', 'outside shooters', 'bank', 'jewelry', 'store', 'gas station', 'museum'],
+    wrong: [
+      'Outside shooters are allowed on every robbery type by default.',
+      'Compliant hostages can be killed if negotiations take too long.',
+      'Fake hostages are allowed when police numbers are high.',
+    ],
+  },
+  {
+    tag: 'Tax / Drug Wash',
+    keys: ['tax', 'money wash', 'drug', 'afk farming', 'location'],
+    wrong: [
+      'Multiple gangs can tax the same location if they split timings.',
+      'Killing is allowed immediately if someone refuses tax.',
+      'AFK farming is acceptable when no enemies are nearby.',
+    ],
+  },
+  {
+    tag: 'Identity / Cuffed / Commands',
+    keys: ['impersonating police', 'impersonating ems', 'radios while cuffed', '/dv', '/me', 'cuffed'],
+    wrong: [
+      'Players may use radio comms while cuffed if speaking quietly.',
+      'Impersonating Police/EMS is okay for social RP moments.',
+      'Command abuse only matters if it directly causes player death.',
+    ],
+  },
+  {
+    tag: 'Tebex / Purchases',
+    keys: ['tebex', 'refund', 'digital', 'resold', 'transferred', 'gifted'],
+    wrong: [
+      'Banned players can always claim partial Tebex refunds.',
+      'Digital Tebex items may be traded if both players agree.',
+      'Lost Tebex items are automatically reimbursed by default.',
+    ],
+  },
+];
+
+function detectRuleBracket({ title = '', question = '', correct = '' }) {
+  const keywordSource = `${title} ${question} ${correct}`.toLowerCase();
+  const bank = RULE_FALSE_OPTION_BANKS.find(entry => entry.keys.some(key => keywordSource.includes(key)));
+  return bank?.tag || 'General Policy';
+}
+
 function buildRuleAlignedFalseAnswers({ title = '', question = '', correct = '', existingWrong = [] }) {
   const keywordSource = `${title} ${question} ${correct}`.toLowerCase();
   const deprecatedWrong = new Set([
@@ -751,75 +904,22 @@ function buildRuleAlignedFalseAnswers({ title = '', question = '', correct = '',
     .filter(Boolean)
     .filter(v => !deprecatedWrong.has(v));
 
-  const banks = [
-    {
-      keys: ['report', 'clip', 'evidence', 'proof'],
-      wrong: [
-        'Accept the story instantly without checking report context.',
-        'A single sentence is enough; clips and logs are optional.',
-        'Close the case first and request evidence only if challenged later.',
-      ],
-    },
-    {
-      keys: ['rdm', 'vdm', 'rp reason', 'random deathmatch', 'force'],
-      wrong: [
-        'Force is valid any time a player is frustrated in chat.',
-        'RDM is acceptable if both sides exchanged insults first.',
-        'RP reason checks can be skipped when the scene is chaotic.',
-      ],
-    },
-    {
-      keys: ['bring', 'teleport', 'freeze', 'revive', 'permission', 'staff action'],
-      wrong: [
-        'Use staff commands immediately, then review policy afterwards.',
-        'Permissions are fine for convenience even without an active case.',
-        'Teleport/freeze can be used to speed up normal RP interactions.',
-      ],
-    },
-    {
-      keys: ['escalat', 'review', 'bias', 'fair'],
-      wrong: [
-        'Handle unclear cases alone to keep response time fast.',
-        'Closing quickly matters more than unbiased review quality.',
-        'Escalation is only needed after both parties keep arguing.',
-      ],
-    },
-    {
-      keys: ['nlr', 'fearrp', 'value life'],
-      wrong: [
-        'FearRP only applies when a weapon is already pointed at the head.',
-        'Players can ignore danger if they think they can win the fight.',
-        'NLR/FearRP standards can be ignored during intense scenes.',
-      ],
-    },
-    {
-      keys: ['metagaming', 'meta gaming', 'outside info', 'ooc info', 'out of character'],
-      wrong: [
-        'Outside information is fine if it helps keep RP moving quickly.',
-        'Using Discord or stream info is allowed if no one reports it.',
-        'Metagaming only matters when there is direct combat.',
-      ],
-    },
-    {
-      keys: ['powergaming', 'power gaming', 'forced emote', 'forced action'],
-      wrong: [
-        'Powergaming is acceptable if your character has authority.',
-        'Forcing outcomes is fine when your role is higher rank.',
-        'Powergaming only applies to police and gang scenarios.',
-      ],
-    },
-  ];
-
-  const pickedBank = banks.find(bank => bank.keys.some(key => keywordSource.includes(key)));
-  const generic = [
-    'Act first and document later.',
-    'Ignore policy wording if the outcome feels right.',
-    'Use personal judgment without checking server standards.',
-  ];
+  const pickedBank = RULE_FALSE_OPTION_BANKS.find(bank => bank.keys.some(key => keywordSource.includes(key)));
+  const generic = keywordSource.includes('where') && keywordSource.includes('allowed')
+    ? [
+      'Everywhere in the city as long as players agree.',
+      'Only near police stations and Pillbox.',
+      'Anywhere outside safezones without extra rules.',
+    ]
+    : [
+      'Skip policy checks if the scene feels clear.',
+      'Rely on assumptions instead of verified evidence.',
+      'Apply the rule loosely based on personal opinion.',
+    ];
 
   const candidates = [
-    ...cleanExistingWrong,
     ...(pickedBank ? pickedBank.wrong : []),
+    ...cleanExistingWrong,
     ...generic,
   ]
     .map(v => String(v || '').trim())
@@ -3762,6 +3862,15 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                     className="min-h-[95px] border-white/10 bg-black/30 text-white"
                     placeholder="Question shown in tracker"
                   />
+                  <div className="mt-2">
+                    <Badge className="border-cyan-500/30 bg-cyan-500/10 text-cyan-200">
+                      Rule bracket: {detectRuleBracket({
+                        title: checkboxDraft.title || '',
+                        question: checkboxDraft.question || '',
+                        correct: (checkboxDraft.answers || [])[0] || '',
+                      })}
+                    </Badge>
+                  </div>
                 </div>
                 <div className="md:col-span-2">
                   <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Answers</div>
