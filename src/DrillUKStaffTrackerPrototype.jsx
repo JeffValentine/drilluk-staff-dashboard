@@ -737,45 +737,58 @@ function buildQuizPayload(correctAnswers, wrongAnswers) {
 
 function buildRuleAlignedFalseAnswers({ title = '', question = '', correct = '', existingWrong = [] }) {
   const keywordSource = `${title} ${question} ${correct}`.toLowerCase();
+  const deprecatedWrong = new Set([
+    'Rule checks can be skipped if the player has no prior punishments.',
+    'Niche rules only apply during staff-led events.',
+    'FearRP and memory rules are optional in high-pressure moments.',
+    'Act first and document later.',
+    'Ignore policy wording if the outcome feels right.',
+    'Use personal judgment without checking server standards.',
+  ]);
+  const cleanExistingWrong = (existingWrong || [])
+    .map(v => String(v || '').trim())
+    .filter(Boolean)
+    .filter(v => !deprecatedWrong.has(v));
+
   const banks = [
     {
       keys: ['report', 'clip', 'evidence', 'proof'],
       wrong: [
-        'Handle the case without a /report if the story sounds believable.',
-        'A short verbal explanation is enough without clips or logs.',
-        'Skip evidence checks if both sides seem upset.',
+        'Accept the story instantly without checking report context.',
+        'A single sentence is enough; clips and logs are optional.',
+        'Close the case first and request evidence only if challenged later.',
       ],
     },
     {
       keys: ['rdm', 'vdm', 'rp reason', 'random deathmatch', 'force'],
       wrong: [
-        'Force is allowed whenever the player feels disrespected.',
-        'RDM is acceptable if both players are arguing already.',
-        'No RP reason is needed if the situation escalates quickly.',
+        'Force is valid any time a player is frustrated in chat.',
+        'RDM is acceptable if both sides exchanged insults first.',
+        'RP reason checks can be skipped when the scene is chaotic.',
       ],
     },
     {
       keys: ['bring', 'teleport', 'freeze', 'revive', 'permission', 'staff action'],
       wrong: [
-        'Use staff actions first, then check policy afterwards.',
-        'Permissions can be used to speed things up even without context.',
-        'Teleport and freeze can be used for convenience during normal RP.',
+        'Use staff commands immediately, then review policy afterwards.',
+        'Permissions are fine for convenience even without an active case.',
+        'Teleport/freeze can be used to speed up normal RP interactions.',
       ],
     },
     {
       keys: ['escalat', 'review', 'bias', 'fair'],
       wrong: [
-        'Make the decision alone even when the case is unclear.',
-        'Prioritize fast closure over unbiased review.',
-        'Escalation is only needed when both players insist loudly.',
+        'Handle unclear cases alone to keep response time fast.',
+        'Closing quickly matters more than unbiased review quality.',
+        'Escalation is only needed after both parties keep arguing.',
       ],
     },
     {
       keys: ['nlr', 'fearrp', 'value life', 'metagaming', 'powergaming'],
       wrong: [
-        'Rule checks can be skipped if the player has no prior punishments.',
-        'Niche rules only apply during staff-led events.',
-        'FearRP and memory rules are optional in high-pressure moments.',
+        'FearRP only applies when a weapon is already pointed at the head.',
+        'Players can ignore danger if they think they can win the fight.',
+        'NLR/FearRP standards can be ignored during intense scenes.',
       ],
     },
   ];
@@ -788,7 +801,7 @@ function buildRuleAlignedFalseAnswers({ title = '', question = '', correct = '',
   ];
 
   const candidates = [
-    ...existingWrong,
+    ...cleanExistingWrong,
     ...(pickedBank ? pickedBank.wrong : []),
     ...generic,
   ]
@@ -802,6 +815,14 @@ function buildRuleAlignedFalseAnswers({ title = '', question = '', correct = '',
     selected.push(generic[selected.length]);
   }
   return selected;
+}
+
+function sameStringArray(a = [], b = []) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (String(a[i] || '').trim() !== String(b[i] || '').trim()) return false;
+  }
+  return true;
 }
 
 function shuffleArray(arr) {
@@ -908,6 +929,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [activeUsers, setActiveUsers] = useState([]);
   const [reviewDrafts, setReviewDrafts] = useState({});
   const lastLocalStaffEditRef = useRef(0);
+  const falseOptionRepairRanRef = useRef(false);
   const isOwnerSession = (authUser?.email || '').toLowerCase() === SITE_OWNER_EMAIL;
   const [rankDisplayNames, setRankDisplayNames] = useState(defaultRankDisplayNames);
   const [rankDrafts, setRankDrafts] = useState(defaultRankDisplayNames);
@@ -1225,6 +1247,13 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       supabase.removeChannel(channel);
     };
   }, [dbReady, authUser?.id]);
+
+  useEffect(() => {
+    if (!dbReady || !supabase || !canManageCheckboxes) return;
+    if (!checkboxCatalog.length || falseOptionRepairRanRef.current) return;
+    falseOptionRepairRanRef.current = true;
+    repairWeakFalseOptionsAcrossCatalog();
+  }, [dbReady, canManageCheckboxes, checkboxCatalog.length]);
 
   const baseChecksByRole = useMemo(() => {
     const map = Object.fromEntries(roles.map(role => [role, []]));
@@ -2181,6 +2210,39 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     setRankDisplayNames(prev => ({ ...prev, [rankKey]: nextName }));
     setRankDrafts(prev => ({ ...prev, [rankKey]: nextName }));
     await writeAudit('rank_display.update', rankKey, null, { display_name: nextName });
+  }
+
+  async function repairWeakFalseOptionsAcrossCatalog() {
+    if (!dbReady || !supabase || !canManageCheckboxes) return;
+    const updates = [];
+    const nextCatalog = checkboxCatalog.map(item => {
+      const payload = parseQuizPayload(item.answer);
+      const correct = payload.correct[0] || '';
+      if (!correct) return item;
+      const repairedWrong = buildRuleAlignedFalseAnswers({
+        title: item.title,
+        question: item.question,
+        correct,
+        existingWrong: payload.wrong,
+      });
+      if (sameStringArray(payload.wrong, repairedWrong)) return item;
+      const nextAnswer = buildQuizPayload(payload.correct, repairedWrong);
+      updates.push({
+        id: item.id,
+        category: item.category,
+        role: serializeRankScope(item.ranks || parseRankScope(item.role)) || null,
+        title: item.title,
+        question: item.question || null,
+        answer: nextAnswer,
+        updated_by: authUser?.id || null,
+      });
+      return { ...item, answer: nextAnswer };
+    });
+
+    if (!updates.length) return;
+    setCheckboxCatalog(nextCatalog);
+    await Promise.all(updates.map(payload => supabase.from('checkbox_catalog').upsert(payload)));
+    await writeAudit('checkbox_catalog.repair_false_answers', 'bulk', null, { updated_count: updates.length });
   }
 
   async function deleteCheckboxItem(itemId) {
