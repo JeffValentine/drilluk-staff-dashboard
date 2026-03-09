@@ -15,7 +15,7 @@ import { supabase } from '@/lib/supabase';
 const roles = ['T-MOD', 'MOD', 'S-MOD', 'ADMIN', 'S-ADMIN', 'HEAD-ADMIN'];
 const SITE_OWNER_EMAIL = 'justappletje@gmail.com';
 const defaultRankDisplayNames = Object.fromEntries(roles.map(role => [role, role]));
-const FALSE_OPTION_REPAIR_VERSION = 'v3';
+const FALSE_OPTION_REPAIR_VERSION = 'v4';
 
 const baseChecks = {
   'T-MOD': [
@@ -738,6 +738,15 @@ function buildQuizPayload(correctAnswers, wrongAnswers) {
 
 const RULE_FALSE_OPTION_BANKS = [
   {
+    tag: 'Evidence / Clip Standard',
+    keys: ['2-minute clip', '2 minute clip', 'clip requirement', 'evidence standard', '/report with a clip', 'report reviews'],
+    wrong: [
+      'A written explanation is enough without clip context.',
+      'Any old clip is valid even if it does not cover the incident window.',
+      'Evidence is optional when both players agree on the outcome.',
+    ],
+  },
+  {
     tag: 'RDM / Initiation',
     keys: ['rdm', 'random deathmatch', 'initiation', 'threats/demands', 'valid rp reason', 'revenge rdm'],
     wrong: [
@@ -811,7 +820,7 @@ const RULE_FALSE_OPTION_BANKS = [
   },
   {
     tag: 'Cop Baiting',
-    keys: ['cop bait', 'police chase', 'initiate roleplay with police', '2 minutes'],
+    keys: ['cop bait', 'cop baiting', 'police chase', 'initiate roleplay with police', 'police for 2 minutes'],
     wrong: [
       'Intentional police chases are allowed if no shots are fired.',
       'Police roleplay can start after fleeing for several minutes.',
