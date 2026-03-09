@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Plus, Shield, GraduationCap, CheckCircle2, Users, ArrowUpRight, ClipboardList, Star, HelpCircle, ExternalLink, BookOpen, MessageSquareWarning, Gavel, Swords, FileVideo, Radio, LifeBuoy, ShieldAlert, Upload, Trash2 } from 'lucide-react';
+import { Search, Plus, Shield, GraduationCap, CheckCircle2, Users, ArrowUpRight, ClipboardList, Star, HelpCircle, ExternalLink, BookOpen, MessageSquareWarning, Gavel, Swords, FileVideo, Radio, LifeBuoy, ShieldAlert, Upload, Trash2, KeyRound, Copy } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -1124,6 +1124,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [managementUsers, setManagementUsers] = useState([]);
   const [managementLoading, setManagementLoading] = useState(false);
   const [managementError, setManagementError] = useState('');
+  const [latestInviteToken, setLatestInviteToken] = useState('');
+  const [inviteTokenCreating, setInviteTokenCreating] = useState(false);
   const [checkboxCatalog, setCheckboxCatalog] = useState(buildDefaultCheckboxCatalog());
   const [checkboxCatalogLoading, setCheckboxCatalogLoading] = useState(false);
   const [checkboxMenu, setCheckboxMenu] = useState('role');
@@ -2456,6 +2458,18 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     onProfileRefresh?.();
   }
 
+  async function createInviteToken() {
+    if (!canManageUsers || !dbReady || !supabase) return;
+    setInviteTokenCreating(true);
+    const { data, error } = await supabase.rpc('create_signup_token', { valid_for_hours: 168 });
+    setInviteTokenCreating(false);
+    if (error) {
+      window.alert(`Token generation failed: ${error.message}`);
+      return;
+    }
+    setLatestInviteToken(data || '');
+  }
+
   async function saveCheckboxItem(item) {
     if (!canManageCheckboxes || !dbReady || !supabase) return;
     const payload = {
@@ -3497,6 +3511,14 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                     <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-zinc-400 md:flex-row md:items-center md:justify-between">
                       <span>Manage trainer/admin access here. All changes are protected and audit logged.</span>
                       <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          onClick={createInviteToken}
+                          disabled={inviteTokenCreating}
+                          className="rounded-xl border border-emerald-400/40 bg-gradient-to-r from-emerald-600 to-teal-600 px-4 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.06)] hover:from-emerald-500 hover:to-teal-500 disabled:opacity-60"
+                        >
+                          <KeyRound className="mr-1.5 h-4 w-4" />
+                          {inviteTokenCreating ? 'Generating...' : 'Create Token'}
+                        </Button>
                         <Button onClick={() => setRosterSyncOpen(true)} className="rounded-xl border border-cyan-400/40 bg-gradient-to-r from-cyan-600 to-sky-600 px-4 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.06)] hover:from-cyan-500 hover:to-sky-500">
                           Sync Missing Roster
                         </Button>
@@ -3505,6 +3527,27 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                         </Button>
                       </div>
                     </div>
+                    {latestInviteToken && (
+                      <div className="flex flex-col gap-2 rounded-xl border border-emerald-400/35 bg-emerald-500/10 p-3 text-xs text-emerald-100 md:flex-row md:items-center md:justify-between">
+                        <div className="font-mono text-[13px] tracking-[0.08em] text-emerald-200">
+                          One-time signup token: {latestInviteToken}
+                        </div>
+                        <Button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(latestInviteToken);
+                            } catch (_) {
+                              window.alert('Copy failed. Copy token manually.');
+                            }
+                          }}
+                          className="h-8 rounded-xl border border-white/20 bg-black/30 px-3 text-xs text-zinc-100 hover:bg-white/10"
+                        >
+                          <Copy className="mr-1.5 h-3.5 w-3.5" />
+                          Copy token
+                        </Button>
+                      </div>
+                    )}
                     <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-100">
                       <span>God Key (Head Admin): allow emergency self-reset to Head Admin after role testing.</span>
                       <Button

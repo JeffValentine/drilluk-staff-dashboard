@@ -64,6 +64,17 @@ create table if not exists public.rank_display_names (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.invite_tokens (
+  id uuid primary key default gen_random_uuid(),
+  token_hash text unique not null,
+  created_by uuid references auth.users(id),
+  used_by uuid references auth.users(id),
+  used_email text,
+  created_at timestamptz not null default now(),
+  used_at timestamptz,
+  expires_at timestamptz
+);
+
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -99,6 +110,7 @@ alter table public.staff_members enable row level security;
 alter table public.audit_logs enable row level security;
 alter table public.checkbox_catalog enable row level security;
 alter table public.rank_display_names enable row level security;
+alter table public.invite_tokens enable row level security;
 
 create or replace function public.current_user_role()
 returns text
@@ -177,6 +189,68 @@ $$;
 
 revoke all on function public.admin_delete_user(uuid) from public;
 grant execute on function public.admin_delete_user(uuid) to authenticated;
+
+create or replace function public.create_signup_token(valid_for_hours int default 168)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  generated_token text;
+  expiry_time timestamptz;
+begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  if not (public.current_user_role() = 'head_admin' or public.current_user_has_god_key() = true) then
+    raise exception 'Insufficient permissions';
+  end if;
+
+  generated_token := upper(encode(gen_random_bytes(10), 'hex'));
+  expiry_time := case
+    when coalesce(valid_for_hours, 0) > 0 then now() + make_interval(hours => valid_for_hours)
+    else null
+  end;
+
+  insert into public.invite_tokens (token_hash, created_by, expires_at)
+  values (encode(digest(lower(generated_token), 'sha256'), 'hex'), auth.uid(), expiry_time);
+
+  return generated_token;
+end;
+$$;
+
+create or replace function public.consume_signup_token(token_input text, claimant_email text default null)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  normalized_token text;
+begin
+  normalized_token := lower(trim(coalesce(token_input, '')));
+  if normalized_token = '' then
+    return false;
+  end if;
+
+  update public.invite_tokens
+  set used_at = now(),
+      used_email = nullif(trim(claimant_email), ''),
+      used_by = auth.uid()
+  where token_hash = encode(digest(normalized_token, 'sha256'), 'hex')
+    and used_at is null
+    and (expires_at is null or expires_at > now());
+
+  return found;
+end;
+$$;
+
+revoke all on function public.create_signup_token(int) from public;
+grant execute on function public.create_signup_token(int) to authenticated;
+revoke all on function public.consume_signup_token(text, text) from public;
+grant execute on function public.consume_signup_token(text, text) to anon, authenticated;
 
 create policy "profiles_self_read"
 on public.profiles for select
@@ -271,3 +345,13 @@ with check (auth.uid() is not null);
 create policy "rank_display_delete_admin_head"
 on public.rank_display_names for delete
 using (public.current_user_role() in ('admin', 'head_admin'));
+
+drop policy if exists "invite_tokens_read_admin_head" on public.invite_tokens;
+create policy "invite_tokens_read_admin_head"
+on public.invite_tokens for select
+using (public.current_user_role() = 'head_admin' or public.current_user_has_god_key() = true);
+
+drop policy if exists "invite_tokens_insert_admin_head" on public.invite_tokens;
+create policy "invite_tokens_insert_admin_head"
+on public.invite_tokens for insert
+with check (public.current_user_role() = 'head_admin' or public.current_user_has_god_key() = true);

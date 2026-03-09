@@ -6,6 +6,8 @@ function LoginScreen({ error, info, onSignIn, onSignUp }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
+  const [signupToken, setSignupToken] = useState("");
+  const [tokenPromptOpen, setTokenPromptOpen] = useState(false);
   const [mode, setMode] = useState("signin");
 
   async function submit(e) {
@@ -14,7 +16,14 @@ function LoginScreen({ error, info, onSignIn, onSignUp }) {
       await onSignIn(email, password);
       return;
     }
-    await onSignUp(email, password, username);
+    setTokenPromptOpen(true);
+  }
+
+  async function submitWithToken(e) {
+    e.preventDefault();
+    await onSignUp(email, password, username, signupToken);
+    setTokenPromptOpen(false);
+    setSignupToken("");
   }
 
   return (
@@ -73,7 +82,11 @@ function LoginScreen({ error, info, onSignIn, onSignUp }) {
             </button>
             <button
               type="button"
-              onClick={() => setMode((m) => (m === "signin" ? "signup" : "signin"))}
+              onClick={() => {
+                setMode((m) => (m === "signin" ? "signup" : "signin"));
+                setTokenPromptOpen(false);
+                setSignupToken("");
+              }}
               className="h-10 w-full rounded-md border border-white/15 bg-black/25 text-sm text-zinc-200 hover:bg-white/10"
             >
               {mode === "signin" ? "Create account instead" : "Back to sign in"}
@@ -81,6 +94,42 @@ function LoginScreen({ error, info, onSignIn, onSignUp }) {
           </div>
         </form>
       </div>
+      {tokenPromptOpen && mode === "signup" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <form
+            onSubmit={submitWithToken}
+            className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0f1018] p-5"
+          >
+            <div className="text-lg font-semibold text-white">Invite Token Required</div>
+            <p className="mt-1 text-sm text-zinc-400">
+              Enter your one-time token from Head Admin to create an account.
+            </p>
+            <input
+              className="mt-4 h-10 w-full rounded-md border border-zinc-700 bg-transparent px-3 text-sm"
+              type="text"
+              placeholder="One-time token"
+              value={signupToken}
+              onChange={(e) => setSignupToken(e.target.value)}
+              required
+            />
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button
+                type="submit"
+                className="h-10 rounded-md bg-fuchsia-600 text-sm font-medium text-white hover:bg-fuchsia-500"
+              >
+                Verify & create
+              </button>
+              <button
+                type="button"
+                onClick={() => setTokenPromptOpen(false)}
+                className="h-10 rounded-md border border-white/15 bg-black/25 text-sm text-zinc-200 hover:bg-white/10"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
@@ -217,10 +266,32 @@ export default function App() {
     if (signInError) setError(signInError.message);
   }
 
-  async function signUp(email, password, username) {
+  async function signUp(email, password, username, signupToken) {
     setError("");
     setInfo("");
     if (!supabase) return;
+
+    const cleanedToken = String(signupToken || "").trim();
+    if (!cleanedToken) {
+      setError("Invite token is required.");
+      return;
+    }
+
+    const { data: tokenOk, error: tokenError } = await supabase.rpc("consume_signup_token", {
+      token_input: cleanedToken,
+      claimant_email: email,
+    });
+
+    if (tokenError) {
+      setError(tokenError.message || "Token verification failed.");
+      return;
+    }
+
+    if (!tokenOk) {
+      setError("Invalid or already used token.");
+      return;
+    }
+
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
