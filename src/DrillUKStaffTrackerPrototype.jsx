@@ -1040,6 +1040,16 @@ function formatAuditAction(action) {
     .trim();
 }
 
+function buildAuditTabActionOrFilter(tab) {
+  if (tab === 'Management') return 'action.ilike.user.%,action.ilike.god_key.%,action.ilike.profile.%';
+  if (tab === 'Checkboxes') return 'action.ilike.checkbox_catalog.%';
+  if (tab === 'Rank Display') return 'action.ilike.rank_display.%';
+  if (tab === 'Discipline') return 'action.ilike.staff.disciplinary.%';
+  if (tab === 'Training Session') return 'action.ilike.staff.session.%,action.ilike.quiz.%';
+  if (tab === 'Tracker') return 'action.ilike.staff.%';
+  return '';
+}
+
 function mapRosterRankToRole(rankLabel) {
   const rank = String(rankLabel || '').trim().toLowerCase();
   if (rank.includes('junior associate')) return 'T-MOD';
@@ -1455,18 +1465,53 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     setAuditLoading(true);
     setAuditError('');
     try {
-      const { data, error } = await supabase
-        .from('audit_logs')
-        .select('id, actor_id, action, target_id, before_value, after_value, created_at')
-        .order('created_at', { ascending: false })
-        .limit(250);
+      const now = Date.now();
+      const cutoffIso = auditDateFilter === '24h'
+        ? new Date(now - 24 * 60 * 60 * 1000).toISOString()
+        : auditDateFilter === '7d'
+          ? new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString()
+          : auditDateFilter === '30d'
+            ? new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString()
+            : null;
 
-      if (error) {
-        setAuditLogs([]);
-        setAuditError(error.message || 'Failed to load audit logs.');
-        return;
+      const baseSelect = 'id, actor_id, action, target_id, before_value, after_value, created_at';
+      const pageSize = 1000;
+      let from = 0;
+      let allRows = [];
+
+      while (true) {
+        let query = supabase
+          .from('audit_logs')
+          .select(baseSelect)
+          .order('created_at', { ascending: false });
+
+        if (auditActorFilter !== 'All') query = query.eq('actor_id', auditActorFilter);
+        if (auditActionFilter !== 'All') query = query.eq('action', auditActionFilter);
+        if (cutoffIso) query = query.gte('created_at', cutoffIso);
+        if (auditRequireChanges) query = query.not('after_value', 'is', null);
+        if (auditQuery.trim()) {
+          const q = auditQuery.trim();
+          query = query.or(`action.ilike.%${q}%,target_id.ilike.%${q}%`);
+        }
+        if (auditTabFilter !== 'All') {
+          const tabFilter = buildAuditTabActionOrFilter(auditTabFilter);
+          if (tabFilter) query = query.or(tabFilter);
+        }
+
+        const { data, error } = await query.range(from, from + pageSize - 1);
+        if (error) {
+          setAuditLogs([]);
+          setAuditError(error.message || 'Failed to load audit logs.');
+          return;
+        }
+
+        const chunk = data || [];
+        allRows = allRows.concat(chunk);
+        if (chunk.length < pageSize) break;
+        from += pageSize;
       }
-      setAuditLogs(data || []);
+
+      setAuditLogs(allRows);
     } finally {
       setAuditLoading(false);
     }
@@ -1603,8 +1648,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   useEffect(() => {
     if (!dbReady || !supabase || !canManageUsers) return;
-    refreshAuditLogsFromDb();
-  }, [dbReady, canManageUsers]);
+    const timer = setTimeout(() => {
+      refreshAuditLogsFromDb();
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [dbReady, canManageUsers, auditQuery, auditActorFilter, auditActionFilter, auditDateFilter, auditRequireChanges, auditTabFilter]);
 
   useEffect(() => {
     if (!dbReady || !supabase || !canManageUsers) return;
