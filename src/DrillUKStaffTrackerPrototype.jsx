@@ -1219,6 +1219,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         const bRankIndex = bIsAllRanks ? -1 : (roleOrder.get(bRanks[0]) ?? 999);
         if (aRankIndex !== bRankIndex) return aRankIndex - bRankIndex;
 
+        const aScopeCount = aRanks.length;
+        const bScopeCount = bRanks.length;
+        if (aScopeCount !== bScopeCount) return bScopeCount - aScopeCount;
+
         return a.title.localeCompare(b.title);
       });
   }, [checkboxCatalog, checkboxMenu, checkboxQuery, checkboxRankFilter]);
