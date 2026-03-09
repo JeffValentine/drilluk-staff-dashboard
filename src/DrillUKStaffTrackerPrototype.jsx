@@ -1050,6 +1050,30 @@ function buildAuditTabActionOrFilter(tab) {
   return '';
 }
 
+const AUDIT_TAB_FILTER_OPTIONS = ['All', 'Tracker', 'Training Session', 'Discipline', 'Management', 'Checkboxes', 'Rank Display'];
+const KNOWN_AUDIT_ACTIONS = [
+  'staff.update',
+  'staff.session.update',
+  'staff.delete',
+  'staff.disciplinary',
+  'staff.create',
+  'staff.roster_sync',
+  'staff.linked_role.update',
+  'staff.restore_demo',
+  'quiz.submit',
+  'user.role.update',
+  'user.active.update',
+  'user.delete',
+  'user.avatar.update',
+  'user.god_key.update',
+  'god_key.force_head_admin',
+  'profile.update',
+  'checkbox_catalog.save',
+  'checkbox_catalog.delete',
+  'checkbox_catalog.repair_false_answers',
+  'rank_display.update',
+];
+
 function mapRosterRankToRole(rankLabel) {
   const rank = String(rankLabel || '').trim().toLowerCase();
   if (rank.includes('junior associate')) return 'T-MOD';
@@ -1865,27 +1889,16 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   }, [staff, disciplineRankFilter, disciplineUserQuery]);
   const disciplineTarget = staff.find(member => member.id === disciplineTargetId) || disciplineCandidates[0] || null;
   const auditActionOptions = useMemo(
-    () => [...new Set((auditLogs || []).map(log => String(log.action || '')).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    () => [...new Set([...KNOWN_AUDIT_ACTIONS, ...(auditLogs || []).map(log => String(log.action || '')).filter(Boolean)])].sort((a, b) => a.localeCompare(b)),
     [auditLogs]
   );
-  const auditTabOptions = useMemo(
-    () => ['All', ...[...new Set((auditLogs || []).map(log => inferAuditTab(log.action)).filter(Boolean))]],
-    [auditLogs]
-  );
+  const auditTabOptions = AUDIT_TAB_FILTER_OPTIONS;
   const auditActorOptions = useMemo(() => {
-    const seen = new Set();
-    return (auditLogs || [])
-      .map(log => {
-        const actor = managementUsers.find(user => user.id === log.actor_id);
-        return { id: log.actor_id || '', label: actor?.username || log.actor_id || 'Unknown' };
-      })
-      .filter(option => {
-        if (!option.id || seen.has(option.id)) return false;
-        seen.add(option.id);
-        return true;
-      })
+    return (managementUsers || [])
+      .map(user => ({ id: user.id || '', label: user.username || user.id || 'Unknown' }))
+      .filter(option => option.id)
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [auditLogs, managementUsers]);
+  }, [managementUsers]);
   const filteredAuditLogs = useMemo(() => {
     const q = auditQuery.trim().toLowerCase();
     const fieldNeedle = auditFieldQuery.trim().toLowerCase();
