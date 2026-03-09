@@ -215,7 +215,7 @@ begin
   end;
 
   insert into public.invite_tokens (token_hash, created_by, expires_at)
-  values (encode(digest(lower(generated_token), 'sha256'), 'hex'), auth.uid(), expiry_time);
+  values (md5(lower(generated_token)), auth.uid(), expiry_time);
 
   return generated_token;
 end;
@@ -239,7 +239,7 @@ begin
   set used_at = now(),
       used_email = nullif(trim(claimant_email), ''),
       used_by = auth.uid()
-  where token_hash = encode(digest(normalized_token, 'sha256'), 'hex')
+  where token_hash = md5(normalized_token)
     and used_at is null
     and (expires_at is null or expires_at > now());
 
