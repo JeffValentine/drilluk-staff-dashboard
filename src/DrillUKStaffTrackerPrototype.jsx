@@ -1117,12 +1117,19 @@ function QuizHint({ item, answer, category }) {
 }
 
 export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSignOut, dbReady, onProfileRefresh }) {
-  const canEdit = ['head_admin', 'admin', 'trainer'].includes(profile?.role || '');
-  const canManageUsers = profile?.role === 'head_admin' || Boolean(profile?.god_key_enabled);
-  const canViewPresence = profile?.role === 'head_admin';
-  const canManageCheckboxes = canManageUsers || profile?.role === 'admin';
-  const canDeleteStaff = ['head_admin', 'admin'].includes(profile?.role || '');
-  const isStaffInTraining = profile?.role === 'staff_in_training';
+  const [viewAsRole, setViewAsRole] = useState('');
+  const [viewAsStaffId, setViewAsStaffId] = useState(null);
+  const canUseViewAs = profile?.role === 'head_admin';
+  const effectiveRole = canUseViewAs && viewAsRole ? viewAsRole : (profile?.role || 'viewer');
+  const isTestingViewMode = canUseViewAs && Boolean(viewAsRole);
+  const canEdit = ['head_admin', 'admin', 'trainer'].includes(effectiveRole);
+  const canManageUsers = isTestingViewMode
+    ? effectiveRole === 'head_admin'
+    : (effectiveRole === 'head_admin' || Boolean(profile?.god_key_enabled));
+  const canViewPresence = effectiveRole === 'head_admin';
+  const canManageCheckboxes = canManageUsers || effectiveRole === 'admin';
+  const canDeleteStaff = ['head_admin', 'admin'].includes(effectiveRole);
+  const isStaffInTraining = effectiveRole === 'staff_in_training';
 
   const [staff, setStaff] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -1781,7 +1788,9 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     });
   }, [staff, query, filterRole, filterTrainerOnly, filterActiveOnly, filterWarningOnly]);
 
-  const traineeRecord = staff.find(s => s.traineeUserId === authUser?.id) || null;
+  const traineeRecord = (canUseViewAs && viewAsRole === 'staff_in_training')
+    ? (staff.find(s => s.id === viewAsStaffId) || staff.find(s => s.id === selectedId) || staff[0] || null)
+    : (staff.find(s => s.traineeUserId === authUser?.id) || null);
   const selected = isStaffInTraining ? traineeRecord : (staff.find(s => s.id === selectedId) || staff[0] || null);
   const sessionCandidates = useMemo(() => {
     const q = sessionUserQuery.trim().toLowerCase();
@@ -1876,6 +1885,16 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       })
       .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
   }, [auditLogs, auditTabFilter, auditActorFilter, auditActionFilter, auditDateFilter, auditRequireChanges, auditFieldQuery, auditQuery, managementUsers]);
+
+  useEffect(() => {
+    if (!(canUseViewAs && viewAsRole === 'staff_in_training')) return;
+    if (!staff.length) {
+      setViewAsStaffId(null);
+      return;
+    }
+    const exists = viewAsStaffId !== null && staff.some(member => member.id === viewAsStaffId);
+    if (!exists) setViewAsStaffId(selectedId ?? staff[0].id);
+  }, [canUseViewAs, viewAsRole, viewAsStaffId, staff, selectedId]);
 
   useEffect(() => {
     if (!staff.length) {
@@ -2931,8 +2950,13 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               <img src="/assets/logos/drilluk-logo.png" alt="Drill UK logo" className="h-10 w-10 rounded-xl border border-white/10 bg-black/20 object-cover mix-blend-screen" />
               <Badge className="border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-200 hover:bg-fuchsia-500/10">Drill UK Staff System</Badge>
               <Badge className="border-white/10 bg-white/10 px-2 text-[10px] text-zinc-200">
-                {accountRoleLabel(profile?.role)}
+                {accountRoleLabel(effectiveRole)}
               </Badge>
+              {canUseViewAs && viewAsRole && (
+                <Badge className="border-amber-500/30 bg-amber-500/10 px-2 text-[10px] text-amber-200">
+                  Viewing As: {accountRoleLabel(viewAsRole)}
+                </Badge>
+              )}
               <Badge
                 className="border-white/10 bg-white/10 px-2 text-[10px] text-zinc-200"
                 title={profile?.username || authUser?.email?.split('@')[0] || 'Guest'}
@@ -2940,6 +2964,63 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 {profile?.username || authUser?.email?.split('@')[0] || 'Guest'}
               </Badge>
             </div>
+            {canUseViewAs && (
+              <div className="mb-2 flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-black/25 px-2 py-1.5 text-xs">
+                <span className="text-zinc-400">View dashboard as</span>
+                <Select
+                  value={viewAsRole || 'none'}
+                  onValueChange={(value) => {
+                    if (value === 'none') {
+                      setViewAsRole('');
+                      return;
+                    }
+                    setViewAsRole(value);
+                    if (value === 'staff_in_training') {
+                      setViewAsStaffId(selectedId || staff[0]?.id || null);
+                    }
+                  }}
+                >
+                  <SelectTrigger className="h-8 w-[220px] border-white/10 bg-black/35 text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Real role ({accountRoleLabel(profile?.role)})</SelectItem>
+                    <SelectItem value="viewer">Guest</SelectItem>
+                    <SelectItem value="staff_in_training">Staff In Training</SelectItem>
+                    <SelectItem value="trainer">Trainer</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="head_admin">Head Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+                {viewAsRole === 'staff_in_training' && (
+                  <Select
+                    value={viewAsStaffId ? String(viewAsStaffId) : 'none'}
+                    onValueChange={(value) => setViewAsStaffId(value === 'none' ? null : Number(value))}
+                  >
+                    <SelectTrigger className="h-8 w-[220px] border-white/10 bg-black/35 text-white">
+                      <SelectValue placeholder="Pick trainee profile" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No profile</SelectItem>
+                      {staff.map(member => (
+                        <SelectItem key={`viewas-trainee-${member.id}`} value={String(member.id)}>
+                          {member.name} ({rankLabel(member.role)})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                {!!viewAsRole && (
+                  <Button
+                    type="button"
+                    onClick={() => setViewAsRole('')}
+                    className="h-8 rounded-lg border border-white/15 bg-black/30 px-3 text-xs text-zinc-100 hover:bg-white/10"
+                  >
+                    Exit View Mode
+                  </Button>
+                )}
+              </div>
+            )}
             <h1 className="font-display text-3xl font-bold tracking-tight md:text-4xl">Drill-UK Staff Dashboard</h1>
             <p className="mt-2 max-w-3xl text-sm text-zinc-300 md:text-base">A modern interactive staff panel for promotions and progression by xJeffValentine, with cleaner workflows for training, permissions, and disciplinary tracking.</p>
           </div>
@@ -3026,6 +3107,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         {!canEdit && (
           <div className="mb-4 rounded-xl border border-amber-500/35 bg-amber-500/10 p-3 text-sm text-amber-200">
             Read-only mode: your account role can view data but cannot edit staff records.
+          </div>
+        )}
+        {isTestingViewMode && (
+          <div className="mb-4 rounded-xl border border-amber-500/35 bg-amber-500/10 p-3 text-sm text-amber-100">
+            View Mode active. You are previewing permissions/layout as <span className="font-semibold">{accountRoleLabel(effectiveRole)}</span>.
           </div>
         )}
         {isSyncLocked && hasQueuedSync && (
