@@ -1161,6 +1161,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   );
 
   const filteredCheckboxItems = useMemo(() => {
+    const roleOrder = new Map(roles.map((role, index) => [role, index]));
     const q = checkboxQuery.trim().toLowerCase();
     return checkboxCatalog
       .filter(item => item.category === checkboxMenu)
@@ -1175,7 +1176,25 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         if (!scopedRanks.length) return true;
         return scopedRanks.includes(checkboxRankFilter);
       })
-      .sort((a, b) => a.title.localeCompare(b.title));
+      .sort((a, b) => {
+        const aRanks = parseRankScope(a.role);
+        const bRanks = parseRankScope(b.role);
+
+        const aIsAllRanks = aRanks.length === 0;
+        const bIsAllRanks = bRanks.length === 0;
+        if (aIsAllRanks && !bIsAllRanks) return -1;
+        if (!aIsAllRanks && bIsAllRanks) return 1;
+
+        const aRankIndex = aIsAllRanks
+          ? -1
+          : Math.min(...aRanks.map(rank => roleOrder.get(rank) ?? 999));
+        const bRankIndex = bIsAllRanks
+          ? -1
+          : Math.min(...bRanks.map(rank => roleOrder.get(rank) ?? 999));
+        if (aRankIndex !== bRankIndex) return aRankIndex - bRankIndex;
+
+        return a.title.localeCompare(b.title);
+      });
   }, [checkboxCatalog, checkboxMenu, checkboxQuery, checkboxRankFilter]);
 
   function itemMatchesRank(item, rank) {
