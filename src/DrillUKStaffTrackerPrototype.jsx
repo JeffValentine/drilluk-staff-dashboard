@@ -1227,6 +1227,21 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       });
   }, [checkboxCatalog, checkboxMenu, checkboxQuery, checkboxRankFilter]);
 
+  const checkboxRowsWithDividers = useMemo(() => {
+    const rows = [];
+    let lastGroupKey = null;
+    filteredCheckboxItems.forEach(item => {
+      const ranks = sortRankScope(parseRankScope(item.role));
+      const groupKey = ranks.length ? ranks[0] : 'ALL';
+      if (groupKey !== lastGroupKey) {
+        rows.push({ type: 'divider', key: `divider-${groupKey}`, groupKey });
+        lastGroupKey = groupKey;
+      }
+      rows.push({ type: 'item', item });
+    });
+    return rows;
+  }, [filteredCheckboxItems]);
+
   function itemMatchesRank(item, rank) {
     const scopedRanks = parseRankScope(item.role);
     if (!scopedRanks.length) return true;
@@ -3422,13 +3437,27 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                           </div>
                         )}
 
-                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                          {filteredCheckboxItems.map(item => (
+                        <div className="space-y-2">
+                          {checkboxRowsWithDividers.map(row => {
+                            if (row.type === 'divider') {
+                              const dividerLabel = row.groupKey === 'ALL' ? 'All ranks' : rankLabel(row.groupKey);
+                              const dividerClass = row.groupKey === 'ALL'
+                                ? 'border-white/15 bg-white/10 text-zinc-200'
+                                : `${roleColor(row.groupKey)} text-[11px]`;
+                              return (
+                                <div key={row.key} className="flex items-center gap-2 px-1">
+                                  <Badge className={`${dividerClass} px-2 py-0.5 uppercase tracking-[0.14em]`}>{dividerLabel}</Badge>
+                                  <div className="h-px flex-1 bg-white/10" />
+                                </div>
+                              );
+                            }
+                            const item = row.item;
+                            return (
                               <button
                                 key={item.id}
                                 type="button"
                                 onClick={() => openCheckboxEditor(item)}
-                                className="rounded-2xl border border-white/10 bg-black/20 p-4 text-left transition hover:border-fuchsia-500/35 hover:bg-fuchsia-500/10"
+                                className="w-full rounded-2xl border border-white/10 bg-black/20 p-4 text-left transition hover:border-fuchsia-500/35 hover:bg-fuchsia-500/10"
                               >
                                 <div className="text-sm font-semibold text-white">{item.title}</div>
                                 <div className="mt-1 max-h-8 overflow-hidden text-xs text-zinc-400">{item.question || 'No question yet'}</div>
@@ -3440,7 +3469,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                                   )}
                                 </div>
                               </button>
-                            ))}
+                            );
+                          })}
                           {!filteredCheckboxItems.length && (
                             <div className="rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-zinc-500">No items in this list yet.</div>
                           )}
