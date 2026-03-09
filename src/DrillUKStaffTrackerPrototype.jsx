@@ -4058,7 +4058,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
         {checkboxEditorOpen && checkboxDraft && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-            <div className="w-full max-w-2xl rounded-2xl border border-white/15 bg-zinc-950 p-5">
+            <div className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-white/15 bg-zinc-950 p-5">
               <div className="mb-4 flex items-center justify-between">
                 <div className="text-lg font-semibold text-white">Edit Checkbox</div>
                 <button type="button" onClick={closeCheckboxEditor} className="text-sm text-zinc-400 hover:text-white">Close</button>
