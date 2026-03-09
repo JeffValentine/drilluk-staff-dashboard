@@ -716,7 +716,7 @@ function parseAnswerList(answer) {
 }
 
 function parseQuizPayload(answerValue) {
-  if (!answerValue) return { correct: [], wrong: [], bracket: null };
+  if (!answerValue) return { correct: [], wrong: [], bracket: null, manual: false };
   const raw = String(answerValue).trim();
   if (raw.startsWith('{')) {
     try {
@@ -725,19 +725,21 @@ function parseQuizPayload(answerValue) {
         correct: Array.isArray(parsed.correct) ? parsed.correct : [],
         wrong: Array.isArray(parsed.wrong) ? parsed.wrong : [],
         bracket: typeof parsed.bracket === 'string' ? parsed.bracket : null,
+        manual: Boolean(parsed.manual),
       };
     } catch {
-      return { correct: parseAnswerList(answerValue), wrong: [], bracket: null };
+      return { correct: parseAnswerList(answerValue), wrong: [], bracket: null, manual: false };
     }
   }
-  return { correct: parseAnswerList(answerValue), wrong: [], bracket: null };
+  return { correct: parseAnswerList(answerValue), wrong: [], bracket: null, manual: false };
 }
 
-function buildQuizPayload(correctAnswers, wrongAnswers, bracket = null) {
+function buildQuizPayload(correctAnswers, wrongAnswers, bracket = null, manual = false) {
   return JSON.stringify({
     correct: (correctAnswers || []).map(v => v.trim()).filter(Boolean),
     wrong: (wrongAnswers || []).map(v => v.trim()).filter(Boolean),
     bracket: bracket || null,
+    manual: Boolean(manual),
   });
 }
 
@@ -1413,6 +1415,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     [checkboxCatalog]
   );
 
+  const manualCheckedByTitle = useMemo(
+    () => Object.fromEntries(checkboxCatalog.map(item => [item.title, Boolean(parseQuizPayload(item.answer).manual)])),
+    [checkboxCatalog]
+  );
+
   const filteredCheckboxItems = useMemo(() => {
     const roleOrder = new Map(roles.map((role, index) => [role, index]));
     const q = checkboxQuery.trim().toLowerCase();
@@ -1565,13 +1572,15 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         .map(item => {
           const payload = parseQuizPayload(item.answer);
           const primaryCorrect = payload.correct[0] || '';
-          const falseOptions = buildRuleAlignedFalseAnswers({
-            title: item.title,
-            question: item.question,
-            correct: primaryCorrect,
-            existingWrong: payload.wrong,
-            bracketTag: payload.bracket,
-          });
+          const falseOptions = payload.manual
+            ? (payload.wrong || []).map(v => String(v || '').trim()).filter(Boolean).slice(0, 3)
+            : buildRuleAlignedFalseAnswers({
+              title: item.title,
+              question: item.question,
+              correct: primaryCorrect,
+              existingWrong: payload.wrong,
+              bracketTag: payload.bracket,
+            });
           const options = shuffleArray([primaryCorrect, ...falseOptions].filter(Boolean));
           return {
             id: item.id,
@@ -2343,6 +2352,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     const updates = [];
     const nextCatalog = checkboxCatalog.map(item => {
       const payload = parseQuizPayload(item.answer);
+      if (payload.manual) return item;
       const correct = payload.correct[0] || '';
       if (!correct) return item;
       const repairedWrong = buildRuleAlignedFalseAnswers({
@@ -2353,7 +2363,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         bracketTag: payload.bracket,
       });
       if (sameStringArray(payload.wrong, repairedWrong)) return item;
-      const nextAnswer = buildQuizPayload(payload.correct, repairedWrong, payload.bracket);
+      const nextAnswer = buildQuizPayload(payload.correct, repairedWrong, payload.bracket, payload.manual);
       updates.push({
         id: item.id,
         category: item.category,
@@ -2407,13 +2417,15 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   function openCheckboxEditor(item) {
     const payload = parseQuizPayload(item.answer);
     const primaryCorrect = payload.correct[0] || '';
-    const normalizedFalse = buildRuleAlignedFalseAnswers({
-      title: item.title,
-      question: item.question,
-      correct: primaryCorrect,
-      existingWrong: payload.wrong,
-      bracketTag: payload.bracket,
-    });
+    const normalizedFalse = payload.manual
+      ? (payload.wrong.length ? payload.wrong : [''])
+      : buildRuleAlignedFalseAnswers({
+        title: item.title,
+        question: item.question,
+        correct: primaryCorrect,
+        existingWrong: payload.wrong,
+        bracketTag: payload.bracket,
+      });
     const normalizedRanks = sortRankScope(item.ranks || parseRankScope(item.role));
     setCheckboxDraft({
       ...item,
@@ -2421,6 +2433,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       answers: payload.correct.length ? payload.correct : [''],
       falseAnswers: normalizedFalse,
       ruleBracket: payload.bracket || '',
+      manualChecked: Boolean(payload.manual),
     });
     setCheckboxEditorOpen(true);
   }
@@ -2433,20 +2446,19 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   async function saveCheckboxDraft() {
     if (!checkboxDraft) return;
     const primaryCorrect = (checkboxDraft.answers || []).find(answer => String(answer || '').trim()) || '';
-    const normalizedFalse = buildRuleAlignedFalseAnswers({
-      title: checkboxDraft.title,
-      question: checkboxDraft.question,
-      correct: primaryCorrect,
-      existingWrong: checkboxDraft.falseAnswers || [],
-      bracketTag: checkboxDraft.ruleBracket || null,
-    });
+    const normalizedFalse = (checkboxDraft.falseAnswers || [])
+      .map(v => String(v || '').trim())
+      .filter(Boolean)
+      .slice(0, 3);
+    while (normalizedFalse.length < 3) normalizedFalse.push('');
     const normalizedRanks = sortRankScope(checkboxDraft.ranks || []);
     const normalized = {
       ...checkboxDraft,
       ranks: normalizedRanks,
       role: serializeRankScope(normalizedRanks),
-      answer: buildQuizPayload(checkboxDraft.answers || [], normalizedFalse, checkboxDraft.ruleBracket || null),
+      answer: buildQuizPayload(checkboxDraft.answers || [], normalizedFalse, checkboxDraft.ruleBracket || null, true),
       falseAnswers: normalizedFalse,
+      manualChecked: true,
     };
     patchCheckboxItem(normalized.id, normalized);
     await saveCheckboxItem(normalized);
@@ -2925,7 +2937,12 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                         return (
                           <div key={item} className="rounded-xl border border-white/10 bg-black/20 p-3">
                             <label className="flex items-center justify-between gap-3">
-                              <span className="text-sm text-zinc-100">{item}</span>
+                              <span className="flex items-center gap-2 text-sm text-zinc-100">
+                                {item}
+                                {manualCheckedByTitle[item] && (
+                                  <Badge className="border-orange-500/40 bg-orange-500/15 px-1.5 text-[10px] text-orange-200">Manually checked</Badge>
+                                )}
+                              </span>
                               <Checkbox disabled={!canEdit} checked={!!selected.checks[item]} onCheckedChange={() => toggleCheck(item, 'checks')} />
                             </label>
                             {quiz && <QuizHint item={quiz.question} answer={quiz.answer} category={quiz.category} />}
@@ -2943,7 +2960,12 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                       {currentCoreValues.map(item => (
                         <div key={item} className="rounded-xl border border-white/10 bg-black/20 p-3">
                           <label className="flex items-center justify-between gap-3">
-                            <span className="text-sm text-zinc-100">{item}</span>
+                            <span className="flex items-center gap-2 text-sm text-zinc-100">
+                              {item}
+                              {manualCheckedByTitle[item] && (
+                                <Badge className="border-orange-500/40 bg-orange-500/15 px-1.5 text-[10px] text-orange-200">Manually checked</Badge>
+                              )}
+                            </span>
                             <Checkbox disabled={!canEdit} checked={!!selected.values[item]} onCheckedChange={() => toggleCheck(item, 'values')} />
                           </label>
                           <div className="mt-2 text-xs text-zinc-400">{dynamicQuizMap[item]?.answer || valueGuidance[item]}</div>
@@ -2962,7 +2984,12 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                         return (
                           <div key={item} className="rounded-xl border border-white/10 bg-black/20 p-3">
                             <label className="flex items-center justify-between gap-3">
-                              <span className="text-sm text-zinc-100">{item}</span>
+                              <span className="flex items-center gap-2 text-sm text-zinc-100">
+                                {item}
+                                {manualCheckedByTitle[item] && (
+                                  <Badge className="border-orange-500/40 bg-orange-500/15 px-1.5 text-[10px] text-orange-200">Manually checked</Badge>
+                                )}
+                              </span>
                               <Checkbox disabled={!canEdit} checked={!!selected.permissions?.[item]} onCheckedChange={() => toggleCheck(item, 'permissions')} />
                             </label>
                             {quiz && <QuizHint item={quiz.question} answer={quiz.answer} category={quiz.category} />}
@@ -3737,7 +3764,12 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                                 onClick={() => openCheckboxEditor(item)}
                                 className="w-full rounded-2xl border border-white/10 bg-black/20 p-4 text-left transition hover:border-fuchsia-500/35 hover:bg-fuchsia-500/10"
                               >
-                                <div className="text-sm font-semibold text-white">{item.title}</div>
+                                <div className="flex items-center gap-2 text-sm font-semibold text-white">
+                                  <span>{item.title}</span>
+                                  {parseQuizPayload(item.answer).manual && (
+                                    <Badge className="border-orange-500/40 bg-orange-500/15 px-1.5 text-[10px] text-orange-200">Manually checked</Badge>
+                                  )}
+                                </div>
                                 <div className="mt-1 max-h-8 overflow-hidden text-xs text-zinc-400">{item.question || 'No question yet'}</div>
                                 <div className="mt-3 flex flex-wrap gap-1.5">
                                   {sortRankScope(parseRankScope(item.role)).length ? sortRankScope(parseRankScope(item.role)).map(rank => (
