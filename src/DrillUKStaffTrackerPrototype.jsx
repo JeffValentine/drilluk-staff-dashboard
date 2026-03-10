@@ -3629,6 +3629,31 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                       </div>
                     </CardContent>
                   </Card>
+
+                  <Card className="border-white/10 bg-white/5">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2"><BookOpen className="h-5 w-5 text-fuchsia-300" /> Training logbook history</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {!(selected.trainingLogs || []).length && (
+                        <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">
+                          No shared training log entries yet.
+                        </div>
+                      )}
+                      {(selected.trainingLogs || []).slice(0, 8).map(entry => (
+                        <div key={`tracker-training-log-${entry.id}`} className="rounded-xl border border-white/10 bg-black/20 p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge className="border-white/10 bg-white/10 text-zinc-200">{entry.trainerName || 'Trainer'}</Badge>
+                              <Badge className="border-cyan-500/35 bg-cyan-500/12 text-cyan-200">{entry.bracket || 'General Policy'}</Badge>
+                            </div>
+                            <div className="text-xs text-zinc-500">{entry.at ? new Date(entry.at).toLocaleString() : '—'}</div>
+                          </div>
+                          <div className="mt-2 whitespace-pre-wrap text-sm text-zinc-200">{entry.note}</div>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
                 </div>
               </div>
             </div>
