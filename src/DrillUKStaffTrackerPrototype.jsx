@@ -5216,15 +5216,15 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
         {canViewPresence && activeUsersOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-            <div className="w-full max-w-lg rounded-2xl border border-emerald-500/30 bg-zinc-950 p-5">
-              <div className="mb-4 flex items-center justify-between">
+            <div className="flex max-h-[82vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-emerald-500/30 bg-zinc-950">
+              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-zinc-950/95 px-5 py-4 backdrop-blur">
                 <div>
                   <div className="text-lg font-semibold text-white">Active Users</div>
                   <div className="text-[11px] text-zinc-500">Visible to Head Admin only.</div>
                 </div>
-                <button type="button" onClick={() => setActiveUsersOpen(false)} className="text-sm text-zinc-400 hover:text-white">Close</button>
+                <button type="button" onClick={() => setActiveUsersOpen(false)} className="rounded-lg border border-white/10 bg-black/30 px-3 py-1 text-sm text-zinc-300 hover:bg-white/10 hover:text-white">Close</button>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 overflow-y-auto px-5 py-4">
                 {!activeUsers.length && (
                   <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">No active users detected.</div>
                 )}
@@ -5253,15 +5253,15 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         )}
         {canViewPresence && offlineUsersOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-            <div className="w-full max-w-lg rounded-2xl border border-zinc-500/30 bg-zinc-950 p-5">
-              <div className="mb-4 flex items-center justify-between">
+            <div className="flex max-h-[82vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-zinc-500/30 bg-zinc-950">
+              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-zinc-950/95 px-5 py-4 backdrop-blur">
                 <div>
                   <div className="text-lg font-semibold text-white">Offline Users</div>
                   <div className="text-[11px] text-zinc-500">Visible to Head Admin only.</div>
                 </div>
-                <button type="button" onClick={() => setOfflineUsersOpen(false)} className="text-sm text-zinc-400 hover:text-white">Close</button>
+                <button type="button" onClick={() => setOfflineUsersOpen(false)} className="rounded-lg border border-white/10 bg-black/30 px-3 py-1 text-sm text-zinc-300 hover:bg-white/10 hover:text-white">Close</button>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 overflow-y-auto px-5 py-4">
                 {!offlineUsers.length && (
                   <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">No offline users detected.</div>
                 )}
