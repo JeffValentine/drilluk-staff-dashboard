@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Search, Plus, Shield, GraduationCap, CheckCircle2, Users, ArrowUpRight, ClipboardList, Star, HelpCircle, ExternalLink, BookOpen, MessageSquareWarning, Gavel, Swords, FileVideo, Radio, LifeBuoy, ShieldAlert, Upload, Trash2, KeyRound, Copy } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -1187,6 +1187,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [sessionTargetId, setSessionTargetId] = useState(null);
   const [sessionNotesOpen, setSessionNotesOpen] = useState(false);
   const [sessionActionsOpen, setSessionActionsOpen] = useState(false);
+  const [sessionNotesDraft, setSessionNotesDraft] = useState({ strongSides: '', attentionPoints: '', notes: '' });
+  const [sessionActionsDraft, setSessionActionsDraft] = useState({ trainer: '', status: 'In Training' });
   const [disciplineRankFilter, setDisciplineRankFilter] = useState('All');
   const [disciplineUserQuery, setDisciplineUserQuery] = useState('');
   const [disciplineTargetId, setDisciplineTargetId] = useState(null);
@@ -1259,6 +1261,12 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     core: { started: false, score: null, answers: {} },
     permission: { started: false, score: null, answers: {} },
   });
+  const deferredQuery = useDeferredValue(query);
+  const deferredSessionUserQuery = useDeferredValue(sessionUserQuery);
+  const deferredDisciplineUserQuery = useDeferredValue(disciplineUserQuery);
+  const deferredCheckboxQuery = useDeferredValue(checkboxQuery);
+  const deferredAuditQuery = useDeferredValue(auditQuery);
+  const deferredAuditFieldQuery = useDeferredValue(auditFieldQuery);
   const isEditOverlayOpen = checkboxEditorOpen || addStaffOpen || rosterSyncOpen || profileOpen || disciplineOpen || sessionNotesOpen || sessionActionsOpen;
   const isSyncLocked = syncPausedByEdit || inputEditingActive || isEditOverlayOpen;
   const hasQueuedSync = pendingSyncFlags.staff || pendingSyncFlags.profiles || pendingSyncFlags.checkbox || pendingSyncFlags.ranks || pendingSyncFlags.audit;
@@ -1679,7 +1687,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       refreshAuditLogsFromDb();
     }, 250);
     return () => clearTimeout(timer);
-  }, [dbReady, canManageUsers, auditQuery, auditActorFilter, auditActionFilter, auditDateFilter, auditRequireChanges, auditTabFilter]);
+  }, [dbReady, canManageUsers, deferredAuditQuery, auditActorFilter, auditActionFilter, auditDateFilter, auditRequireChanges, auditTabFilter]);
 
   useEffect(() => {
     if (!dbReady || !supabase || !canManageUsers) return;
@@ -1784,7 +1792,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   const filteredCheckboxItems = useMemo(() => {
     const roleOrder = new Map(roles.map((role, index) => [role, index]));
-    const q = checkboxQuery.trim().toLowerCase();
+    const q = deferredCheckboxQuery.trim().toLowerCase();
     return checkboxCatalog
       .filter(item => item.category === checkboxMenu)
       .filter(item => {
@@ -1817,7 +1825,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
         return a.title.localeCompare(b.title);
       });
-  }, [checkboxCatalog, checkboxMenu, checkboxQuery, checkboxRankFilter]);
+  }, [checkboxCatalog, checkboxMenu, deferredCheckboxQuery, checkboxRankFilter]);
 
   const checkboxRowsWithDividers = useMemo(() => {
     const rows = [];
@@ -1848,9 +1856,9 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     );
     const roleOrder = new Map(roles.map((role, index) => [role, index]));
     const list = staff.filter(s =>
-      (s.name.toLowerCase().includes(query.toLowerCase()) ||
-      s.role.toLowerCase().includes(query.toLowerCase()) ||
-      s.status.toLowerCase().includes(query.toLowerCase())) &&
+      (s.name.toLowerCase().includes(deferredQuery.toLowerCase()) ||
+      s.role.toLowerCase().includes(deferredQuery.toLowerCase()) ||
+      s.status.toLowerCase().includes(deferredQuery.toLowerCase())) &&
       (filterRole === 'All' || s.role === filterRole) &&
       (!filterTrainerOnly || trainerNames.has(s.name)) &&
       (!filterActiveOnly || s.status === 'Active') &&
@@ -1861,14 +1869,14 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       if (rankDiff !== 0) return rankDiff;
       return a.name.localeCompare(b.name);
     });
-  }, [staff, query, filterRole, filterTrainerOnly, filterActiveOnly, filterWarningOnly]);
+  }, [staff, deferredQuery, filterRole, filterTrainerOnly, filterActiveOnly, filterWarningOnly]);
 
   const traineeRecord = (canUseViewAs && viewAsRole === 'staff_in_training')
     ? (staff.find(s => s.id === viewAsStaffId) || staff.find(s => s.id === selectedId) || staff[0] || null)
     : (staff.find(s => s.traineeUserId === authUser?.id) || null);
   const selected = isStaffInTraining ? traineeRecord : (staff.find(s => s.id === selectedId) || staff[0] || null);
   const sessionCandidates = useMemo(() => {
-    const q = sessionUserQuery.trim().toLowerCase();
+    const q = deferredSessionUserQuery.trim().toLowerCase();
     return staff
       .filter(member => sessionRankFilter === 'All' || member.role === sessionRankFilter)
       .filter(member => {
@@ -1877,10 +1885,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         return haystack.includes(q);
       })
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [staff, sessionRankFilter, sessionUserQuery]);
+  }, [staff, sessionRankFilter, deferredSessionUserQuery]);
   const sessionTarget = staff.find(member => member.id === sessionTargetId) || sessionCandidates[0] || null;
   const disciplineCandidates = useMemo(() => {
-    const q = disciplineUserQuery.trim().toLowerCase();
+    const q = deferredDisciplineUserQuery.trim().toLowerCase();
     return staff
       .filter(member => disciplineRankFilter === 'All' || member.role === disciplineRankFilter)
       .filter(member => {
@@ -1889,7 +1897,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         return haystack.includes(q);
       })
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [staff, disciplineRankFilter, disciplineUserQuery]);
+  }, [staff, disciplineRankFilter, deferredDisciplineUserQuery]);
   const disciplineTarget = staff.find(member => member.id === disciplineTargetId) || disciplineCandidates[0] || null;
   const auditActionOptions = useMemo(
     () => [...new Set([...KNOWN_AUDIT_ACTIONS, ...(auditLogs || []).map(log => String(log.action || '')).filter(Boolean)])].sort((a, b) => a.localeCompare(b)),
@@ -1903,8 +1911,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [managementUsers]);
   const filteredAuditLogs = useMemo(() => {
-    const q = auditQuery.trim().toLowerCase();
-    const fieldNeedle = auditFieldQuery.trim().toLowerCase();
+    const q = deferredAuditQuery.trim().toLowerCase();
+    const fieldNeedle = deferredAuditFieldQuery.trim().toLowerCase();
     const now = Date.now();
     const cutoff = auditDateFilter === '24h'
       ? now - 24 * 60 * 60 * 1000
@@ -1948,7 +1956,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         return haystack.includes(q);
       })
       .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
-  }, [auditLogs, auditTabFilter, auditActorFilter, auditActionFilter, auditDateFilter, auditRequireChanges, auditFieldQuery, auditQuery, managementUsers]);
+  }, [auditLogs, auditTabFilter, auditActorFilter, auditActionFilter, auditDateFilter, auditRequireChanges, deferredAuditFieldQuery, deferredAuditQuery, managementUsers]);
 
   useEffect(() => {
     if (!(canUseViewAs && viewAsRole === 'staff_in_training')) return;
@@ -1978,6 +1986,19 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   useEffect(() => {
     setTrainingLogDraft(prev => ({ ...prev, note: '' }));
   }, [sessionTargetId]);
+
+  useEffect(() => {
+    if (!sessionTarget) return;
+    setSessionNotesDraft({
+      strongSides: sessionTarget.strongSides || '',
+      attentionPoints: sessionTarget.attentionPoints || '',
+      notes: sessionTarget.notes || '',
+    });
+    setSessionActionsDraft({
+      trainer: sessionTarget.trainer || 'Unassigned',
+      status: sessionTarget.status || 'In Training',
+    });
+  }, [sessionTarget?.id, sessionTarget?.strongSides, sessionTarget?.attentionPoints, sessionTarget?.notes, sessionTarget?.trainer, sessionTarget?.status]);
 
   const totals = {
     total: staff.length,
@@ -2447,6 +2468,25 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     updateSessionTarget({ trainingLogs: nextLogs });
     writeAudit('staff.training_log.add', sessionTarget.id, null, { bracket: entry.bracket, note: entry.note });
     setTrainingLogDraft(prev => ({ ...prev, note: '' }));
+  }
+
+  function saveSessionNotesDraft() {
+    if (!sessionTarget || !canEdit) return;
+    updateSessionTarget({
+      strongSides: sessionNotesDraft.strongSides,
+      attentionPoints: sessionNotesDraft.attentionPoints,
+      notes: sessionNotesDraft.notes,
+    });
+    setSessionNotesOpen(false);
+  }
+
+  function saveSessionActionsDraft() {
+    if (!sessionTarget || !canEdit) return;
+    updateSessionTarget({
+      trainer: sessionActionsDraft.trainer,
+      status: sessionActionsDraft.status,
+    });
+    setSessionActionsOpen(false);
   }
 
   async function addStaff() {
@@ -5007,26 +5047,30 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 <div>
                   <div className="mb-2 text-sm text-zinc-400">Strong sides</div>
                   <Textarea
-                    value={sessionTarget.strongSides}
-                    onChange={(e) => updateSessionTarget({ strongSides: e.target.value })}
+                    value={sessionNotesDraft.strongSides}
+                    onChange={(e) => setSessionNotesDraft(prev => ({ ...prev, strongSides: e.target.value }))}
                     className="min-h-[110px] border-white/10 bg-black/20 text-white"
                   />
                 </div>
                 <div>
                   <div className="mb-2 text-sm text-zinc-400">Attention points</div>
                   <Textarea
-                    value={sessionTarget.attentionPoints}
-                    onChange={(e) => updateSessionTarget({ attentionPoints: e.target.value })}
+                    value={sessionNotesDraft.attentionPoints}
+                    onChange={(e) => setSessionNotesDraft(prev => ({ ...prev, attentionPoints: e.target.value }))}
                     className="min-h-[110px] border-white/10 bg-black/20 text-white"
                   />
                 </div>
                 <div>
                   <div className="mb-2 text-sm text-zinc-400">General notes</div>
                   <Textarea
-                    value={sessionTarget.notes}
-                    onChange={(e) => updateSessionTarget({ notes: e.target.value })}
+                    value={sessionNotesDraft.notes}
+                    onChange={(e) => setSessionNotesDraft(prev => ({ ...prev, notes: e.target.value }))}
                     className="min-h-[130px] border-white/10 bg-black/20 text-white"
                   />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="secondary" onClick={() => setSessionNotesOpen(false)} className="rounded-2xl border border-white/15 bg-black/25 text-zinc-100 hover:bg-white/10">Cancel</Button>
+                  <Button type="button" onClick={saveSessionNotesDraft} className="rounded-2xl border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white hover:from-fuchsia-500 hover:to-indigo-500">Save Notes</Button>
                 </div>
               </div>
             </div>
@@ -5043,11 +5087,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               <div className="space-y-4">
                 <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                   <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Update trainer</div>
-                  <Input disabled={!canEdit} value={sessionTarget.trainer} onChange={(e) => updateSessionTarget({ trainer: e.target.value })} className="border-white/10 bg-black/30 text-white" />
+                  <Input disabled={!canEdit} value={sessionActionsDraft.trainer} onChange={(e) => setSessionActionsDraft(prev => ({ ...prev, trainer: e.target.value }))} className="border-white/10 bg-black/30 text-white" />
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                   <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Set status</div>
-                  <Select value={sessionTarget.status} onValueChange={(value) => updateSessionTarget({ status: value })} disabled={!canEdit}>
+                  <Select value={sessionActionsDraft.status} onValueChange={(value) => setSessionActionsDraft(prev => ({ ...prev, status: value }))} disabled={!canEdit}>
                     <SelectTrigger className="border-white/10 bg-black/30 text-white"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="In Training">In Training</SelectItem>
@@ -5075,6 +5119,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 </div>
                 <div className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/10 p-4 text-sm text-fuchsia-100">
                   Suggested next step: {completionPercent(sessionTarget) >= 90 ? `review ${sessionTarget.name} for ${sessionTarget.promotion}` : `continue ${sessionTarget.role} training until all required checks are complete`}.
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="secondary" onClick={() => setSessionActionsOpen(false)} className="rounded-2xl border border-white/15 bg-black/25 text-zinc-100 hover:bg-white/10">Cancel</Button>
+                  <Button type="button" onClick={saveSessionActionsDraft} className="rounded-2xl border border-emerald-400/40 bg-gradient-to-r from-emerald-600 to-green-500 text-white hover:from-emerald-500 hover:to-green-400">Save Actions</Button>
                 </div>
               </div>
             </div>
