@@ -31,6 +31,7 @@ create table if not exists public.staff_members (
   permissions jsonb not null default '{}'::jsonb,
   disciplinary jsonb not null default '{"warnings":0,"actions":0,"logs":[]}'::jsonb,
   quiz_history jsonb not null default '[]'::jsonb,
+  training_logs jsonb not null default '[]'::jsonb,
   notes text not null default '',
   updated_by uuid references auth.users(id),
   updated_at timestamptz not null default now()
@@ -99,6 +100,7 @@ alter table public.profiles add column if not exists god_key_enabled boolean not
 alter table public.profiles add column if not exists last_seen_at timestamptz;
 alter table public.staff_members add column if not exists trainee_user_id uuid references auth.users(id);
 alter table public.staff_members add column if not exists quiz_history jsonb not null default '[]'::jsonb;
+alter table public.staff_members add column if not exists training_logs jsonb not null default '[]'::jsonb;
 
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created

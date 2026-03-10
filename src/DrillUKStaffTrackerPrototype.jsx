@@ -1228,6 +1228,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [offlineUsersOpen, setOfflineUsersOpen] = useState(false);
   const [activeUsers, setActiveUsers] = useState([]);
   const [reviewDrafts, setReviewDrafts] = useState({});
+  const [trainingLogDraft, setTrainingLogDraft] = useState({ bracket: 'General Policy', note: '' });
   const lastLocalStaffEditRef = useRef(0);
   const isOwnerSession = (authUser?.email || '').toLowerCase() === SITE_OWNER_EMAIL;
   const [rosterSyncOpen, setRosterSyncOpen] = useState(false);
@@ -1261,6 +1262,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const isEditOverlayOpen = checkboxEditorOpen || addStaffOpen || rosterSyncOpen || profileOpen || disciplineOpen || sessionNotesOpen || sessionActionsOpen;
   const isSyncLocked = syncPausedByEdit || inputEditingActive || isEditOverlayOpen;
   const hasQueuedSync = pendingSyncFlags.staff || pendingSyncFlags.profiles || pendingSyncFlags.checkbox || pendingSyncFlags.ranks || pendingSyncFlags.audit;
+  const ruleBracketOptions = useMemo(() => ['General Policy', ...new Set(RULE_FALSE_OPTION_BANKS.map(item => item.tag))], []);
 
   function holdRealtimeSync(ms = 2500) {
     setSyncPausedByEdit(true);
@@ -1417,6 +1419,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       values: row.values || Object.fromEntries(dynamicCoreValues.map(item => [item.title, false])),
       disciplinary: row.disciplinary || { warnings: 0, actions: 0, logs: [] },
       quizHistory: Array.isArray(row.quiz_history) ? row.quiz_history : [],
+      trainingLogs: Array.isArray(row.training_logs) ? row.training_logs : [],
       notes: row.notes || '',
     }));
     const shouldPreserveLocalSelected = Date.now() - lastLocalStaffEditRef.current < 1400;
@@ -1972,6 +1975,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     setDisciplineTargetId(selected?.id ?? staff[0].id);
   }, [staff, selected?.id, disciplineTargetId, sessionTargetId]);
 
+  useEffect(() => {
+    setTrainingLogDraft(prev => ({ ...prev, note: '' }));
+  }, [sessionTargetId]);
+
   const totals = {
     total: staff.length,
     inTraining: staff.filter(s => s.status === 'In Training').length,
@@ -2061,6 +2068,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       permissions: member.permissions || {},
       disciplinary: member.disciplinary || { warnings: 0, actions: 0, logs: [] },
       quiz_history: Array.isArray(member.quizHistory) ? member.quizHistory : [],
+      training_logs: Array.isArray(member.trainingLogs) ? member.trainingLogs : [],
       notes: member.notes || '',
       updated_by: authUser?.id || null,
     };
@@ -2422,6 +2430,25 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     });
   }
 
+  function addTrainingLogEntry() {
+    if (!sessionTarget || !canEdit) return;
+    const note = String(trainingLogDraft.note || '').trim();
+    if (!note) return;
+    const trainerName = profile?.username || authUser?.email?.split('@')[0] || 'Trainer';
+    const entry = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      at: new Date().toISOString(),
+      bracket: trainingLogDraft.bracket || 'General Policy',
+      note,
+      trainerName,
+      trainerId: authUser?.id || null,
+    };
+    const nextLogs = [entry, ...(sessionTarget.trainingLogs || [])].slice(0, 500);
+    updateSessionTarget({ trainingLogs: nextLogs });
+    writeAudit('staff.training_log.add', sessionTarget.id, null, { bracket: entry.bracket, note: entry.note });
+    setTrainingLogDraft(prev => ({ ...prev, note: '' }));
+  }
+
   async function addStaff() {
     if (!canEdit || !addStaffForm.name.trim()) return;
     const roleChecks = Object.fromEntries((baseChecksByRole[addStaffForm.role] || []).map(item => [item, false]));
@@ -2457,6 +2484,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       values: valueChecks,
       disciplinary: { warnings: 0, actions: 0, logs: [] },
       quizHistory: [],
+      trainingLogs: [],
       notes: '',
     };
     setStaff(prev => [next, ...prev]);
@@ -2513,6 +2541,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         values: valueChecks,
         disciplinary: { warnings: 0, actions: 0, logs: [] },
         quizHistory: [],
+        trainingLogs: [],
         notes: `Auto-created from roster seed (${entry.rank}).`,
       };
     });
@@ -3686,83 +3715,139 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 </CardContent>
               </Card>
 
-              <Card className="border-white/10 bg-white/5">
-                <CardHeader><CardTitle>Quiz Review History</CardTitle></CardHeader>
-                <CardContent className="space-y-3">
-                  {!sessionTarget && (
-                    <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">
-                      Select a staff member to review quiz attempts.
-                    </div>
-                  )}
-                  {sessionTarget && !(sessionTarget.quizHistory || []).length && (
-                    <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">
-                      No quiz attempts recorded yet.
-                    </div>
-                  )}
-                  {(sessionTarget?.quizHistory || []).slice(0, 12).map(attempt => (
-                    <div key={attempt.id} className="rounded-xl border border-white/10 bg-black/20 p-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-sm font-semibold text-white">
-                          {attempt.category?.toUpperCase?.() || 'QUIZ'} · {new Date(attempt.at).toLocaleString()}
-                        </div>
-                        <Badge className={attempt.passed ? 'border-emerald-500/35 bg-emerald-500/15 text-emerald-200' : 'border-red-500/35 bg-red-500/15 text-red-200'}>
-                          {attempt.score}% {attempt.passed ? 'Pass' : 'Fail'}
-                        </Badge>
+              <div className="space-y-4">
+                <Card className="border-white/10 bg-white/5">
+                  <CardHeader><CardTitle>Quiz Review History</CardTitle></CardHeader>
+                  <CardContent className="space-y-3">
+                    {!sessionTarget && (
+                      <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">
+                        Select a staff member to review quiz attempts.
                       </div>
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                        <Badge className={
-                          attempt.reviewStatus === 'approved'
-                            ? 'border-emerald-500/35 bg-emerald-500/15 text-emerald-200'
-                            : attempt.reviewStatus === 'needs_retake'
-                              ? 'border-amber-500/35 bg-amber-500/15 text-amber-200'
-                              : 'border-white/10 bg-white/10 text-zinc-300'
-                        }>
-                          Review: {attempt.reviewStatus || 'pending'}
-                        </Badge>
-                        {attempt.reviewedBy && (
-                          <span className="text-zinc-500">By {attempt.reviewedBy}{attempt.reviewedAt ? ` · ${new Date(attempt.reviewedAt).toLocaleString()}` : ''}</span>
+                    )}
+                    {sessionTarget && !(sessionTarget.quizHistory || []).length && (
+                      <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">
+                        No quiz attempts recorded yet.
+                      </div>
+                    )}
+                    {(sessionTarget?.quizHistory || []).slice(0, 12).map(attempt => (
+                      <div key={attempt.id} className="rounded-xl border border-white/10 bg-black/20 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="text-sm font-semibold text-white">
+                            {attempt.category?.toUpperCase?.() || 'QUIZ'} · {new Date(attempt.at).toLocaleString()}
+                          </div>
+                          <Badge className={attempt.passed ? 'border-emerald-500/35 bg-emerald-500/15 text-emerald-200' : 'border-red-500/35 bg-red-500/15 text-red-200'}>
+                            {attempt.score}% {attempt.passed ? 'Pass' : 'Fail'}
+                          </Badge>
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                          <Badge className={
+                            attempt.reviewStatus === 'approved'
+                              ? 'border-emerald-500/35 bg-emerald-500/15 text-emerald-200'
+                              : attempt.reviewStatus === 'needs_retake'
+                                ? 'border-amber-500/35 bg-amber-500/15 text-amber-200'
+                                : 'border-white/10 bg-white/10 text-zinc-300'
+                          }>
+                            Review: {attempt.reviewStatus || 'pending'}
+                          </Badge>
+                          {attempt.reviewedBy && (
+                            <span className="text-zinc-500">By {attempt.reviewedBy}{attempt.reviewedAt ? ` · ${new Date(attempt.reviewedAt).toLocaleString()}` : ''}</span>
+                          )}
+                        </div>
+                        <div className="mt-3 space-y-2">
+                          {(attempt.items || []).map(item => (
+                            <div key={`${attempt.id}-${item.id}`} className="rounded-lg border border-white/10 bg-black/25 p-2 text-xs">
+                              <div className="font-medium text-zinc-100">{item.title}</div>
+                              <div className="mt-1 text-zinc-400">Selected: <span className="text-zinc-200">{item.selected || 'No answer'}</span></div>
+                              <div className="text-zinc-400">Correct: <span className="text-zinc-200">{item.correct}</span></div>
+                            </div>
+                          ))}
+                        </div>
+                        {canEdit && (
+                          <div className="mt-3 space-y-2 rounded-lg border border-white/10 bg-black/25 p-2">
+                            <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Trainer Review Note</div>
+                            <Textarea
+                              value={reviewDrafts[attempt.id] ?? attempt.reviewNote ?? ''}
+                              onChange={(e) => setReviewDrafts(prev => ({ ...prev, [attempt.id]: e.target.value }))}
+                              className="min-h-[72px] border-white/10 bg-black/30 text-white"
+                              placeholder="Add review note, coaching points, or retake reason..."
+                            />
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                onClick={() => applyQuizReview(attempt.id, 'approved')}
+                                className="rounded-xl border border-emerald-400/40 bg-gradient-to-r from-emerald-600 to-green-500 text-white hover:from-emerald-500 hover:to-green-400"
+                              >
+                                Approve Attempt
+                              </Button>
+                              <Button
+                                type="button"
+                                onClick={() => applyQuizReview(attempt.id, 'needs_retake')}
+                                className="rounded-xl border border-amber-400/40 bg-gradient-to-r from-amber-600 to-orange-500 text-white hover:from-amber-500 hover:to-orange-400"
+                              >
+                                Mark Retake
+                              </Button>
+                            </div>
+                          </div>
                         )}
                       </div>
-                      <div className="mt-3 space-y-2">
-                        {(attempt.items || []).map(item => (
-                          <div key={`${attempt.id}-${item.id}`} className="rounded-lg border border-white/10 bg-black/25 p-2 text-xs">
-                            <div className="font-medium text-zinc-100">{item.title}</div>
-                            <div className="mt-1 text-zinc-400">Selected: <span className="text-zinc-200">{item.selected || 'No answer'}</span></div>
-                            <div className="text-zinc-400">Correct: <span className="text-zinc-200">{item.correct}</span></div>
-                          </div>
-                        ))}
+                    ))}
+                  </CardContent>
+                </Card>
+
+                <Card className="border-white/10 bg-white/5">
+                  <CardHeader><CardTitle>Training Logbook</CardTitle></CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="grid gap-2 md:grid-cols-[1fr,130px]">
+                      <Textarea
+                        value={trainingLogDraft.note}
+                        onChange={(e) => setTrainingLogDraft(prev => ({ ...prev, note: e.target.value }))}
+                        className="min-h-[88px] border-white/10 bg-black/30 text-white"
+                        placeholder="Add session notes, coaching points, and progress observations..."
+                        disabled={!canEdit || !sessionTarget}
+                      />
+                      <div className="space-y-2">
+                        <Select
+                          value={trainingLogDraft.bracket}
+                          onValueChange={(value) => setTrainingLogDraft(prev => ({ ...prev, bracket: value }))}
+                          disabled={!canEdit || !sessionTarget}
+                        >
+                          <SelectTrigger className="border-white/10 bg-black/30 text-white"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {ruleBracketOptions.map(bracket => (
+                              <SelectItem key={`training-log-bracket-${bracket}`} value={bracket}>{bracket}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          type="button"
+                          onClick={addTrainingLogEntry}
+                          disabled={!canEdit || !sessionTarget || !trainingLogDraft.note.trim()}
+                          className="w-full rounded-xl border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white hover:from-fuchsia-500 hover:to-indigo-500"
+                        >
+                          Add Log Entry
+                        </Button>
                       </div>
-                      {canEdit && (
-                        <div className="mt-3 space-y-2 rounded-lg border border-white/10 bg-black/25 p-2">
-                          <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Trainer Review Note</div>
-                          <Textarea
-                            value={reviewDrafts[attempt.id] ?? attempt.reviewNote ?? ''}
-                            onChange={(e) => setReviewDrafts(prev => ({ ...prev, [attempt.id]: e.target.value }))}
-                            className="min-h-[72px] border-white/10 bg-black/30 text-white"
-                            placeholder="Add review note, coaching points, or retake reason..."
-                          />
-                          <div className="flex flex-wrap gap-2">
-                            <Button
-                              type="button"
-                              onClick={() => applyQuizReview(attempt.id, 'approved')}
-                              className="rounded-xl border border-emerald-400/40 bg-gradient-to-r from-emerald-600 to-green-500 text-white hover:from-emerald-500 hover:to-green-400"
-                            >
-                              Approve Attempt
-                            </Button>
-                            <Button
-                              type="button"
-                              onClick={() => applyQuizReview(attempt.id, 'needs_retake')}
-                              className="rounded-xl border border-amber-400/40 bg-gradient-to-r from-amber-600 to-orange-500 text-white hover:from-amber-500 hover:to-orange-400"
-                            >
-                              Mark Retake
-                            </Button>
-                          </div>
-                        </div>
-                      )}
                     </div>
-                  ))}
-                </CardContent>
-              </Card>
+                    {sessionTarget && !(sessionTarget.trainingLogs || []).length && (
+                      <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">
+                        No training log entries yet.
+                      </div>
+                    )}
+                    {(sessionTarget?.trainingLogs || []).slice(0, 40).map(entry => (
+                      <div key={entry.id} className="rounded-xl border border-white/10 bg-black/20 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge className="border-white/10 bg-white/10 text-zinc-200">{entry.trainerName || 'Trainer'}</Badge>
+                            <Badge className="border-cyan-500/35 bg-cyan-500/12 text-cyan-200">{entry.bracket || 'General Policy'}</Badge>
+                          </div>
+                          <div className="text-xs text-zinc-500">{entry.at ? new Date(entry.at).toLocaleString() : '—'}</div>
+                        </div>
+                        <div className="mt-2 whitespace-pre-wrap text-sm text-zinc-200">{entry.note}</div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           </TabsContent>
 
