@@ -927,6 +927,9 @@ const RULE_FALSE_OPTION_BANKS = [
   },
 ];
 
+const infoCalloutClass = 'cursor-default select-none rounded-2xl border border-white/10 bg-gradient-to-r from-zinc-900/95 to-black/70 px-4 py-3 text-sm leading-relaxed text-zinc-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]';
+const subtleInfoCalloutClass = 'cursor-default select-none rounded-xl border border-white/10 bg-gradient-to-r from-zinc-900/90 to-black/65 px-3 py-3 text-xs leading-relaxed text-zinc-400 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]';
+
 function detectRuleBracket({ title = '', question = '', correct = '' }) {
   const keywordSource = `${title} ${question} ${correct}`.toLowerCase();
   const bank = RULE_FALSE_OPTION_BANKS.find(entry => entry.keys.some(key => keywordSource.includes(key)));
@@ -3814,9 +3817,9 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                   <CardHeader><CardTitle>Quiz Review History</CardTitle></CardHeader>
                   <CardContent className="space-y-3">
                     {!sessionTarget && (
-                      <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">
-                        Select a staff member to review quiz attempts.
-                      </div>
+                    <div className={infoCalloutClass}>
+                      Select a staff member to review quiz attempts.
+                    </div>
                     )}
                     {sessionTarget && !(sessionTarget.quizHistory || []).length && (
                       <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">
@@ -4149,7 +4152,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                     <CardTitle>Select a Tool</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-300">
+                    <div className={infoCalloutClass}>
                       Choose a tool category first. Nothing opens until you explicitly select it.
                     </div>
                     <button
@@ -4173,7 +4176,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                     <CardTitle>Punish Tools</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-300">
+                    <div className={infoCalloutClass}>
                       Select the exact punish tool you want to open.
                     </div>
                     <button
@@ -4195,7 +4198,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                       <CardTitle>Discord Staff Formatter</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-300">
+                      <div className={infoCalloutClass}>
                         Fill the fields and copy a clean Discord-ready block. This tool is available to all dashboard users.
                       </div>
                       <div className="grid gap-3 md:grid-cols-2">
@@ -4304,7 +4307,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 )}
                 {canManageUsers && (
                   <>
-                    <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-zinc-400 md:flex-row md:items-center md:justify-between">
+                    <div className={`${subtleInfoCalloutClass} flex flex-col gap-3 md:flex-row md:items-center md:justify-between`}>
                       <span>Manage trainer/admin access here. All changes are protected and audit logged.</span>
                       <div className="flex flex-wrap items-center gap-2">
                         <Button
@@ -4520,7 +4523,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 )}
                 {canManageUsers && (
                   <>
-                    <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-zinc-400">
+                    <div className={subtleInfoCalloutClass}>
                       Tracks who changed what, where it was changed, and when.
                     </div>
                     <div className="space-y-3 rounded-xl border border-white/10 bg-black/25 p-3">
@@ -4673,7 +4676,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 <CardTitle>Rank Display Names</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-zinc-400">
+                <div className={subtleInfoCalloutClass}>
                   Rename how ranks are shown across the dashboard. Internal rank keys stay the same.
                 </div>
                 {rankDisplayLoading && (
@@ -4790,7 +4793,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {!disciplineTarget && (
-                    <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">
+                    <div className={infoCalloutClass}>
                       Select a staff member to review disciplinary history.
                     </div>
                   )}
