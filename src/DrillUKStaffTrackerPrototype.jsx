@@ -2501,10 +2501,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   async function copyStaffToolFormat() {
     const payload = [
       '```ini',
-      `License: ${staffToolForm.license || ''}`,
-      `Discord ID: ${staffToolForm.discordId || ''}`,
-      `Reason: ${staffToolForm.reason || ''}`,
-      `Clip Link: ${staffToolForm.clipLink || ''}`,
+      `[License]: ${staffToolForm.license || ''}`,
+      `[Discord ID]: ${staffToolForm.discordId || ''}`,
+      `[Reason]: ${staffToolForm.reason || ''}`,
+      `[Clip Link]: ${staffToolForm.clipLink || ''}`,
       '```',
     ].join('\n');
 
@@ -4262,11 +4262,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                           <Badge className="border-cyan-500/35 bg-cyan-500/12 text-cyan-200">Discord</Badge>
                           <Badge className="border-white/10 bg-white/10 text-zinc-200">```ini``` ready</Badge>
                         </div>
-                        <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl border border-white/10 bg-black/35 p-4 text-sm text-zinc-200">{`[Staff Report]
-License: ${staffToolForm.license || ''}
-Discord ID: ${staffToolForm.discordId || ''}
-Reason: ${staffToolForm.reason || ''}
-Clip Link: ${staffToolForm.clipLink || ''}`}</pre>
+                        <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl border border-white/10 bg-black/35 p-4 text-sm text-zinc-200">{`[License]: ${staffToolForm.license || ''}
+[Discord ID]: ${staffToolForm.discordId || ''}
+[Reason]: ${staffToolForm.reason || ''}
+[Clip Link]: ${staffToolForm.clipLink || ''}`}</pre>
                       </div>
                       <div className="rounded-2xl border border-amber-400/35 bg-gradient-to-r from-amber-500/14 to-orange-500/10 p-4">
                         <div className="mb-2 flex flex-wrap items-center gap-2">
