@@ -3276,7 +3276,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         )}
 
         <Tabs defaultValue={isStaffInTraining ? 'myprogress' : 'tracker'} className="space-y-4">
-          <TabsList className={`grid w-full bg-white/5 ${isStaffInTraining ? 'grid-cols-3 md:w-[780px]' : 'grid-cols-10 md:w-[1680px]'}`}>
+          <TabsList className="flex w-full flex-wrap justify-start gap-2 bg-white/5 p-2 h-auto">
             {isStaffInTraining ? (
               <>
                 <TabsTrigger value="myprogress">My Progress</TabsTrigger>
