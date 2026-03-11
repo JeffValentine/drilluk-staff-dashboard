@@ -1231,6 +1231,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     reason: '',
     clipLink: '',
   });
+  const [staffToolsSection, setStaffToolsSection] = useState('punish');
+  const [staffToolsPunishSection, setStaffToolsPunishSection] = useState('review-form');
   const [staffToolCopiedOpen, setStaffToolCopiedOpen] = useState(false);
   const ownProfileFileInputRef = useRef(null);
   const [activeUsersOpen, setActiveUsersOpen] = useState(false);
@@ -4101,104 +4103,144 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           </TabsContent>
 
           <TabsContent value="stafftools">
-            <div className="grid gap-4 xl:grid-cols-[0.95fr,1.05fr]">
+            <div className="space-y-4">
               <Card className="border-white/10 bg-white/5">
                 <CardHeader>
-                  <CardTitle>Discord Staff Formatter</CardTitle>
+                  <CardTitle>Staff Tools</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-300">
-                    Fill the fields and copy a clean Discord-ready block. This tool is available to all dashboard users.
-                  </div>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <div>
-                      <div className="mb-2 text-xs uppercase tracking-[0.18em] text-zinc-500">License</div>
-                      <Input
-                        value={staffToolForm.license}
-                        onChange={(e) => setStaffToolForm(prev => ({ ...prev, license: e.target.value }))}
-                        placeholder="rockstar license / player license"
-                        className="border-white/10 bg-black/30 text-white"
-                      />
-                    </div>
-                    <div>
-                      <div className="mb-2 text-xs uppercase tracking-[0.18em] text-zinc-500">Discord ID</div>
-                      <Input
-                        value={staffToolForm.discordId}
-                        onChange={(e) => setStaffToolForm(prev => ({ ...prev, discordId: e.target.value }))}
-                        placeholder="user id / mention"
-                        className="border-white/10 bg-black/30 text-white"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <div className="mb-2 text-xs uppercase tracking-[0.18em] text-zinc-500">Reason</div>
-                    <Textarea
-                      value={staffToolForm.reason}
-                      onChange={(e) => setStaffToolForm(prev => ({ ...prev, reason: e.target.value }))}
-                      className="min-h-[110px] border-white/10 bg-black/30 text-white"
-                      placeholder="brief case summary / enforcement reason"
-                    />
-                  </div>
-                  <div>
-                    <div className="mb-2 text-xs uppercase tracking-[0.18em] text-zinc-500">Clip Link</div>
-                    <Input
-                      value={staffToolForm.clipLink}
-                      onChange={(e) => setStaffToolForm(prev => ({ ...prev, clipLink: e.target.value }))}
-                      placeholder="https://..."
-                      className="border-white/10 bg-black/30 text-white"
-                    />
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button onClick={copyStaffToolFormat} className="rounded-2xl border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white hover:from-fuchsia-500 hover:to-indigo-500">
-                      Copy Discord Format
-                    </Button>
-                    <Button
+                <CardContent className="space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    <button
                       type="button"
-                      variant="secondary"
-                      onClick={() => setStaffToolForm({ license: '', discordId: '', reason: '', clipLink: '' })}
-                      className="rounded-2xl border border-white/15 bg-black/25 text-zinc-100 hover:bg-white/10"
+                      onClick={() => setStaffToolsSection('punish')}
+                      className={`rounded-full border px-3 py-1.5 text-xs ${
+                        staffToolsSection === 'punish'
+                          ? 'border-fuchsia-500/40 bg-fuchsia-500/18 text-fuchsia-200'
+                          : 'border-white/10 bg-black/25 text-zinc-300 hover:bg-white/10'
+                      }`}
                     >
-                      Clear
-                    </Button>
+                      Punish
+                    </button>
                   </div>
+                  {staffToolsSection === 'punish' && (
+                    <div className="flex flex-wrap gap-2 border-t border-white/10 pt-3">
+                      <button
+                        type="button"
+                        onClick={() => setStaffToolsPunishSection('review-form')}
+                        className={`rounded-full border px-3 py-1.5 text-xs ${
+                          staffToolsPunishSection === 'review-form'
+                            ? 'border-cyan-500/35 bg-cyan-500/14 text-cyan-200'
+                            : 'border-white/10 bg-black/25 text-zinc-300 hover:bg-white/10'
+                        }`}
+                      >
+                        Review Form
+                      </button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
-              <Card className="border-white/10 bg-white/5">
-                <CardHeader>
-                  <CardTitle>Preview</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4">
-                    <div className="mb-3 flex flex-wrap items-center gap-2">
-                      <Badge className="border-cyan-500/35 bg-cyan-500/12 text-cyan-200">Discord</Badge>
-                      <Badge className="border-white/10 bg-white/10 text-zinc-200">```ini``` ready</Badge>
-                    </div>
-                    <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl border border-white/10 bg-black/35 p-4 text-sm text-zinc-200">{`[Staff Report]
+              {staffToolsSection === 'punish' && staffToolsPunishSection === 'review-form' && (
+                <div className="grid gap-4 xl:grid-cols-[0.95fr,1.05fr]">
+                  <Card className="border-white/10 bg-white/5">
+                    <CardHeader>
+                      <CardTitle>Discord Staff Formatter</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-300">
+                        Fill the fields and copy a clean Discord-ready block. This tool is available to all dashboard users.
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <div>
+                          <div className="mb-2 text-xs uppercase tracking-[0.18em] text-zinc-500">License</div>
+                          <Input
+                            value={staffToolForm.license}
+                            onChange={(e) => setStaffToolForm(prev => ({ ...prev, license: e.target.value }))}
+                            placeholder="rockstar license / player license"
+                            className="border-white/10 bg-black/30 text-white"
+                          />
+                        </div>
+                        <div>
+                          <div className="mb-2 text-xs uppercase tracking-[0.18em] text-zinc-500">Discord ID</div>
+                          <Input
+                            value={staffToolForm.discordId}
+                            onChange={(e) => setStaffToolForm(prev => ({ ...prev, discordId: e.target.value }))}
+                            placeholder="user id / mention"
+                            className="border-white/10 bg-black/30 text-white"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="mb-2 text-xs uppercase tracking-[0.18em] text-zinc-500">Reason</div>
+                        <Textarea
+                          value={staffToolForm.reason}
+                          onChange={(e) => setStaffToolForm(prev => ({ ...prev, reason: e.target.value }))}
+                          className="min-h-[110px] border-white/10 bg-black/30 text-white"
+                          placeholder="brief case summary / enforcement reason"
+                        />
+                      </div>
+                      <div>
+                        <div className="mb-2 text-xs uppercase tracking-[0.18em] text-zinc-500">Clip Link</div>
+                        <Input
+                          value={staffToolForm.clipLink}
+                          onChange={(e) => setStaffToolForm(prev => ({ ...prev, clipLink: e.target.value }))}
+                          placeholder="https://..."
+                          className="border-white/10 bg-black/30 text-white"
+                        />
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button onClick={copyStaffToolFormat} className="rounded-2xl border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white hover:from-fuchsia-500 hover:to-indigo-500">
+                          Copy Discord Format
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={() => setStaffToolForm({ license: '', discordId: '', reason: '', clipLink: '' })}
+                          className="rounded-2xl border border-white/15 bg-black/25 text-zinc-100 hover:bg-white/10"
+                        >
+                          Clear
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-white/10 bg-white/5">
+                    <CardHeader>
+                      <CardTitle>Preview</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4">
+                        <div className="mb-3 flex flex-wrap items-center gap-2">
+                          <Badge className="border-cyan-500/35 bg-cyan-500/12 text-cyan-200">Discord</Badge>
+                          <Badge className="border-white/10 bg-white/10 text-zinc-200">```ini``` ready</Badge>
+                        </div>
+                        <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl border border-white/10 bg-black/35 p-4 text-sm text-zinc-200">{`[Staff Report]
 License: ${staffToolForm.license || ''}
 Discord ID: ${staffToolForm.discordId || ''}
 Reason: ${staffToolForm.reason || ''}
 Clip Link: ${staffToolForm.clipLink || ''}`}</pre>
-                  </div>
-                  <div className="rounded-2xl border border-amber-400/35 bg-gradient-to-r from-amber-500/14 to-orange-500/10 p-4">
-                    <div className="mb-2 flex flex-wrap items-center gap-2">
-                      <Badge className="border-amber-400/35 bg-amber-500/15 text-amber-100">Post It Here</Badge>
-                      <Badge className="border-white/10 bg-white/10 text-zinc-100">Required next step</Badge>
-                    </div>
-                    <div className="text-sm text-zinc-200">
-                      After copying, post the formatted block in this Discord channel:
-                    </div>
-                    <a
-                      href="https://discord.com/channels/1033780064996827227/1481342607652032685"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-3 block rounded-xl border border-fuchsia-500/30 bg-black/35 px-3 py-3 text-sm font-medium text-fuchsia-200 hover:bg-black/50 hover:text-fuchsia-100"
-                    >
-                      https://discord.com/channels/1033780064996827227/1481342607652032685
-                    </a>
-                  </div>
-                </CardContent>
-              </Card>
+                      </div>
+                      <div className="rounded-2xl border border-amber-400/35 bg-gradient-to-r from-amber-500/14 to-orange-500/10 p-4">
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
+                          <Badge className="border-amber-400/35 bg-amber-500/15 text-amber-100">Post It Here</Badge>
+                          <Badge className="border-white/10 bg-white/10 text-zinc-100">Required next step</Badge>
+                        </div>
+                        <div className="text-sm text-zinc-200">
+                          After copying, post the formatted block in this Discord channel:
+                        </div>
+                        <a
+                          href="https://discord.com/channels/1033780064996827227/1481342607652032685"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-3 block rounded-xl border border-fuchsia-500/30 bg-black/35 px-3 py-3 text-sm font-medium text-fuchsia-200 hover:bg-black/50 hover:text-fuchsia-100"
+                        >
+                          https://discord.com/channels/1033780064996827227/1481342607652032685
+                        </a>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
             </div>
           </TabsContent>
 
