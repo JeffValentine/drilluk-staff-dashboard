@@ -1225,6 +1225,13 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [profileName, setProfileName] = useState(profile?.username || '');
   const [profileAvatar, setProfileAvatar] = useState(profile?.avatar_url || '');
   const [profileAvatarFile, setProfileAvatarFile] = useState(null);
+  const [staffToolForm, setStaffToolForm] = useState({
+    license: '',
+    discordId: '',
+    reason: '',
+    clipLink: '',
+  });
+  const [staffToolCopiedOpen, setStaffToolCopiedOpen] = useState(false);
   const ownProfileFileInputRef = useRef(null);
   const [activeUsersOpen, setActiveUsersOpen] = useState(false);
   const [offlineUsersOpen, setOfflineUsersOpen] = useState(false);
@@ -2489,6 +2496,24 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     setSessionActionsOpen(false);
   }
 
+  async function copyStaffToolFormat() {
+    const payload = [
+      '```ini',
+      `License: ${staffToolForm.license || ''}`,
+      `Discord ID: ${staffToolForm.discordId || ''}`,
+      `Reason: ${staffToolForm.reason || ''}`,
+      `Clip Link: ${staffToolForm.clipLink || ''}`,
+      '```',
+    ].join('\n');
+
+    try {
+      await navigator.clipboard.writeText(payload);
+      setStaffToolCopiedOpen(true);
+    } catch (_) {
+      window.alert('Copy failed. Clipboard permission was denied.');
+    }
+  }
+
   async function addStaff() {
     if (!canEdit || !addStaffForm.name.trim()) return;
     const roleChecks = Object.fromEntries((baseChecksByRole[addStaffForm.role] || []).map(item => [item, false]));
@@ -3251,11 +3276,12 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         )}
 
         <Tabs defaultValue={isStaffInTraining ? 'myprogress' : 'tracker'} className="space-y-4">
-          <TabsList className={`grid w-full bg-white/5 ${isStaffInTraining ? 'grid-cols-2 md:w-[520px]' : 'grid-cols-9 md:w-[1520px]'}`}>
+          <TabsList className={`grid w-full bg-white/5 ${isStaffInTraining ? 'grid-cols-3 md:w-[780px]' : 'grid-cols-10 md:w-[1680px]'}`}>
             {isStaffInTraining ? (
               <>
                 <TabsTrigger value="myprogress">My Progress</TabsTrigger>
                 <TabsTrigger value="hub">Overview & Resources</TabsTrigger>
+                <TabsTrigger value="stafftools">Staff Tools</TabsTrigger>
               </>
             ) : (
               <>
@@ -3263,6 +3289,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 <TabsTrigger value="session">Training Session</TabsTrigger>
                 <TabsTrigger value="progression">Progression</TabsTrigger>
                 <TabsTrigger value="hub">Overview & Resources</TabsTrigger>
+                <TabsTrigger value="stafftools">Staff Tools</TabsTrigger>
                 <TabsTrigger value="checkboxes">Checkboxes</TabsTrigger>
                 <TabsTrigger value="management">Management</TabsTrigger>
                 <TabsTrigger value="audit">Audit Log</TabsTrigger>
@@ -4068,6 +4095,103 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                       </div>
                     </div>
                   ))}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="stafftools">
+            <div className="grid gap-4 xl:grid-cols-[0.95fr,1.05fr]">
+              <Card className="border-white/10 bg-white/5">
+                <CardHeader>
+                  <CardTitle>Discord Staff Formatter</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-300">
+                    Fill the fields and copy a clean Discord-ready block. This tool is available to all dashboard users.
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div>
+                      <div className="mb-2 text-xs uppercase tracking-[0.18em] text-zinc-500">License</div>
+                      <Input
+                        value={staffToolForm.license}
+                        onChange={(e) => setStaffToolForm(prev => ({ ...prev, license: e.target.value }))}
+                        placeholder="rockstar license / player license"
+                        className="border-white/10 bg-black/30 text-white"
+                      />
+                    </div>
+                    <div>
+                      <div className="mb-2 text-xs uppercase tracking-[0.18em] text-zinc-500">Discord ID</div>
+                      <Input
+                        value={staffToolForm.discordId}
+                        onChange={(e) => setStaffToolForm(prev => ({ ...prev, discordId: e.target.value }))}
+                        placeholder="user id / mention"
+                        className="border-white/10 bg-black/30 text-white"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="mb-2 text-xs uppercase tracking-[0.18em] text-zinc-500">Reason</div>
+                    <Textarea
+                      value={staffToolForm.reason}
+                      onChange={(e) => setStaffToolForm(prev => ({ ...prev, reason: e.target.value }))}
+                      className="min-h-[110px] border-white/10 bg-black/30 text-white"
+                      placeholder="brief case summary / enforcement reason"
+                    />
+                  </div>
+                  <div>
+                    <div className="mb-2 text-xs uppercase tracking-[0.18em] text-zinc-500">Clip Link</div>
+                    <Input
+                      value={staffToolForm.clipLink}
+                      onChange={(e) => setStaffToolForm(prev => ({ ...prev, clipLink: e.target.value }))}
+                      placeholder="https://..."
+                      className="border-white/10 bg-black/30 text-white"
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button onClick={copyStaffToolFormat} className="rounded-2xl border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white hover:from-fuchsia-500 hover:to-indigo-500">
+                      Copy Discord Format
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => setStaffToolForm({ license: '', discordId: '', reason: '', clipLink: '' })}
+                      className="rounded-2xl border border-white/15 bg-black/25 text-zinc-100 hover:bg-white/10"
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-white/10 bg-white/5">
+                <CardHeader>
+                  <CardTitle>Preview</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4">
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                      <Badge className="border-cyan-500/35 bg-cyan-500/12 text-cyan-200">Discord</Badge>
+                      <Badge className="border-white/10 bg-white/10 text-zinc-200">```ini``` ready</Badge>
+                    </div>
+                    <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl border border-white/10 bg-black/35 p-4 text-sm text-zinc-200">{`[Staff Report]
+License: ${staffToolForm.license || ''}
+Discord ID: ${staffToolForm.discordId || ''}
+Reason: ${staffToolForm.reason || ''}
+Clip Link: ${staffToolForm.clipLink || ''}`}</pre>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">
+                    After copying, post it here:
+                    {' '}
+                    <a
+                      href="https://discord.com/channels/1033780064996827227/1481342607652032685"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-fuchsia-300 hover:text-fuchsia-200"
+                    >
+                      Discord channel
+                    </a>
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -5209,6 +5333,39 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                   <Button variant="secondary" onClick={() => setProfileOpen(false)} className="rounded-2xl">Cancel</Button>
                   <Button onClick={saveOwnProfile} className="rounded-2xl bg-fuchsia-600 hover:bg-fuchsia-500">Save Profile</Button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {staffToolCopiedOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+            <div className="w-full max-w-md rounded-2xl border border-fuchsia-500/35 bg-zinc-950 p-5">
+              <div className="text-lg font-semibold text-white">Copied to clipboard</div>
+              <div className="mt-2 text-sm text-zinc-400">
+                Post the copied block in the designated Discord channel.
+              </div>
+              <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-300">
+                Target:
+                {' '}
+                <a
+                  href="https://discord.com/channels/1033780064996827227/1481342607652032685"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-fuchsia-300 hover:text-fuchsia-200"
+                >
+                  https://discord.com/channels/1033780064996827227/1481342607652032685
+                </a>
+              </div>
+              <div className="mt-4 flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setStaffToolCopiedOpen(false)}
+                  className="rounded-2xl border border-white/15 bg-black/25 text-zinc-100 hover:bg-white/10"
+                >
+                  Close
+                </Button>
               </div>
             </div>
           </div>
