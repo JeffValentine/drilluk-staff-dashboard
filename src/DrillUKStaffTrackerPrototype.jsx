@@ -4284,7 +4284,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                           rel="noreferrer"
                           className="mt-3 block rounded-xl border border-fuchsia-500/30 bg-black/35 px-3 py-3 text-sm font-medium text-fuchsia-200 hover:bg-black/50 hover:text-fuchsia-100"
                         >
-                          https://discord.com/channels/1033780064996827227/1481342607652032685
+                          Go to: Punishment Review channel
                         </a>
                       </div>
                     </CardContent>
@@ -5453,7 +5453,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                   rel="noreferrer"
                   className="block rounded-xl border border-fuchsia-500/30 bg-black/35 px-3 py-3 text-sm font-medium text-fuchsia-200 hover:bg-black/50 hover:text-fuchsia-100"
                 >
-                  https://discord.com/channels/1033780064996827227/1481342607652032685
+                  Go to: Punishment Review channel
                 </a>
               </div>
               <div className="mt-4 flex justify-end gap-2">
