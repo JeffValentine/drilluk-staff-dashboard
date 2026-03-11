@@ -4180,16 +4180,21 @@ Discord ID: ${staffToolForm.discordId || ''}
 Reason: ${staffToolForm.reason || ''}
 Clip Link: ${staffToolForm.clipLink || ''}`}</pre>
                   </div>
-                  <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">
-                    After copying, post it here:
-                    {' '}
+                  <div className="rounded-2xl border border-amber-400/35 bg-gradient-to-r from-amber-500/14 to-orange-500/10 p-4">
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <Badge className="border-amber-400/35 bg-amber-500/15 text-amber-100">Post It Here</Badge>
+                      <Badge className="border-white/10 bg-white/10 text-zinc-100">Required next step</Badge>
+                    </div>
+                    <div className="text-sm text-zinc-200">
+                      After copying, post the formatted block in this Discord channel:
+                    </div>
                     <a
                       href="https://discord.com/channels/1033780064996827227/1481342607652032685"
                       target="_blank"
                       rel="noreferrer"
-                      className="text-fuchsia-300 hover:text-fuchsia-200"
+                      className="mt-3 block rounded-xl border border-fuchsia-500/30 bg-black/35 px-3 py-3 text-sm font-medium text-fuchsia-200 hover:bg-black/50 hover:text-fuchsia-100"
                     >
-                      Discord channel
+                      https://discord.com/channels/1033780064996827227/1481342607652032685
                     </a>
                   </div>
                 </CardContent>
@@ -5345,14 +5350,16 @@ Clip Link: ${staffToolForm.clipLink || ''}`}</pre>
               <div className="mt-2 text-sm text-zinc-400">
                 Post the copied block in the designated Discord channel.
               </div>
-              <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-300">
-                Target:
-                {' '}
+              <div className="mt-4 rounded-2xl border border-amber-400/35 bg-gradient-to-r from-amber-500/14 to-orange-500/10 p-4">
+                <div className="mb-2 flex items-center gap-2">
+                  <Badge className="border-amber-400/35 bg-amber-500/15 text-amber-100">Post It Here</Badge>
+                  <Badge className="border-white/10 bg-white/10 text-zinc-100">Discord target</Badge>
+                </div>
                 <a
                   href="https://discord.com/channels/1033780064996827227/1481342607652032685"
                   target="_blank"
                   rel="noreferrer"
-                  className="text-fuchsia-300 hover:text-fuchsia-200"
+                  className="block rounded-xl border border-fuchsia-500/30 bg-black/35 px-3 py-3 text-sm font-medium text-fuchsia-200 hover:bg-black/50 hover:text-fuchsia-100"
                 >
                   https://discord.com/channels/1033780064996827227/1481342607652032685
                 </a>
