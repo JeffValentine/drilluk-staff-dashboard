@@ -1231,8 +1231,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     reason: '',
     clipLink: '',
   });
-  const [staffToolsSection, setStaffToolsSection] = useState('punish');
-  const [staffToolsPunishSection, setStaffToolsPunishSection] = useState('review-form');
+  const [staffToolsSection, setStaffToolsSection] = useState('');
+  const [staffToolsPunishSection, setStaffToolsPunishSection] = useState('');
   const [staffToolCopiedOpen, setStaffToolCopiedOpen] = useState(false);
   const ownProfileFileInputRef = useRef(null);
   const [activeUsersOpen, setActiveUsersOpen] = useState(false);
@@ -4112,7 +4112,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() => setStaffToolsSection('punish')}
+                      onClick={() => {
+                        setStaffToolsSection('punish');
+                        setStaffToolsPunishSection('');
+                      }}
                       className={`rounded-full border px-3 py-1.5 text-xs ${
                         staffToolsSection === 'punish'
                           ? 'border-fuchsia-500/40 bg-fuchsia-500/18 text-fuchsia-200'
@@ -4139,6 +4142,51 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                   )}
                 </CardContent>
               </Card>
+
+              {!staffToolsSection && (
+                <Card className="border-white/10 bg-white/5">
+                  <CardHeader>
+                    <CardTitle>Select a Tool</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-300">
+                      Choose a tool category first. Nothing opens until you explicitly select it.
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStaffToolsSection('punish');
+                        setStaffToolsPunishSection('');
+                      }}
+                      className="w-full rounded-2xl border border-fuchsia-500/30 bg-gradient-to-r from-fuchsia-500/10 to-indigo-500/10 p-4 text-left transition hover:border-fuchsia-400/40 hover:bg-fuchsia-500/12"
+                    >
+                      <div className="text-sm font-semibold text-white">Punish</div>
+                      <div className="mt-1 text-xs text-zinc-400">Discord review forms and punishment formatting tools.</div>
+                    </button>
+                  </CardContent>
+                </Card>
+              )}
+
+              {staffToolsSection === 'punish' && !staffToolsPunishSection && (
+                <Card className="border-white/10 bg-white/5">
+                  <CardHeader>
+                    <CardTitle>Punish Tools</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-300">
+                      Select the exact punish tool you want to open.
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setStaffToolsPunishSection('review-form')}
+                      className="w-full rounded-2xl border border-cyan-500/30 bg-gradient-to-r from-cyan-500/10 to-sky-500/10 p-4 text-left transition hover:border-cyan-400/40 hover:bg-cyan-500/12"
+                    >
+                      <div className="text-sm font-semibold text-white">Review Form</div>
+                      <div className="mt-1 text-xs text-zinc-400">Generate a Discord-ready report block with license, Discord ID, reason, and clip link.</div>
+                    </button>
+                  </CardContent>
+                </Card>
+              )}
 
               {staffToolsSection === 'punish' && staffToolsPunishSection === 'review-form' && (
                 <div className="grid gap-4 xl:grid-cols-[0.95fr,1.05fr]">
