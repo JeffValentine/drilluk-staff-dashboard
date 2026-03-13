@@ -4728,9 +4728,12 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 <div className="space-y-4">
                   <Card className="border-white/10 bg-white/5">
                     <CardHeader>
-                      <CardTitle className="flex items-center gap-2"><ClipboardList className="h-5 w-5 text-fuchsia-300" /> Role checklist</CardTitle>
+                      <CardTitle className="flex items-center gap-2"><ClipboardList className="h-5 w-5 text-fuchsia-300" /> Manual checklist controls</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
+                      <div className={infoCalloutClass}>
+                        Unified quiz attempts and trainer reviews now drive readiness. These checklist rows remain available as manual sign-off and compatibility controls.
+                      </div>
                       {currentChecks.map(item => {
                         const quiz = dynamicQuizMap[item] || allRuleQuizMap[item];
                         return (
@@ -4756,9 +4759,12 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
                   <Card className="border-white/10 bg-white/5">
                     <CardHeader>
-                      <CardTitle className="flex items-center gap-2"><Star className="h-5 w-5 text-fuchsia-300" /> Core values review</CardTitle>
+                      <CardTitle className="flex items-center gap-2"><Star className="h-5 w-5 text-fuchsia-300" /> Manual core values controls</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
+                      <div className={infoCalloutClass}>
+                        Unified quiz attempts and trainer reviews now drive readiness. These checklist rows remain available as manual sign-off and compatibility controls.
+                      </div>
                       {currentCoreValues.map(item => (
                         <div key={item} className="rounded-xl border border-white/10 bg-black/20 p-3">
                           <label className="flex items-center justify-between gap-3">
@@ -4781,9 +4787,12 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
                   <Card className="border-white/10 bg-white/5">
                     <CardHeader>
-                      <CardTitle className="flex items-center gap-2"><ShieldAlert className="h-5 w-5 text-fuchsia-300" /> Permissions and actions</CardTitle>
+                      <CardTitle className="flex items-center gap-2"><ShieldAlert className="h-5 w-5 text-fuchsia-300" /> Manual permissions controls</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
+                      <div className={infoCalloutClass}>
+                        Unified quiz attempts and trainer reviews now drive readiness. These checklist rows remain available as manual sign-off and compatibility controls.
+                      </div>
                       {currentPermissions.map(item => {
                         const quiz = dynamicQuizMap[item] || permissionQuizMap[item];
                         return (
@@ -4826,6 +4835,9 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                       <CardTitle className="flex items-center gap-2"><BookOpen className="h-5 w-5 text-fuchsia-300" /> Training logbook history</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
+                      <div className={infoCalloutClass}>
+                        Unified quiz attempts and trainer reviews now drive readiness. These checklist rows remain available as manual sign-off and compatibility controls.
+                      </div>
                       {!(selected.trainingLogs || []).length && (
                         <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">
                           No shared training log entries yet.
@@ -7149,6 +7161,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   );
 }
  
+
 
 
 
