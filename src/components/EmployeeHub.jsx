@@ -41,6 +41,7 @@ export default function EmployeeHub({
   readinessPercent,
   activeQuizSummaries,
   quizHistory,
+  getReadinessPercent,
 }) {
   return (
     <div className="grid items-start gap-4 xl:grid-cols-[380px,1fr]">
@@ -225,4 +226,5 @@ export default function EmployeeHub({
     </div>
   );
 }
+
 
