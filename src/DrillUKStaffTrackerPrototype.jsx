@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Search, Plus, Shield, GraduationCap, CheckCircle2, Users, ArrowUpRight, ClipboardList, Star, HelpCircle, ExternalLink, BookOpen, MessageSquareWarning, Gavel, Swords, FileVideo, Radio, LifeBuoy, ShieldAlert, Upload, Trash2, KeyRound, Copy } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -647,21 +647,6 @@ const initialStaff = [
   },
 ];
 
-function legacyCompletionPercent(record) {
-  const checkValues = Object.values(record.checks || {});
-  const valueValues = Object.values(record.values || {});
-  const permissionValues = Object.values(record.permissions || {});
-  const total = checkValues.length + valueValues.length + permissionValues.length;
-  const done = [...checkValues, ...valueValues, ...permissionValues].filter(Boolean).length;
-  return total ? Math.round((done / total) * 100) : 0;
-}
-
-function normalizeReviewStatus(status) {
-  if (status === 'reviewed' || status === 'approved') return 'approved';
-  if (status === 'failed_review' || status === 'needs_retake') return 'needs_retake';
-  return 'pending';
-}
-
 function toDatabaseReviewStatus(status) {
   if (status === 'approved') return 'reviewed';
   if (status === 'needs_retake') return 'failed_review';
@@ -689,7 +674,7 @@ function buildReviewSummary(requiredDefinitions, member, getProgress, getAttempt
   const retake = summaries.filter(item => item.reviewStatus === 'needs_retake').length;
   const readiness = summaries.length
     ? Math.round(summaries.reduce((sum, item) => sum + item.progressPercent, 0) / summaries.length)
-    : legacyCompletionPercent(member);
+    : 0;
   return {
     total: summaries.length,
     completed,
@@ -708,10 +693,6 @@ function getTrainingRecommendation(member, summary) {
   if (summary.approved < summary.total) return 'approve ' + member.name + "'s completed quiz attempts or add trainer notes.";
   if (!member.signedOff) return 'sign off ' + member.name + ' once coaching notes are complete.';
   return 'review ' + member.name + ' for ' + member.promotion + '.';
-}
-
-function emptyManualChecks() {
-  return { checks: {}, values: {}, permissions: {} };
 }
 
 function statusColor(status) {
@@ -1198,7 +1179,7 @@ function QuizHint({ item, answer, category }) {
       >
         <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-fuchsia-200">
           <HelpCircle className="h-3.5 w-3.5" />
-          Quiz check {category ? `ï¿½ ${category}` : ''}
+          Quiz check {category ? `ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½ ${category}` : ''}
         </div>
         <span className="text-[11px] text-zinc-400">{open ? 'Hide' : 'Show'}</span>
       </button>
@@ -1344,12 +1325,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     ranks: false,
     audit: false,
     managedQuiz: false,
-  });
-  const [quizState, setQuizState] = useState({
-    role: { started: false, score: null, answers: {} },
-    core: { started: false, score: null, answers: {} },
-    permission: { started: false, score: null, answers: {} },
-  });
+  });
   const deferredQuery = useDeferredValue(query);
   const deferredSessionUserQuery = useDeferredValue(sessionUserQuery);
   const deferredDisciplineUserQuery = useDeferredValue(disciplineUserQuery);
@@ -1515,9 +1491,9 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       permissions: row.permissions || Object.fromEntries(dynamicPermissions.map(item => [item.title, false])),
       values: row.values || Object.fromEntries(dynamicCoreValues.map(item => [item.title, false])),
       disciplinary: row.disciplinary || { warnings: 0, actions: 0, logs: [] },
-      quizHistory: Array.isArray(row.quiz_history) ? row.quiz_history : [],
+      quizHistory: [],
       trainingLogs: Array.isArray(row.training_logs) ? row.training_logs : [],
-      assignedQuizKeys: Array.isArray(row.assigned_quiz_keys) ? row.assigned_quiz_keys.map(value => String(value || '')).filter(Boolean) : [],
+      assignedQuizKeys: [],
       notes: row.notes || '',
     }));
     const shouldPreserveLocalSelected = Date.now() - lastLocalStaffEditRef.current < 1400;
@@ -2111,8 +2087,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       const historyFromUnified = unifiedQuizHistoryByStaff.get(member.id);
       return {
         ...member,
-        assignedQuizKeys: assignedFromUnified ? Array.from(assignedFromUnified).sort((a, b) => a.localeCompare(b)) : member.assignedQuizKeys,
-        quizHistory: historyFromUnified || member.quizHistory,
+        assignedQuizKeys: Array.from(assignedFromUnified || []).sort((a, b) => a.localeCompare(b)),
+        quizHistory: historyFromUnified || [],
       };
     });
   }, [staff, unifiedAssignedQuizKeysByStaff, unifiedQuizHistoryByStaff]);
@@ -2352,41 +2328,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     if ((member.assignedQuizKeys || []).includes(definition.key)) return true;
     return definition.rankKey === member.role;
   }
-
-  const quizItemsByCategory = useMemo(() => {
-    if (!selected) return { role: [], core: [], permission: [] };
-    const build = (category) =>
-      checkboxCatalog
-        .filter(item => item.category === category && itemMatchesRank(item, selected.role))
-        .map(item => {
-          const payload = parseQuizPayload(item.answer);
-          const primaryCorrect = payload.correct[0] || '';
-          const falseOptions = payload.manual
-            ? (payload.wrong || []).map(v => String(v || '').trim()).filter(Boolean).slice(0, 3)
-            : buildRuleAlignedFalseAnswers({
-              title: item.title,
-              question: item.question,
-              correct: primaryCorrect,
-              existingWrong: payload.wrong,
-              bracketTag: payload.bracket,
-            });
-          const options = shuffleArray([primaryCorrect, ...falseOptions].filter(Boolean));
-          return {
-            id: item.id,
-            title: item.title,
-            question: item.question || item.title,
-            correct: primaryCorrect,
-            options,
-          };
-        })
-        .filter(item => item.correct);
-
-    return {
-      role: build('role'),
-      core: build('core'),
-      permission: build('permission'),
-    };
-  }, [checkboxCatalog, selected]);
+
   const knowledgeQuizDefinitions = useMemo(() => {
     const categoryLabels = {
       role: 'Entry Quiz',
@@ -2491,11 +2433,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           return {
             ...definition,
             sortLabel: definition.kind === 'pack'
-              ? `${rankLabel(definition.rankKey)} ï¿½ ${definition.badge}`
+              ? `${rankLabel(definition.rankKey)} ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½ ${definition.badge}`
               : definition.kind === 'mandatory'
                 ? 'All trainees'
                 : definition.rankKey
-                  ? `${rankLabel(definition.rankKey)} ï¿½ Additional`
+                  ? `${rankLabel(definition.rankKey)} ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½ Additional`
                   : 'Additional quiz',
             sortWeight: sortMeta,
           };
@@ -2711,11 +2653,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         return {
           ...definition,
           sortLabel: definition.kind === 'pack'
-            ? `${rankLabel(definition.rankKey)} ï¿½ ${definition.badge}`
+            ? `${rankLabel(definition.rankKey)} ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½ ${definition.badge}`
             : definition.kind === 'mandatory'
               ? 'All trainees'
               : definition.rankKey
-                ? `${rankLabel(definition.rankKey)} ï¿½ Additional`
+                ? `${rankLabel(definition.rankKey)} ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½ Additional`
                 : 'Additional quiz',
           sortWeight: sortMeta,
         };
@@ -2837,9 +2779,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       values: member.values || {},
       permissions: member.permissions || {},
       disciplinary: member.disciplinary || { warnings: 0, actions: 0, logs: [] },
-      quiz_history: Array.isArray(member.quizHistory) ? member.quizHistory : [],
       training_logs: Array.isArray(member.trainingLogs) ? member.trainingLogs : [],
-      assigned_quiz_keys: Array.isArray(member.assignedQuizKeys) ? member.assignedQuizKeys : [],
       notes: member.notes || '',
       updated_by: authUser?.id || null,
     };
@@ -3276,83 +3216,6 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     });
     setAddStaffCardFile(null);
     setAddStaffOpen(true);
-  }
-
-  function startQuiz(category) {
-    setQuizState(prev => ({
-      ...prev,
-      [category]: { started: true, score: null, answers: {} },
-    }));
-  }
-
-  function setQuizAnswer(category, itemId, option) {
-    setQuizState(prev => ({
-      ...prev,
-      [category]: {
-        ...prev[category],
-        answers: { ...prev[category].answers, [itemId]: option },
-      },
-    }));
-  }
-
-  function finishQuiz(category) {
-    if (!selected) return;
-    const items = quizItemsByCategory[category] || [];
-    if (!items.length) return;
-
-    const answered = quizState[category].answers || {};
-    const correctCount = items.filter(item => answered[item.id] === item.correct).length;
-    const score = Math.round((correctCount / items.length) * 100);
-    const passed = score >= 90;
-    const attempt = {
-      id: `${Date.now()}-${category}`,
-      at: new Date().toISOString(),
-      category,
-      score,
-      passed,
-      reviewStatus: 'pending',
-      reviewNote: '',
-      reviewedBy: null,
-      reviewedAt: null,
-      items: items.map(item => ({
-        id: item.id,
-        title: item.title,
-        selected: answered[item.id] || null,
-        correct: item.correct,
-        isCorrect: answered[item.id] === item.correct,
-      })),
-    };
-
-    setQuizState(prev => ({
-      ...prev,
-      [category]: { ...prev[category], score },
-    }));
-    const quizHistory = [attempt, ...(selected.quizHistory || [])].slice(0, 200);
-    writeAudit('quiz.submit', selected.id, null, { category, score, passed });
-    if (!passed) {
-      updateSelected({ quizHistory });
-      return;
-    }
-
-    const keys = items.map(item => item.title);
-    if (category === 'role') {
-      updateSelected({
-        checks: { ...selected.checks, ...Object.fromEntries(keys.map(k => [k, true])) },
-        quizHistory,
-      });
-      return;
-    }
-    if (category === 'core') {
-      updateSelected({
-        values: { ...selected.values, ...Object.fromEntries(keys.map(k => [k, true])) },
-        quizHistory,
-      });
-      return;
-    }
-    updateSelected({
-      permissions: { ...selected.permissions, ...Object.fromEntries(keys.map(k => [k, true])) },
-      quizHistory,
-    });
   }
 
   function updateQuizReview(attemptId, patch) {
@@ -4818,7 +4681,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                         <div className="mt-3 space-y-2">
                           {(selected.disciplinary?.logs || []).slice(0, 3).map(log => (
                             <div key={log.id} className="rounded-lg border border-white/10 bg-black/25 p-2 text-xs text-zinc-300">
-                              <div className="font-medium text-white">{log.type} ï¿½ {log.date}</div>
+                              <div className="font-medium text-white">{log.type} ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½ {log.date}</div>
                               <div className="mt-1">{log.reason}</div>
                             </div>
                           ))}
@@ -4850,7 +4713,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                               <Badge className="border-white/10 bg-white/10 text-zinc-200">{entry.trainerName || 'Trainer'}</Badge>
                               <Badge className="border-cyan-500/35 bg-cyan-500/12 text-cyan-200">{entry.bracket || 'General Policy'}</Badge>
                             </div>
-                            <div className="text-xs text-zinc-500">{entry.at ? new Date(entry.at).toLocaleString() : 'ï¿½'}</div>
+                            <div className="text-xs text-zinc-500">{entry.at ? new Date(entry.at).toLocaleString() : 'ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½'}</div>
                           </div>
                           <div className="mt-2 whitespace-pre-wrap text-sm text-zinc-200">{entry.note}</div>
                         </div>
@@ -4914,7 +4777,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <div className="text-sm font-semibold text-white">{sessionTarget?.name || 'No staff selected'}</div>
-                        <div className="mt-1 text-xs text-zinc-400">{sessionTarget ? `${sessionTarget.role} ï¿½ Trainer: ${sessionTarget.trainer}` : 'Select a staff member to start a training session.'}</div>
+                        <div className="mt-1 text-xs text-zinc-400">{sessionTarget ? `${sessionTarget.role} ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½ Trainer: ${sessionTarget.trainer}` : 'Select a staff member to start a training session.'}</div>
                       </div>
                       {sessionTarget && (
                         <Badge className={`${statusColor(sessionTarget.status)} px-2 text-[10px]`}>{sessionTarget.status}</Badge>
@@ -4961,7 +4824,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                       <div key={attempt.id} className="rounded-xl border border-white/10 bg-black/20 p-3">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="text-sm font-semibold text-white">
-                            {attempt.category?.toUpperCase?.() || 'QUIZ'} ï¿½ {new Date(attempt.at).toLocaleString()}
+                            {attempt.category?.toUpperCase?.() || 'QUIZ'} ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½ {new Date(attempt.at).toLocaleString()}
                           </div>
                           <Badge className={attempt.passed ? 'border-emerald-500/35 bg-emerald-500/15 text-emerald-200' : 'border-red-500/35 bg-red-500/15 text-red-200'}>
                             {attempt.score}% {attempt.passed ? 'Pass' : 'Fail'}
@@ -4978,7 +4841,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                             Review: {attempt.reviewStatus || 'pending'}
                           </Badge>
                           {attempt.reviewedBy && (
-                            <span className="text-zinc-500">By {attempt.reviewedBy}{attempt.reviewedAt ? ` ï¿½ ${new Date(attempt.reviewedAt).toLocaleString()}` : ''}</span>
+                            <span className="text-zinc-500">By {attempt.reviewedBy}{attempt.reviewedAt ? ` ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½ ${new Date(attempt.reviewedAt).toLocaleString()}` : ''}</span>
                           )}
                         </div>
                         <div className="mt-3 space-y-2">
@@ -5068,7 +4931,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                             <Badge className="border-white/10 bg-white/10 text-zinc-200">{entry.trainerName || 'Trainer'}</Badge>
                             <Badge className="border-cyan-500/35 bg-cyan-500/12 text-cyan-200">{entry.bracket || 'General Policy'}</Badge>
                           </div>
-                          <div className="text-xs text-zinc-500">{entry.at ? new Date(entry.at).toLocaleString() : 'ï¿½'}</div>
+                          <div className="text-xs text-zinc-500">{entry.at ? new Date(entry.at).toLocaleString() : 'ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½'}</div>
                         </div>
                         <div className="mt-2 whitespace-pre-wrap text-sm text-zinc-200">{entry.note}</div>
                       </div>
@@ -5895,11 +5758,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                               </div>
                               <div className="min-w-0">
                                 <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">Target</div>
-                                <div className="truncate text-sm text-zinc-300">{log.target_id || 'ï¿½'}</div>
+                                <div className="truncate text-sm text-zinc-300">{log.target_id || 'ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½'}</div>
                               </div>
                               <div className="text-right">
                                 <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">When</div>
-                                <div className="text-sm text-zinc-300">{log.created_at ? new Date(log.created_at).toLocaleString() : 'ï¿½'}</div>
+                                <div className="text-sm text-zinc-300">{log.created_at ? new Date(log.created_at).toLocaleString() : 'ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½'}</div>
                               </div>
                               {!!changedFields.length && (
                                 <div className="md:col-span-5">
@@ -6214,7 +6077,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="text-lg font-semibold text-white">
-                      {employeeQuickView === 'tracker' ? 'Staff Tracker Snapshot' : employeeQuickView === 'session' ? 'Training Session Snapshot' : 'Progression Snapshot'} ï¿½ {selected.name}
+                      {employeeQuickView === 'tracker' ? 'Staff Tracker Snapshot' : employeeQuickView === 'session' ? 'Training Session Snapshot' : 'Progression Snapshot'} ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½ {selected.name}
                     </div>
                     <Badge className={roleColor(selected.role)}>{rankLabel(selected.role)}</Badge>
                     <Badge className={statusColor(selected.status)}>{selected.status}</Badge>
@@ -6292,7 +6155,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                                 <Badge className="border-white/10 bg-white/10 text-zinc-200">{entry.trainerName || 'Trainer'}</Badge>
                                 <Badge className="border-cyan-500/35 bg-cyan-500/12 text-cyan-200">{entry.bracket || 'General Policy'}</Badge>
                               </div>
-                              <div className="text-xs text-zinc-500">{entry.at ? new Date(entry.at).toLocaleString() : 'ï¿½'}</div>
+                              <div className="text-xs text-zinc-500">{entry.at ? new Date(entry.at).toLocaleString() : 'ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½'}</div>
                             </div>
                             <div className="mt-2 text-sm text-zinc-200">{entry.note}</div>
                           </div>
@@ -6321,9 +6184,9 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                     <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                       <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Session notes snapshot</div>
                       <div className="mt-3 space-y-3 text-sm text-zinc-300">
-                        <div><span className="text-zinc-500">Strong sides:</span> {selected.strongSides || 'ï¿½'}</div>
-                        <div><span className="text-zinc-500">Attention points:</span> {selected.attentionPoints || 'ï¿½'}</div>
-                        <div><span className="text-zinc-500">General notes:</span> {selected.notes || 'ï¿½'}</div>
+                        <div><span className="text-zinc-500">Strong sides:</span> {selected.strongSides || 'ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½'}</div>
+                        <div><span className="text-zinc-500">Attention points:</span> {selected.attentionPoints || 'ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½'}</div>
+                        <div><span className="text-zinc-500">General notes:</span> {selected.notes || 'ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½'}</div>
                       </div>
                     </div>
                   </div>
@@ -6335,7 +6198,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div>
                               <div className="text-sm font-semibold text-white">{attempt.title || attempt.quizKey || attempt.category}</div>
-                              <div className="mt-1 text-xs text-zinc-500">{attempt.at ? new Date(attempt.at).toLocaleString() : 'ï¿½'}</div>
+                              <div className="mt-1 text-xs text-zinc-500">{attempt.at ? new Date(attempt.at).toLocaleString() : 'ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½'}</div>
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
                               <Badge className={attempt.passed ? 'border-emerald-500/35 bg-emerald-500/12 text-emerald-100' : 'border-red-500/35 bg-red-500/12 text-red-100'}>{attempt.score}%</Badge>
@@ -6368,7 +6231,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                   <div className="rounded-3xl border border-white/10 bg-black/25 p-5">
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Signed off</div><div className="mt-2 text-lg font-semibold text-white">{selected.signedOff ? 'Yes' : 'No'}</div></div>
-                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Promotion target</div><div className="mt-2 text-lg font-semibold text-white">{selected.promotion || 'ï¿½'}</div></div>
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Promotion target</div><div className="mt-2 text-lg font-semibold text-white">{selected.promotion || 'ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½'}</div></div>
                       <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Warnings</div><div className="mt-2 text-lg font-semibold text-white">{selected.disciplinary?.warnings || 0}</div></div>
                       <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Actions</div><div className="mt-2 text-lg font-semibold text-white">{selected.disciplinary?.actions || 0}</div></div>
                     </div>
@@ -6391,7 +6254,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
             <div className="max-h-[88vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-white/15 bg-zinc-950 p-5">
               <div className="mb-4 flex items-center justify-between">
                 <div>
-                  <div className="text-lg font-semibold text-white">Assign Quiz ï¿½ {selected.name}</div>
+                  <div className="text-lg font-semibold text-white">Assign Quiz ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½ {selected.name}</div>
                   <div className="mt-1 text-sm text-zinc-400">Assigned quizzes appear in My Progress. Rank-matched quizzes already show automatically.</div>
                 </div>
                 <button type="button" onClick={() => setAssignQuizOpen(false)} className="text-sm text-zinc-400 hover:text-white">Close</button>
@@ -6863,7 +6726,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
             <div className="w-full max-w-2xl rounded-2xl border border-fuchsia-500/35 bg-zinc-950 p-5">
               <div className="mb-4 flex items-center justify-between">
-                <div className="text-lg font-semibold text-white">Session Notes ï¿½ {sessionTarget.name}</div>
+                <div className="text-lg font-semibold text-white">Session Notes ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½ {sessionTarget.name}</div>
                 <button type="button" onClick={() => setSessionNotesOpen(false)} className="text-sm text-zinc-400 hover:text-white">Close</button>
               </div>
               <div className="space-y-4">
@@ -6904,7 +6767,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
             <div className="w-full max-w-xl rounded-2xl border border-emerald-500/35 bg-zinc-950 p-5">
               <div className="mb-4 flex items-center justify-between">
-                <div className="text-lg font-semibold text-white">Session Actions ï¿½ {sessionTarget.name}</div>
+                <div className="text-lg font-semibold text-white">Session Actions ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½ {sessionTarget.name}</div>
                 <button type="button" onClick={() => setSessionActionsOpen(false)} className="text-sm text-zinc-400 hover:text-white">Close</button>
               </div>
               <div className="space-y-4">
