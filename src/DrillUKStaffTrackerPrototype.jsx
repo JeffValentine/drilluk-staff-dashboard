@@ -6325,7 +6325,12 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                               <div className="text-sm font-semibold text-white">{attempt.title || attempt.quizKey || attempt.category}</div>
                               <div className="mt-1 text-xs text-zinc-500">{attempt.at ? new Date(attempt.at).toLocaleString() : 'ï¿½'}</div>
                             </div>
-                            <Badge className={attempt.passed ? 'border-emerald-500/35 bg-emerald-500/12 text-emerald-100' : 'border-red-500/35 bg-red-500/12 text-red-100'}>{attempt.score}%</Badge>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge className={attempt.passed ? 'border-emerald-500/35 bg-emerald-500/12 text-emerald-100' : 'border-red-500/35 bg-red-500/12 text-red-100'}>{attempt.score}%</Badge>
+                              {normalizeReviewStatus(attempt.reviewStatus) === 'approved' && <Badge className="border-emerald-500/35 bg-emerald-500/12 text-emerald-100">Approved</Badge>}
+                              {normalizeReviewStatus(attempt.reviewStatus) === 'pending' && attempt.passed && <Badge className="border-amber-500/35 bg-amber-500/12 text-amber-100">Pending Review</Badge>}
+                              {normalizeReviewStatus(attempt.reviewStatus) === 'needs_retake' && <Badge className="border-red-500/35 bg-red-500/12 text-red-100">Retake</Badge>}
+                            </div>
                           </div>
                           {attempt.reviewNote && <div className="mt-2 text-sm text-zinc-300">{attempt.reviewNote}</div>}
                         </div>
@@ -6358,10 +6363,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                   </div>
                   <div className="rounded-3xl border border-white/10 bg-black/25 p-5 lg:col-span-2">
                     <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Progress breakdown</div>
-                    <div className="mt-4 grid gap-3 md:grid-cols-3">
-                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-sm font-medium text-white">Entry Quiz</div><div className="mt-1 text-3xl font-semibold text-white">{checklistPercent(currentChecks, selected.checks)}%</div></div>
-                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-sm font-medium text-white">Core Values</div><div className="mt-1 text-3xl font-semibold text-white">{checklistPercent(currentCoreValues, selected.values)}%</div></div>
-                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-sm font-medium text-white">Staff Menu</div><div className="mt-1 text-3xl font-semibold text-white">{checklistPercent(currentPermissions, selected.permissions)}%</div></div>
+                    <div className="mt-4 grid gap-3 md:grid-cols-4">
+                      <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/8 p-4"><div className="text-sm font-medium text-emerald-200">Approved</div><div className="mt-1 text-3xl font-semibold text-white">{selectedTrainingSummary.approved}</div></div>
+                      <div className="rounded-2xl border border-amber-500/20 bg-amber-500/8 p-4"><div className="text-sm font-medium text-amber-200">Pending Review</div><div className="mt-1 text-3xl font-semibold text-white">{selectedTrainingSummary.pending}</div></div>
+                      <div className="rounded-2xl border border-red-500/20 bg-red-500/8 p-4"><div className="text-sm font-medium text-red-200">Retake Required</div><div className="mt-1 text-3xl font-semibold text-white">{selectedTrainingSummary.retake}</div></div>
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-sm font-medium text-white">Required Quizzes</div><div className="mt-1 text-3xl font-semibold text-white">{selectedTrainingSummary.total}</div></div>
                     </div>
                   </div>
                 </div>
@@ -7143,6 +7149,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   );
 }
  
+
 
 
 
