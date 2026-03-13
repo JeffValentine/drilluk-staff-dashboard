@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function EmployeeHub({
@@ -37,13 +38,16 @@ export default function EmployeeHub({
   onWarning,
   onDiscipline,
   onAssignQuiz,
+  readinessPercent,
+  activeQuizSummaries,
+  quizHistory,
 }) {
   return (
     <div className="grid items-start gap-4 xl:grid-cols-[380px,1fr]">
       <Card className="border-white/10 bg-white/5 xl:sticky xl:top-6">
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>Employee Directory</span>
+            <span>Staff Team</span>
             <div className="flex items-center gap-2">
               <button type="button" onClick={() => setFilterOpen(v => !v)} className="rounded-xl border border-white/10 bg-black/30 px-3 py-1 text-xs text-zinc-300 hover:bg-white/10">
                 Filters
@@ -115,6 +119,13 @@ export default function EmployeeHub({
                     </div>
                   </div>
                 </div>
+                <div className="mt-4">
+                  <div className="mb-2 flex items-center justify-between text-xs uppercase tracking-[0.2em] text-zinc-400">
+                    <span>Readiness</span>
+                    <span>{getReadinessPercent(member)}%</span>
+                  </div>
+                  <Progress value={getReadinessPercent(member)} className="h-2 bg-white/10" />
+                </div>
               </button>
             ))}
           </div>
@@ -124,7 +135,7 @@ export default function EmployeeHub({
       <div className="space-y-4">
         <Card className="border-white/10 bg-white/5">
           <CardHeader>
-            <CardTitle>Employee Workspace</CardTitle>
+            <CardTitle>Staff Team Overview</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 xl:grid-cols-[320px,1fr]">
@@ -148,7 +159,7 @@ export default function EmployeeHub({
                     <div className="rounded-2xl border border-white/10 bg-white/5 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Trainer</div><div className="mt-2 text-sm text-white">{selected?.trainer}</div></div>
                     <div className="rounded-2xl border border-white/10 bg-white/5 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Staff since</div><div className="mt-2 text-sm text-white">{selected?.staffSince}</div></div>
                     <div className="rounded-2xl border border-white/10 bg-white/5 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Rank since</div><div className="mt-2 text-sm text-white">{selected?.modSince}</div></div>
-                    <div className="rounded-2xl border border-white/10 bg-white/5 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Readiness</div><div className="mt-2 text-sm text-white">{selected?.readiness}%</div></div>
+                    <div className="rounded-2xl border border-white/10 bg-white/5 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Readiness</div><div className="mt-2 text-sm text-white">{readinessPercent}%</div></div>
                   </div>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -163,7 +174,55 @@ export default function EmployeeHub({
             </div>
           </CardContent>
         </Card>
+
+        <div className="grid gap-4 xl:grid-cols-[0.9fr,1.1fr]">
+          <Card className="border-white/10 bg-white/5">
+            <CardHeader>
+              <CardTitle>Active Quizzes</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {!activeQuizSummaries?.length && (
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">No active quizzes for this staff member yet.</div>
+              )}
+              {(activeQuizSummaries || []).map(quiz => (
+                <div key={quiz.key} className="rounded-xl border border-white/10 bg-black/20 p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="text-sm font-semibold text-white">{quiz.title}</div>
+                    <Badge className="border-emerald-500/35 bg-emerald-500/12 text-emerald-100">{quiz.progress.label}</Badge>
+                    {quiz.assigned && <Badge className="border-cyan-500/35 bg-cyan-500/12 text-cyan-100">Assigned</Badge>}
+                  </div>
+                  <div className="mt-2"><Progress value={quiz.progress.percent} className="h-2 bg-white/10" /></div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card className="border-white/10 bg-white/5">
+            <CardHeader>
+              <CardTitle>Quiz History</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {!quizHistory?.length && (
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">No quiz attempts logged yet.</div>
+              )}
+              {(quizHistory || []).slice(0, 10).map(attempt => (
+                <div key={attempt.id} className="rounded-xl border border-white/10 bg-black/20 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-semibold text-white">{attempt.title || attempt.quizKey || attempt.category}</div>
+                      <div className="mt-1 text-xs text-zinc-500">{new Date(attempt.at).toLocaleString()}</div>
+                    </div>
+                    <Badge className={attempt.passed ? 'border-emerald-500/35 bg-emerald-500/12 text-emerald-100' : 'border-red-500/35 bg-red-500/12 text-red-100'}>
+                      {attempt.score}%
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
 }
+

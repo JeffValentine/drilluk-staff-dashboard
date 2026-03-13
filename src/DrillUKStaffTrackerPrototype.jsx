@@ -1177,6 +1177,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [managementView, setManagementView] = useState('directory');
   const [managementQuery, setManagementQuery] = useState('');
   const [selectedKnowledgeQuizKey, setSelectedKnowledgeQuizKey] = useState('mandatory-general');
+  const [assignQuizOpen, setAssignQuizOpen] = useState(false);
 
   const [staff, setStaff] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -2094,7 +2095,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   }, [sessionTargetId]);
 
   useEffect(() => {
-    const traineeTabs = ['myprogress', 'quizknowledge', 'stafftools'];
+    const traineeTabs = ['myprogress', 'stafftools'];
     const staffTabs = ['employee', 'quizknowledge', 'stafftools', 'management', 'tracker', 'session', 'progression', 'discipline', 'audit', 'ranks', 'checkboxes'];
     const allowed = isStaffInTraining ? traineeTabs : staffTabs;
     const fallback = isStaffInTraining ? 'myprogress' : 'employee';
@@ -2396,10 +2397,20 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       : knowledgeQuizDefinitions;
     return source.map(definition => ({
       ...definition,
-      progressLabel: getKnowledgeQuizProgress(definition, selected).label,
-      progressPercent: getKnowledgeQuizProgress(definition, selected).percent,
+      progressLabel: isStaffInTraining ? getKnowledgeQuizProgress(definition, selected).label : null,
+      progressPercent: isStaffInTraining ? getKnowledgeQuizProgress(definition, selected).percent : null,
     }));
-  }, [getKnowledgeQuizProgress, isStaffInTraining, knowledgeQuizDefinitions, selected]);
+  }, [isStaffInTraining, knowledgeQuizDefinitions, selected]);
+
+  const selectedStaffQuizDefinitions = useMemo(() => {
+    if (!selected) return [];
+    return knowledgeQuizDefinitions
+      .filter(definition => isQuizVisibleForMember(definition, selected))
+      .map(definition => ({
+        ...definition,
+        progress: getKnowledgeQuizProgress(definition, selected),
+      }));
+  }, [knowledgeQuizDefinitions, selected]);
 
   const selectedKnowledgeQuiz = useMemo(
     () => displayedKnowledgeQuizDefinitions.find(item => item.key === selectedKnowledgeQuizKey) || displayedKnowledgeQuizDefinitions[0] || null,
@@ -3452,7 +3463,23 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     closeManagedQuizEditor();
   }
 
+  function openNewManagedQuiz() {
+    openManagedQuizEditor({
+      key: `managed-${Date.now()}`,
+      title: 'New Managed Quiz',
+      description: 'Custom quiz for rank-based or assigned training.',
+      kind: 'managed',
+      rankKey: '',
+      passScore: 90,
+      sourceItems: [],
+    }, null);
+  }
+
   function addManagedQuizQuestion(quizKey) {
+    if (!quizKey) {
+      openNewManagedQuiz();
+      return;
+    }
     const definition = knowledgeQuizDefinitions.find(item => item.key === quizKey);
     if (!definition) return;
     openManagedQuizEditor(definition, null);
@@ -3841,12 +3868,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
             {isStaffInTraining ? (
               <>
                 <TabsTrigger value="myprogress">My Progress</TabsTrigger>
-                <TabsTrigger value="quizknowledge">Quizzes & Knowledge</TabsTrigger>
                 <TabsTrigger value="stafftools">Staff Tools</TabsTrigger>
               </>
             ) : (
               <>
-                <TabsTrigger value="employee">Employee</TabsTrigger>
+                <TabsTrigger value="employee">Staff Team Overview</TabsTrigger>
                 <TabsTrigger value="quizknowledge">Quizzes & Knowledge</TabsTrigger>
                 <TabsTrigger value="stafftools">Staff Tools</TabsTrigger>
                 <TabsTrigger value="management">Management</TabsTrigger>
@@ -3856,7 +3882,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
           {['tracker', 'session', 'progression', 'discipline'].includes(activeMainTab) && (
             <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-black/25 p-2">
-              <Button type="button" onClick={() => setActiveMainTab('employee')} className="rounded-xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">Back to Employee</Button>
+              <Button type="button" onClick={() => setActiveMainTab('employee')} className="rounded-xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">Back to Staff Team Overview</Button>
               <Button type="button" onClick={() => setActiveMainTab('tracker')} className="rounded-xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">Tracker</Button>
               <Button type="button" onClick={() => setActiveMainTab('session')} className="rounded-xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">Training Session</Button>
               <Button type="button" onClick={() => setActiveMainTab('progression')} className="rounded-xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">Progression</Button>
@@ -3898,6 +3924,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               nameSizeClass={nameSizeClass}
               openAddStaffModal={openAddStaffModal}
               canEdit={canEdit}
+              readinessPercent={completionPercent(selected)}
+              activeQuizSummaries={selectedStaffQuizDefinitions}
+              quizHistory={selected?.quizHistory || []}
+              getReadinessPercent={completionPercent}
               onOpenTracker={() => setActiveMainTab('tracker')}
               onOpenSession={() => setActiveMainTab('session')}
               onOpenProgression={() => setActiveMainTab('progression')}
@@ -3911,7 +3941,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 setDisciplineTargetId(selected?.id || null);
                 setDisciplineOpen(true);
               }}
-              onAssignQuiz={() => setActiveMainTab('quizknowledge')}
+              onAssignQuiz={() => setAssignQuizOpen(true)}
             />
           </TabsContent>
 
@@ -5659,6 +5689,42 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           </TabsContent>
         </Tabs>
 
+        {assignQuizOpen && selected && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+            <div className="max-h-[88vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-white/15 bg-zinc-950 p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <div className="text-lg font-semibold text-white">Assign Quiz · {selected.name}</div>
+                  <div className="mt-1 text-sm text-zinc-400">Assigned quizzes appear in My Progress. Rank-matched quizzes already show automatically.</div>
+                </div>
+                <button type="button" onClick={() => setAssignQuizOpen(false)} className="text-sm text-zinc-400 hover:text-white">Close</button>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {knowledgeQuizDefinitions.map(definition => {
+                  const assigned = (selected.assignedQuizKeys || []).includes(definition.key);
+                  const rankMatched = definition.kind === 'mandatory' || definition.rankKey === selected.role;
+                  return (
+                    <button
+                      key={`assign-${definition.key}`}
+                      type="button"
+                      onClick={() => toggleQuizAssignment(definition)}
+                      className={`rounded-2xl border p-4 text-left transition ${assigned ? 'border-cyan-400/45 bg-cyan-500/12' : 'border-white/10 bg-black/25 hover:bg-white/5'}`}
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge className={definition.kind === 'mandatory' ? 'border-amber-500/35 bg-amber-500/12 text-amber-100' : 'border-cyan-500/35 bg-cyan-500/12 text-cyan-100'}>{definition.badge}</Badge>
+                        {definition.rankLabel && <Badge className={roleColor(definition.rankKey)}>{definition.rankLabel}</Badge>}
+                        {assigned && <Badge className="border-cyan-500/35 bg-cyan-500/12 text-cyan-100">Assigned</Badge>}
+                        {rankMatched && <Badge className="border-emerald-500/35 bg-emerald-500/12 text-emerald-100">Active by rank</Badge>}
+                      </div>
+                      <div className="mt-3 text-sm font-semibold text-white">{definition.title}</div>
+                      <div className="mt-1 text-xs text-zinc-400">{definition.description}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
         {rosterSyncOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
             <div className="w-full max-w-3xl rounded-2xl border border-cyan-500/35 bg-zinc-950 p-5">
