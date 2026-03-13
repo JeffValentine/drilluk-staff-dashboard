@@ -1178,6 +1178,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [managementQuery, setManagementQuery] = useState('');
   const [selectedKnowledgeQuizKey, setSelectedKnowledgeQuizKey] = useState('mandatory-general');
   const [assignQuizOpen, setAssignQuizOpen] = useState(false);
+  const [employeeQuickView, setEmployeeQuickView] = useState('');
 
   const [staff, setStaff] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -1301,7 +1302,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const deferredCheckboxQuery = useDeferredValue(checkboxQuery);
   const deferredAuditQuery = useDeferredValue(auditQuery);
   const deferredAuditFieldQuery = useDeferredValue(auditFieldQuery);
-  const isEditOverlayOpen = managedQuizEditorOpen || checkboxEditorOpen || addStaffOpen || rosterSyncOpen || profileOpen || disciplineOpen || sessionNotesOpen || sessionActionsOpen;
+  const isEditOverlayOpen = managedQuizEditorOpen || checkboxEditorOpen || addStaffOpen || rosterSyncOpen || profileOpen || disciplineOpen || sessionNotesOpen || sessionActionsOpen || Boolean(employeeQuickView);
   const isSyncLocked = syncPausedByEdit || inputEditingActive || isEditOverlayOpen;
   const hasQueuedSync = pendingSyncFlags.staff || pendingSyncFlags.profiles || pendingSyncFlags.checkbox || pendingSyncFlags.ranks || pendingSyncFlags.audit || pendingSyncFlags.managedQuiz;
   const ruleBracketOptions = useMemo(() => ['General Policy', ...new Set(RULE_FALSE_OPTION_BANKS.map(item => item.tag))], []);
@@ -2432,7 +2433,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         })
         .filter(definition => definition.questions.length);
 
-      return definitions
+      const normalizedUnified = definitions
         .map(definition => {
           const sortMeta = getKnowledgeQuizSortMeta(definition);
           return {
@@ -2446,11 +2447,74 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                   : 'Additional quiz',
             sortWeight: sortMeta,
           };
-        })
+        });
+
+      const unifiedKeys = new Set(normalizedUnified.map(item => item.key));
+      const fallbackPackDefinitions = [];
+      const fallbackGrouped = new Map();
+
+      checkboxCatalog.forEach(item => {
+        if (!['role', 'core', 'permission'].includes(item.category)) return;
+        const payload = parseQuizPayload(item.answer);
+        const primaryCorrect = payload.correct?.[0];
+        if (!primaryCorrect) return;
+        const wrongAnswers = payload.manual
+          ? (payload.wrong || []).map(v => String(v || '').trim()).filter(Boolean).slice(0, 3)
+          : buildRuleAlignedFalseAnswers({
+              title: item.title,
+              question: item.question,
+              correct: primaryCorrect,
+              existingWrong: payload.wrong,
+              bracketTag: payload.bracket,
+            });
+        const scope = sortRankScope(item.ranks || parseRankScope(item.role) || []);
+        (scope.length ? scope : roles).forEach(rank => {
+          const key = `${rank}|${item.category}`;
+          if (unifiedKeys.has(key)) return;
+          if (!fallbackGrouped.has(key)) {
+            fallbackGrouped.set(key, {
+              key,
+              title: `${rankLabel(rank)} ${categoryLabels[item.category]}`,
+              description: `${rankLabel(rank)} ${categoryLabels[item.category].toLowerCase()} built from the current knowledge catalog.`,
+              badge: categoryLabels[item.category],
+              kind: 'pack',
+              rankLabel: rankLabel(rank),
+              rankKey: rank,
+              passScore: 90,
+              sourceType: 'checkbox',
+              sourceItems: [],
+              questions: [],
+            });
+          }
+          const definition = fallbackGrouped.get(key);
+          const options = shuffleArray([primaryCorrect, ...wrongAnswers].filter(Boolean));
+          definition.sourceItems.push({
+            id: item.id,
+            category: payload.bracket || categoryLabels[item.category],
+            question: item.question || item.title,
+            correctAnswer: primaryCorrect,
+            wrongAnswers,
+            sourceCheckbox: item,
+          });
+          definition.questions.push({
+            category: payload.bracket || categoryLabels[item.category],
+            question: item.question || item.title,
+            options,
+            answer: Math.max(options.indexOf(primaryCorrect), 0),
+          });
+        });
+      });
+
+      fallbackPackDefinitions.push(...Array.from(fallbackGrouped.values()).filter(definition => definition.questions.length));
+
+      return [...normalizedUnified, ...fallbackPackDefinitions]
         .sort((a, b) => {
-          if (a.sortWeight.group !== b.sortWeight.group) return a.sortWeight.group - b.sortWeight.group;
-          if (a.sortWeight.rank !== b.sortWeight.rank) return a.sortWeight.rank - b.sortWeight.rank;
-          if (a.sortWeight.category !== b.sortWeight.category) return a.sortWeight.category - b.sortWeight.category;
+          if (a.sortWeight?.group !== undefined && b.sortWeight?.group !== undefined && a.sortWeight.group !== b.sortWeight.group) return a.sortWeight.group - b.sortWeight.group;
+          const aMeta = a.sortWeight || getKnowledgeQuizSortMeta(a);
+          const bMeta = b.sortWeight || getKnowledgeQuizSortMeta(b);
+          if (aMeta.group !== bMeta.group) return aMeta.group - bMeta.group;
+          if (aMeta.rank !== bMeta.rank) return aMeta.rank - bMeta.rank;
+          if (aMeta.category !== bMeta.category) return aMeta.category - bMeta.category;
           return a.title.localeCompare(b.title);
         });
     }
@@ -4235,21 +4299,21 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           </TabsList>
 
           {['tracker', 'session', 'progression', 'discipline'].includes(activeMainTab) && (
-            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-black/25 p-2">
-              <Button type="button" onClick={() => setActiveMainTab('employee')} className="rounded-xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">Back to Staff Team Overview</Button>
-              <Button type="button" onClick={() => setActiveMainTab('tracker')} className="rounded-xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">Tracker</Button>
-              <Button type="button" onClick={() => setActiveMainTab('session')} className="rounded-xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">Training Session</Button>
-              <Button type="button" onClick={() => setActiveMainTab('progression')} className="rounded-xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">Progression</Button>
-              <Button type="button" onClick={() => setActiveMainTab('discipline')} className="rounded-xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">Discipline</Button>
+            <div className="flex flex-wrap items-center gap-2 rounded-3xl border border-white/10 bg-gradient-to-r from-black/35 via-fuchsia-950/20 to-cyan-950/20 p-2.5 shadow-[0_18px_50px_rgba(0,0,0,0.28)]">
+              <Button type="button" onClick={() => setActiveMainTab('employee')} className="rounded-2xl border border-fuchsia-400/35 bg-fuchsia-500/12 text-fuchsia-100 hover:bg-fuchsia-500/18">Back to Staff Team Overview</Button>
+              <Button type="button" onClick={() => setActiveMainTab('tracker')} className="rounded-2xl border border-cyan-400/35 bg-cyan-500/12 text-cyan-100 hover:bg-cyan-500/18">Tracker</Button>
+              <Button type="button" onClick={() => setActiveMainTab('session')} className="rounded-2xl border border-emerald-400/35 bg-emerald-500/12 text-emerald-100 hover:bg-emerald-500/18">Training Session</Button>
+              <Button type="button" onClick={() => setActiveMainTab('progression')} className="rounded-2xl border border-amber-400/35 bg-amber-500/12 text-amber-100 hover:bg-amber-500/18">Progression</Button>
+              <Button type="button" onClick={() => setActiveMainTab('discipline')} className="rounded-2xl border border-red-400/35 bg-red-500/12 text-red-100 hover:bg-red-500/18">Discipline</Button>
             </div>
           )}
 
           {['audit', 'ranks', 'checkboxes'].includes(activeMainTab) && (
-            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-black/25 p-2">
-              <Button type="button" onClick={() => setActiveMainTab(activeMainTab === 'checkboxes' ? 'quizknowledge' : 'management')} className="rounded-xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">Back</Button>
-              <Button type="button" onClick={() => setActiveMainTab('checkboxes')} className="rounded-xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">Quiz Builder</Button>
-              <Button type="button" onClick={() => setActiveMainTab('audit')} className="rounded-xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">Audit Log</Button>
-              <Button type="button" onClick={() => setActiveMainTab('ranks')} className="rounded-xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">Rank Display</Button>
+            <div className="flex flex-wrap items-center gap-2 rounded-3xl border border-white/10 bg-gradient-to-r from-black/35 via-fuchsia-950/20 to-cyan-950/20 p-2.5 shadow-[0_18px_50px_rgba(0,0,0,0.28)]">
+              <Button type="button" onClick={() => setActiveMainTab(activeMainTab === 'checkboxes' ? 'quizknowledge' : 'management')} className="rounded-2xl border border-fuchsia-400/35 bg-fuchsia-500/12 text-fuchsia-100 hover:bg-fuchsia-500/18">Back</Button>
+              <Button type="button" onClick={() => setActiveMainTab('checkboxes')} className="rounded-2xl border border-cyan-400/35 bg-cyan-500/12 text-cyan-100 hover:bg-cyan-500/18">Quiz Builder</Button>
+              <Button type="button" onClick={() => setActiveMainTab('audit')} className="rounded-2xl border border-amber-400/35 bg-amber-500/12 text-amber-100 hover:bg-amber-500/18">Audit Log</Button>
+              <Button type="button" onClick={() => setActiveMainTab('ranks')} className="rounded-2xl border border-emerald-400/35 bg-emerald-500/12 text-emerald-100 hover:bg-emerald-500/18">Rank Display</Button>
             </div>
           )}
 
@@ -4282,9 +4346,9 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               activeQuizSummaries={selectedStaffQuizDefinitions}
               quizHistory={selected?.quizHistory || []}
               getReadinessPercent={completionPercent}
-              onOpenTracker={() => setActiveMainTab('tracker')}
-              onOpenSession={() => setActiveMainTab('session')}
-              onOpenProgression={() => setActiveMainTab('progression')}
+              onOpenTracker={() => setEmployeeQuickView('tracker')}
+              onOpenSession={() => setEmployeeQuickView('session')}
+              onOpenProgression={() => setEmployeeQuickView('progression')}
               onWarning={() => {
                 setDisciplineType('Warning');
                 setDisciplineTargetId(selected?.id || null);
@@ -6043,7 +6107,175 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           </TabsContent>
         </Tabs>
 
-        {assignQuizOpen && selected && (
+        {employeeQuickView && selected && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+            <div className="max-h-[88vh] w-full max-w-5xl overflow-y-auto rounded-[28px] border border-white/15 bg-zinc-950 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.42)]">
+              <div className="mb-4 flex items-start justify-between gap-4">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="text-lg font-semibold text-white">
+                      {employeeQuickView === 'tracker' ? 'Staff Tracker Snapshot' : employeeQuickView === 'session' ? 'Training Session Snapshot' : 'Progression Snapshot'} · {selected.name}
+                    </div>
+                    <Badge className={roleColor(selected.role)}>{rankLabel(selected.role)}</Badge>
+                    <Badge className={statusColor(selected.status)}>{selected.status}</Badge>
+                  </div>
+                  <div className="mt-1 text-sm text-zinc-400">
+                    {employeeQuickView === 'tracker'
+                      ? 'Compact staff overview without leaving the main dashboard.'
+                      : employeeQuickView === 'session'
+                        ? 'Quick trainer review, notes, and attempt history.'
+                        : 'Progress checkpoints, sign-off state, and readiness.'}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setActiveMainTab(employeeQuickView);
+                      setEmployeeQuickView('');
+                    }}
+                    className="rounded-2xl border border-white/15 bg-black/25 text-zinc-100 hover:bg-white/10"
+                  >
+                    Open Full Page
+                  </Button>
+                  <button type="button" onClick={() => setEmployeeQuickView('')} className="text-sm text-zinc-400 hover:text-white">Close</button>
+                </div>
+              </div>
+
+              {employeeQuickView === 'tracker' && (
+                <div className="grid gap-4 xl:grid-cols-[280px,1fr]">
+                  <div className="rounded-3xl border border-white/10 bg-black/25 p-4">
+                    <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/30">
+                      {selected.profileImage ? (
+                        <img src={selected.profileImage} alt={`${selected.name} profile`} className="h-[320px] w-full object-cover" />
+                      ) : (
+                        <div className="flex h-[320px] items-center justify-center text-sm text-zinc-500">No card image</div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Trainer</div><div className="mt-2 text-sm text-white">{selected.trainer}</div></div>
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Staff Since</div><div className="mt-2 text-sm text-white">{selected.staffSince}</div></div>
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">{rankLabel(selected.role)} Since</div><div className="mt-2 text-sm text-white">{selected.modSince}</div></div>
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Readiness</div><div className="mt-2 text-sm text-white">{completionPercent(selected)}%</div></div>
+                    </div>
+                    <div className="grid gap-4 lg:grid-cols-3">
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Role checklist</div>
+                        <div className="mt-2 text-3xl font-semibold text-white">{checklistPercent(currentChecks, selected.checks)}%</div>
+                        <div className="mt-2 text-xs text-zinc-500">{currentChecks.filter(item => !!selected.checks?.[item]).length} / {currentChecks.length} complete</div>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Core values</div>
+                        <div className="mt-2 text-3xl font-semibold text-white">{checklistPercent(currentCoreValues, selected.values)}%</div>
+                        <div className="mt-2 text-xs text-zinc-500">{currentCoreValues.filter(item => !!selected.values?.[item]).length} / {currentCoreValues.length} complete</div>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Permissions</div>
+                        <div className="mt-2 text-3xl font-semibold text-white">{checklistPercent(currentPermissions, selected.permissions)}%</div>
+                        <div className="mt-2 text-xs text-zinc-500">{currentPermissions.filter(item => !!selected.permissions?.[item]).length} / {currentPermissions.length} complete</div>
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Recent training logbook</div>
+                      <div className="mt-3 space-y-2">
+                        {(selected.trainingLogs || []).slice(0, 4).map(entry => (
+                          <div key={`employee-qv-log-${entry.id}`} className="rounded-xl border border-white/10 bg-black/25 p-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Badge className="border-white/10 bg-white/10 text-zinc-200">{entry.trainerName || 'Trainer'}</Badge>
+                                <Badge className="border-cyan-500/35 bg-cyan-500/12 text-cyan-200">{entry.bracket || 'General Policy'}</Badge>
+                              </div>
+                              <div className="text-xs text-zinc-500">{entry.at ? new Date(entry.at).toLocaleString() : '—'}</div>
+                            </div>
+                            <div className="mt-2 text-sm text-zinc-200">{entry.note}</div>
+                          </div>
+                        ))}
+                        {!(selected.trainingLogs || []).length && <div className="rounded-xl border border-white/10 bg-black/25 p-3 text-sm text-zinc-400">No training log entries yet.</div>}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {employeeQuickView === 'session' && (
+                <div className="grid gap-4 xl:grid-cols-[0.95fr,1.05fr]">
+                  <div className="space-y-4">
+                    <div className="rounded-3xl border border-white/10 bg-black/25 p-4">
+                      <div className="mb-1 flex items-center justify-between text-xs uppercase tracking-[0.18em] text-zinc-500">
+                        <span>Readiness</span>
+                        <span>{completionPercent(selected)}%</span>
+                      </div>
+                      <Progress value={completionPercent(selected)} className="h-2.5 bg-white/10" />
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <Button disabled={!canEdit} onClick={() => setSessionNotesOpen(true)} className="rounded-2xl border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white hover:from-fuchsia-500 hover:to-indigo-500">Open Notes</Button>
+                        <Button disabled={!canEdit} onClick={() => setSessionActionsOpen(true)} className="rounded-2xl border border-emerald-400/40 bg-gradient-to-r from-emerald-600 to-green-500 text-white hover:from-emerald-500 hover:to-green-400">Open Actions</Button>
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Session notes snapshot</div>
+                      <div className="mt-3 space-y-3 text-sm text-zinc-300">
+                        <div><span className="text-zinc-500">Strong sides:</span> {selected.strongSides || '—'}</div>
+                        <div><span className="text-zinc-500">Attention points:</span> {selected.attentionPoints || '—'}</div>
+                        <div><span className="text-zinc-500">General notes:</span> {selected.notes || '—'}</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="rounded-3xl border border-white/10 bg-black/25 p-4">
+                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Recent quiz review history</div>
+                    <div className="mt-3 space-y-3">
+                      {(selected.quizHistory || []).slice(0, 8).map(attempt => (
+                        <div key={`employee-qv-attempt-${attempt.id}`} className="rounded-xl border border-white/10 bg-black/20 p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <div className="text-sm font-semibold text-white">{attempt.title || attempt.quizKey || attempt.category}</div>
+                              <div className="mt-1 text-xs text-zinc-500">{attempt.at ? new Date(attempt.at).toLocaleString() : '—'}</div>
+                            </div>
+                            <Badge className={attempt.passed ? 'border-emerald-500/35 bg-emerald-500/12 text-emerald-100' : 'border-red-500/35 bg-red-500/12 text-red-100'}>{attempt.score}%</Badge>
+                          </div>
+                          {attempt.reviewNote && <div className="mt-2 text-sm text-zinc-300">{attempt.reviewNote}</div>}
+                        </div>
+                      ))}
+                      {!(selected.quizHistory || []).length && <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">No quiz attempts logged yet.</div>}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {employeeQuickView === 'progression' && (
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-3xl border border-fuchsia-500/30 bg-gradient-to-r from-fuchsia-500/15 via-purple-500/10 to-blue-500/10 p-5">
+                    <div className="flex items-end justify-between gap-3">
+                      <div>
+                        <div className="text-xs uppercase tracking-[0.2em] text-zinc-300">Readiness score</div>
+                        <div className="mt-1 text-5xl font-bold leading-none text-white">{completionPercent(selected)}%</div>
+                      </div>
+                      <Badge className="border-white/15 bg-white/10 text-zinc-100">Target: {selected.promotion}</Badge>
+                    </div>
+                    <Progress value={completionPercent(selected)} className="mt-4 h-2.5 bg-white/10" />
+                  </div>
+                  <div className="rounded-3xl border border-white/10 bg-black/25 p-5">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Signed off</div><div className="mt-2 text-lg font-semibold text-white">{selected.signedOff ? 'Yes' : 'No'}</div></div>
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Promotion target</div><div className="mt-2 text-lg font-semibold text-white">{selected.promotion || '—'}</div></div>
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Warnings</div><div className="mt-2 text-lg font-semibold text-white">{selected.disciplinary?.warnings || 0}</div></div>
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Actions</div><div className="mt-2 text-lg font-semibold text-white">{selected.disciplinary?.actions || 0}</div></div>
+                    </div>
+                  </div>
+                  <div className="rounded-3xl border border-white/10 bg-black/25 p-5 lg:col-span-2">
+                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Progress breakdown</div>
+                    <div className="mt-4 grid gap-3 md:grid-cols-3">
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-sm font-medium text-white">Entry Quiz</div><div className="mt-1 text-3xl font-semibold text-white">{checklistPercent(currentChecks, selected.checks)}%</div></div>
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-sm font-medium text-white">Core Values</div><div className="mt-1 text-3xl font-semibold text-white">{checklistPercent(currentCoreValues, selected.values)}%</div></div>
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><div className="text-sm font-medium text-white">Staff Menu</div><div className="mt-1 text-3xl font-semibold text-white">{checklistPercent(currentPermissions, selected.permissions)}%</div></div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}        {assignQuizOpen && selected && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
             <div className="max-h-[88vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-white/15 bg-zinc-950 p-5">
               <div className="mb-4 flex items-center justify-between">
@@ -6818,6 +7050,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   );
 }
  
+
+
+
+
 
 
 
