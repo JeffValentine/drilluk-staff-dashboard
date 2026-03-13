@@ -11,6 +11,8 @@ export default function QuizKnowledgeHub({
   selectedQuiz,
   canManageCheckboxes,
   onOpenBuilder,
+  onEditQuizQuestion,
+  onAddManagedQuestion,
   defaultName,
   rankBadgeClass,
 }) {
@@ -25,15 +27,15 @@ export default function QuizKnowledgeHub({
             <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge className="border-fuchsia-500/35 bg-fuchsia-500/12 text-fuchsia-200">Knowledge Packs</Badge>
-                <Badge className="border-white/10 bg-white/10 text-zinc-200">Checkboxes now surface as quizzes</Badge>
+                <Badge className="border-white/10 bg-white/10 text-zinc-200">Directly editable from the selected quiz</Badge>
               </div>
               <p className="mt-3 text-sm leading-6 text-zinc-300">
-                Entry Quiz, Core Values Quiz, and Staff Menu Quiz now show as proper quiz packs by rank. The mandatory rules quiz sits in the same dashboard and uses the same confirmation flow.
+                Entry Quiz, Core Values Quiz, and Staff Menu Quiz now show as proper quiz packs by rank. Mandatory and managed quizzes use the same runner, while admins can inspect and edit the question bank directly from the selected quiz card.
               </p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
-              <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Builder</div>
-              <div className="mt-2 text-sm text-zinc-300">Use the builder to manage quiz lines, answers, and rank visibility.</div>
+              <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Builder access</div>
+              <div className="mt-2 text-sm text-zinc-300">Use the builder for bulk work, or click a quiz card below to review and edit its individual questions.</div>
               {canManageCheckboxes && (
                 <Button onClick={onOpenBuilder} className="mt-4 rounded-2xl border border-amber-400/35 bg-amber-500/12 text-amber-100 hover:bg-amber-500/18">
                   Open Quiz Builder
@@ -63,6 +65,57 @@ export default function QuizKnowledgeHub({
           </div>
         </CardContent>
       </Card>
+
+      {selectedQuiz && canManageCheckboxes && (
+        <Card className="border-white/10 bg-white/5">
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between gap-3">
+              <span>{selectedQuiz.title} Question Bank</span>
+              <div className="flex flex-wrap gap-2">
+                {selectedQuiz.sourceType === 'managed' && (
+                  <Button onClick={() => onAddManagedQuestion?.(selectedQuiz.key)} className="rounded-2xl border border-amber-400/35 bg-amber-500/12 text-amber-100 hover:bg-amber-500/18">
+                    Add Question
+                  </Button>
+                )}
+                <Button onClick={onOpenBuilder} className="rounded-2xl border border-white/15 bg-black/25 text-zinc-100 hover:bg-white/10">
+                  Open Builder
+                </Button>
+              </div>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {selectedQuiz.sourceItems?.map((item, index) => (
+              <div key={item.id || `${selectedQuiz.key}-${index}`} className="rounded-2xl border border-white/10 bg-black/25 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className="border-white/10 bg-white/10 text-zinc-200">Question {index + 1}</Badge>
+                      <Badge className="border-cyan-500/35 bg-cyan-500/12 text-cyan-100">{item.category || 'General'}</Badge>
+                    </div>
+                    <div className="mt-3 text-sm font-semibold text-white">{item.question}</div>
+                    <div className="mt-3 space-y-2 text-sm text-zinc-300">
+                      <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/8 px-3 py-2 text-emerald-100">Correct: {item.correctAnswer}</div>
+                      {(item.wrongAnswers || []).map((answer, wrongIndex) => (
+                        <div key={`${item.id || index}-wrong-${wrongIndex}`} className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-zinc-300">
+                          Wrong option: {answer}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <Button onClick={() => onEditQuizQuestion?.(selectedQuiz, item)} className="rounded-2xl border border-fuchsia-400/35 bg-fuchsia-500/12 text-fuchsia-100 hover:bg-fuchsia-500/18">
+                    Edit
+                  </Button>
+                </div>
+              </div>
+            ))}
+            {!selectedQuiz.sourceItems?.length && (
+              <div className="rounded-xl border border-white/10 bg-black/25 p-4 text-sm text-zinc-400">
+                No questions are available for this quiz yet.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {selectedQuiz && (
         <ExperimentalStaffQuiz

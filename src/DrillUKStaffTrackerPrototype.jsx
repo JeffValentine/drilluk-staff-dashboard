@@ -1234,6 +1234,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [checkboxRankFilter, setCheckboxRankFilter] = useState('All');
   const [checkboxEditorOpen, setCheckboxEditorOpen] = useState(false);
   const [checkboxDraft, setCheckboxDraft] = useState(null);
+  const [managedQuizQuestions, setManagedQuizQuestions] = useState([]);
+  const [managedQuizLoading, setManagedQuizLoading] = useState(false);
+  const [managedQuizEditorOpen, setManagedQuizEditorOpen] = useState(false);
+  const [managedQuizDraft, setManagedQuizDraft] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileName, setProfileName] = useState(profile?.username || '');
   const [profileAvatar, setProfileAvatar] = useState(profile?.avatar_url || '');
@@ -1269,6 +1273,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     checkbox: false,
     ranks: false,
     audit: false,
+    managedQuiz: false,
   });
   const syncPauseTimerRef = useRef(null);
   const syncLockedRef = useRef(false);
@@ -1278,6 +1283,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     checkbox: false,
     ranks: false,
     audit: false,
+    managedQuiz: false,
   });
   const [quizState, setQuizState] = useState({
     role: { started: false, score: null, answers: {} },
@@ -1290,9 +1296,9 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const deferredCheckboxQuery = useDeferredValue(checkboxQuery);
   const deferredAuditQuery = useDeferredValue(auditQuery);
   const deferredAuditFieldQuery = useDeferredValue(auditFieldQuery);
-  const isEditOverlayOpen = checkboxEditorOpen || addStaffOpen || rosterSyncOpen || profileOpen || disciplineOpen || sessionNotesOpen || sessionActionsOpen;
+  const isEditOverlayOpen = managedQuizEditorOpen || checkboxEditorOpen || addStaffOpen || rosterSyncOpen || profileOpen || disciplineOpen || sessionNotesOpen || sessionActionsOpen;
   const isSyncLocked = syncPausedByEdit || inputEditingActive || isEditOverlayOpen;
-  const hasQueuedSync = pendingSyncFlags.staff || pendingSyncFlags.profiles || pendingSyncFlags.checkbox || pendingSyncFlags.ranks || pendingSyncFlags.audit;
+  const hasQueuedSync = pendingSyncFlags.staff || pendingSyncFlags.profiles || pendingSyncFlags.checkbox || pendingSyncFlags.ranks || pendingSyncFlags.audit || pendingSyncFlags.managedQuiz;
   const ruleBracketOptions = useMemo(() => ['General Policy', ...new Set(RULE_FALSE_OPTION_BANKS.map(item => item.tag))], []);
 
   function holdRealtimeSync(ms = 2500) {
@@ -1610,6 +1616,37 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     setCheckboxCatalogLoading(false);
   }
 
+  async function refreshManagedQuizQuestionsFromDb() {
+    if (!dbReady || !supabase) return;
+    setManagedQuizLoading(true);
+    const { data, error } = await supabase
+      .from('managed_quiz_questions')
+      .select('*')
+      .order('quiz_key', { ascending: true })
+      .order('question_order', { ascending: true })
+      .order('updated_at', { ascending: true });
+
+    if (!error) {
+      setManagedQuizQuestions(
+        (data || []).map(row => ({
+          id: row.id,
+          quizKey: row.quiz_key,
+          quizTitle: row.quiz_title,
+          quizDescription: row.quiz_description || '',
+          quizKind: row.quiz_kind || 'managed',
+          rankKey: row.rank_key || '',
+          passScore: Number(row.pass_score || 80),
+          questionOrder: Number(row.question_order || 0),
+          category: row.category || 'General Rules',
+          question: row.question || '',
+          correctAnswer: row.correct_answer || '',
+          wrongAnswers: Array.isArray(row.wrong_answers) ? row.wrong_answers.map(value => String(value || '')).filter(Boolean).slice(0, 3) : [],
+        }))
+      );
+    }
+    setManagedQuizLoading(false);
+  }
+
   async function refreshRankDisplayNamesFromDb() {
     if (!dbReady || !supabase) return;
     setRankDisplayLoading(true);
@@ -1646,6 +1683,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     if (key === 'checkbox') await refreshCheckboxCatalogFromDb();
     if (key === 'ranks') await refreshRankDisplayNamesFromDb();
     if (key === 'audit') await refreshAuditLogsFromDb();
+    if (key === 'managedQuiz') await refreshManagedQuizQuestionsFromDb();
     setPendingSync(key, false);
   }
 
@@ -1656,6 +1694,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     if (pending.checkbox) await requestRefresh('checkbox');
     if (pending.ranks) await requestRefresh('ranks');
     if (pending.audit) await requestRefresh('audit');
+    if (pending.managedQuiz) await requestRefresh('managedQuiz');
   }
 
   useEffect(() => {
@@ -1775,10 +1814,29 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   useEffect(() => {
     if (!dbReady || !supabase) return;
+    refreshManagedQuizQuestionsFromDb();
+  }, [dbReady, authUser?.id]);
+
+  useEffect(() => {
+    if (!dbReady || !supabase) return;
     const channel = supabase
       .channel('rank_display_names_sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rank_display_names' }, () => {
         requestRefresh('ranks');
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [dbReady, authUser?.id]);
+
+  useEffect(() => {
+    if (!dbReady || !supabase) return;
+    const channel = supabase
+      .channel('managed_quiz_questions_sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'managed_quiz_questions' }, (payload) => {
+        if (payload?.eventType === 'UPDATE' && payload?.new?.updated_by === authUser?.id) return;
+        requestRefresh('managedQuiz');
       })
       .subscribe();
     return () => {
@@ -2122,6 +2180,31 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       core: 'Core Values Quiz',
       permission: 'Staff Menu Quiz',
     };
+
+    const managedByQuizKey = new Map();
+    managedQuizQuestions.forEach(item => {
+      if (!managedByQuizKey.has(item.quizKey)) managedByQuizKey.set(item.quizKey, []);
+      managedByQuizKey.get(item.quizKey).push(item);
+    });
+
+    const mandatoryManaged = (managedByQuizKey.get('mandatory-general') || []).sort((a, b) => Number(a.questionOrder || 0) - Number(b.questionOrder || 0));
+    const mandatorySourceItems = mandatoryManaged.length
+      ? mandatoryManaged
+      : EXPERIMENTAL_QUIZ_QUESTIONS.map((item, index) => ({
+          id: `seed-${index + 1}`,
+          quizKey: 'mandatory-general',
+          quizTitle: 'Mandatory Quiz - General Rules',
+          quizDescription: 'General rules, reporting, RP standards, and enforcement baseline.',
+          quizKind: 'mandatory',
+          rankKey: '',
+          passScore: 80,
+          questionOrder: index + 1,
+          category: item.category || 'General Rules',
+          question: item.question,
+          correctAnswer: item.options?.[item.answer] || '',
+          wrongAnswers: (item.options || []).filter((_, optionIndex) => optionIndex !== item.answer).slice(0, 3),
+        }));
+
     const definitions = [
       {
         key: 'mandatory-general',
@@ -2130,10 +2213,51 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         badge: 'Mandatory',
         kind: 'mandatory',
         rankLabel: null,
+        rankKey: '',
         passScore: 80,
-        questions: EXPERIMENTAL_QUIZ_QUESTIONS,
+        sourceType: 'managed',
+        sourceItems: mandatorySourceItems,
+        questions: mandatorySourceItems.map(item => {
+          const options = shuffleArray([item.correctAnswer, ...(item.wrongAnswers || [])].filter(Boolean));
+          return {
+            category: item.category || 'General Rules',
+            question: item.question,
+            options,
+            answer: Math.max(options.indexOf(item.correctAnswer), 0),
+          };
+        }),
       },
     ];
+
+    Array.from(managedByQuizKey.entries())
+      .filter(([quizKey]) => quizKey !== 'mandatory-general')
+      .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
+      .forEach(([quizKey, rows]) => {
+        const sortedRows = [...rows].sort((a, b) => Number(a.questionOrder || 0) - Number(b.questionOrder || 0));
+        const sample = sortedRows[0];
+        definitions.push({
+          key: quizKey,
+          title: sample.quizTitle || quizKey,
+          description: sample.quizDescription || 'Managed knowledge quiz.',
+          badge: 'Managed Quiz',
+          kind: 'managed',
+          rankLabel: sample.rankKey ? rankLabel(sample.rankKey) : null,
+          rankKey: sample.rankKey || '',
+          passScore: Number(sample.passScore || 80),
+          sourceType: 'managed',
+          sourceItems: sortedRows,
+          questions: sortedRows.map(item => {
+            const options = shuffleArray([item.correctAnswer, ...(item.wrongAnswers || [])].filter(Boolean));
+            return {
+              category: item.category || 'General Rules',
+              question: item.question,
+              options,
+              answer: Math.max(options.indexOf(item.correctAnswer), 0),
+            };
+          }),
+        });
+      });
+
     const grouped = new Map();
 
     checkboxCatalog.forEach(item => {
@@ -2163,11 +2287,21 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
             rankLabel: rankLabel(rank),
             rankKey: rank,
             passScore: 90,
+            sourceType: 'checkbox',
+            sourceItems: [],
             questions: [],
           });
         }
         const definition = grouped.get(key);
         const options = shuffleArray([primaryCorrect, ...wrongAnswers].filter(Boolean));
+        definition.sourceItems.push({
+          id: item.id,
+          category: payload.bracket || categoryLabels[item.category],
+          question: item.question || item.title,
+          correctAnswer: primaryCorrect,
+          wrongAnswers,
+          sourceCheckbox: item,
+        });
         definition.questions.push({
           category: payload.bracket || categoryLabels[item.category],
           question: item.question || item.title,
@@ -2188,8 +2322,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         })
     );
     return definitions;
-  }, [checkboxCatalog, roles, rankLabel]);
-
+  }, [checkboxCatalog, managedQuizQuestions, roles, rankLabel]);
   const selectedKnowledgeQuiz = useMemo(
     () => knowledgeQuizDefinitions.find(item => item.key === selectedKnowledgeQuizKey) || knowledgeQuizDefinitions[0] || null,
     [knowledgeQuizDefinitions, selectedKnowledgeQuizKey]
@@ -3069,6 +3202,127 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     setLatestInviteToken(data || '');
   }
 
+  async function saveManagedQuizQuestion(item) {
+    if (!canManageCheckboxes) return null;
+    const normalizedWrong = (item.wrongAnswers || [])
+      .map(value => String(value || '').trim())
+      .filter(Boolean)
+      .slice(0, 3);
+    const payload = {
+      id: item.id || undefined,
+      quiz_key: item.quizKey,
+      quiz_title: item.quizTitle,
+      quiz_description: item.quizDescription || '',
+      quiz_kind: item.quizKind || 'managed',
+      rank_key: item.rankKey || null,
+      pass_score: Number(item.passScore || 80),
+      question_order: Number(item.questionOrder || 0),
+      category: item.category || 'General Rules',
+      question: item.question || '',
+      correct_answer: item.correctAnswer || '',
+      wrong_answers: normalizedWrong,
+      updated_by: authUser?.id || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (!dbReady || !supabase) return payload;
+    const { data, error } = await supabase
+      .from('managed_quiz_questions')
+      .upsert(payload)
+      .select()
+      .single();
+
+    if (error) {
+      setManagedQuizDraft(item);
+      throw error;
+    }
+
+    setManagedQuizQuestions(prev => {
+      const next = prev.filter(entry => entry.id !== data.id);
+      next.push({
+        id: data.id,
+        quizKey: data.quiz_key,
+        quizTitle: data.quiz_title,
+        quizDescription: data.quiz_description || '',
+        quizKind: data.quiz_kind || 'managed',
+        rankKey: data.rank_key || '',
+        passScore: Number(data.pass_score || 80),
+        questionOrder: Number(data.question_order || 0),
+        category: data.category || 'General Rules',
+        question: data.question || '',
+        correctAnswer: data.correct_answer || '',
+        wrongAnswers: Array.isArray(data.wrong_answers) ? data.wrong_answers.map(value => String(value || '')).filter(Boolean).slice(0, 3) : [],
+      });
+      return next.sort((a, b) => String(a.quizKey).localeCompare(String(b.quizKey)) || Number(a.questionOrder || 0) - Number(b.questionOrder || 0) || String(a.question).localeCompare(String(b.question)));
+    });
+    await writeAudit('managed_quiz_questions.save', payload.quiz_key, null, payload);
+    return data;
+  }
+
+  async function deleteManagedQuizQuestion(itemId) {
+    if (!canManageCheckboxes || !itemId) return;
+    setManagedQuizQuestions(prev => prev.filter(item => item.id !== itemId));
+    if (dbReady && supabase) {
+      await supabase.from('managed_quiz_questions').delete().eq('id', itemId);
+      await writeAudit('managed_quiz_questions.delete', itemId, null, null);
+    }
+  }
+
+  function openManagedQuizEditor(quizDefinition, item = null) {
+    const sourceItems = quizDefinition?.sourceItems || [];
+    const nextOrder = sourceItems.length ? Math.max(...sourceItems.map(entry => Number(entry.questionOrder || 0))) + 1 : 1;
+    setManagedQuizDraft(item ? {
+      id: item.id || null,
+      quizKey: item.quizKey || quizDefinition.key,
+      quizTitle: item.quizTitle || quizDefinition.title,
+      quizDescription: item.quizDescription || quizDefinition.description || '',
+      quizKind: item.quizKind || (quizDefinition.kind === 'mandatory' ? 'mandatory' : 'managed'),
+      rankKey: item.rankKey || quizDefinition.rankKey || '',
+      passScore: Number(item.passScore || quizDefinition.passScore || 80),
+      questionOrder: Number(item.questionOrder || nextOrder),
+      category: item.category || 'General Rules',
+      question: item.question || '',
+      correctAnswer: item.correctAnswer || item.correct || '',
+      wrongAnswers: (item.wrongAnswers || []).length ? [...item.wrongAnswers] : ['', '', ''],
+    } : {
+      id: null,
+      quizKey: quizDefinition.key,
+      quizTitle: quizDefinition.title,
+      quizDescription: quizDefinition.description || '',
+      quizKind: quizDefinition.kind === 'mandatory' ? 'mandatory' : 'managed',
+      rankKey: quizDefinition.rankKey || '',
+      passScore: Number(quizDefinition.passScore || 80),
+      questionOrder: nextOrder,
+      category: quizDefinition.rankLabel || 'General Rules',
+      question: '',
+      correctAnswer: '',
+      wrongAnswers: ['', '', ''],
+    });
+    setManagedQuizEditorOpen(true);
+  }
+
+  function closeManagedQuizEditor() {
+    setManagedQuizEditorOpen(false);
+    setManagedQuizDraft(null);
+  }
+
+  async function saveManagedQuizDraft() {
+    if (!managedQuizDraft) return;
+    const normalized = {
+      ...managedQuizDraft,
+      wrongAnswers: (managedQuizDraft.wrongAnswers || []).map(value => String(value || '').trim()).filter(Boolean).slice(0, 3),
+    };
+    while (normalized.wrongAnswers.length < 3) normalized.wrongAnswers.push('');
+    await saveManagedQuizQuestion(normalized);
+    closeManagedQuizEditor();
+  }
+
+  function addManagedQuizQuestion(quizKey) {
+    const definition = knowledgeQuizDefinitions.find(item => item.key === quizKey);
+    if (!definition) return;
+    openManagedQuizEditor(definition, null);
+  }
+
   async function saveCheckboxItem(item) {
     if (!canManageCheckboxes || !dbReady || !supabase) return;
     holdRealtimeSync(2600);
@@ -3534,6 +3788,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               selectedQuiz={selectedKnowledgeQuiz}
               canManageCheckboxes={canManageCheckboxes}
               onOpenBuilder={() => setActiveMainTab('checkboxes')}
+              onEditQuizQuestion={(quizDefinition, item) => {
+                if (quizDefinition?.sourceType === 'checkbox') openCheckboxEditor(item.sourceCheckbox || item);
+                else openManagedQuizEditor(quizDefinition, item);
+              }}
+              onAddManagedQuestion={addManagedQuizQuestion}
               defaultName={profile?.username || authUser?.email?.split('@')[0] || ''}
               rankBadgeClass={roleColor}
             />
@@ -4649,6 +4908,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 filteredCount={filteredManagementUsers.length}
                 onOpenAudit={() => setActiveMainTab('audit')}
                 onOpenRanks={() => setActiveMainTab('ranks')}
+                onOpenQuizBuilder={() => setActiveMainTab('checkboxes')}
                 onOpenDirectory={() => setActiveMainTab('management')}
               />
             <Card className="border-white/10 bg-white/5">
@@ -5413,6 +5673,139 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               <div className="mt-5 flex justify-end gap-2">
                 <Button variant="secondary" onClick={() => setAddStaffOpen(false)} className="rounded-2xl">Cancel</Button>
                 <Button onClick={addStaff} className="rounded-2xl bg-fuchsia-600 hover:bg-fuchsia-500">Create Staff Member</Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {managedQuizEditorOpen && managedQuizDraft && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+            <div className="max-h-[88vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-white/15 bg-zinc-950 p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="text-lg font-semibold text-white">{managedQuizDraft.id ? 'Edit Quiz Question' : 'Add Quiz Question'}</div>
+                <button type="button" onClick={closeManagedQuizEditor} className="text-sm text-zinc-400 hover:text-white">Close</button>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Quiz title</div>
+                  <Input
+                    value={managedQuizDraft.quizTitle || ''}
+                    onChange={(e) => setManagedQuizDraft(prev => ({ ...prev, quizTitle: e.target.value }))}
+                    className="border-white/10 bg-black/30 text-white"
+                    placeholder="Quiz title"
+                  />
+                </div>
+                <div>
+                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Quiz key</div>
+                  <Input
+                    value={managedQuizDraft.quizKey || ''}
+                    onChange={(e) => setManagedQuizDraft(prev => ({ ...prev, quizKey: e.target.value.toLowerCase().replace(/[^a-z0-9-|]/g, '-') }))}
+                    className="border-white/10 bg-black/30 text-white"
+                    placeholder="mandatory-general"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Quiz description</div>
+                  <Textarea
+                    value={managedQuizDraft.quizDescription || ''}
+                    onChange={(e) => setManagedQuizDraft(prev => ({ ...prev, quizDescription: e.target.value }))}
+                    className="min-h-[80px] border-white/10 bg-black/30 text-white"
+                    placeholder="Short quiz summary"
+                  />
+                </div>
+                <div>
+                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Rank scope</div>
+                  <Select value={managedQuizDraft.rankKey || 'none'} onValueChange={(value) => setManagedQuizDraft(prev => ({ ...prev, rankKey: value === 'none' ? '' : value }))}>
+                    <SelectTrigger className="border-white/10 bg-black/30 text-white"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No rank badge</SelectItem>
+                      {roles.map(role => (
+                        <SelectItem key={`managed-rank-${role}`} value={role}>{rankLabel(role)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Pass score</div>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={managedQuizDraft.passScore ?? 80}
+                      onChange={(e) => setManagedQuizDraft(prev => ({ ...prev, passScore: Number(e.target.value || 80) }))}
+                      className="border-white/10 bg-black/30 text-white"
+                    />
+                  </div>
+                  <div>
+                    <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Question order</div>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={managedQuizDraft.questionOrder ?? 1}
+                      onChange={(e) => setManagedQuizDraft(prev => ({ ...prev, questionOrder: Number(e.target.value || 1) }))}
+                      className="border-white/10 bg-black/30 text-white"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Category</div>
+                  <Input
+                    value={managedQuizDraft.category || ''}
+                    onChange={(e) => setManagedQuizDraft(prev => ({ ...prev, category: e.target.value }))}
+                    className="border-white/10 bg-black/30 text-white"
+                    placeholder="General Rules"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Question</div>
+                  <Textarea
+                    value={managedQuizDraft.question || ''}
+                    onChange={(e) => setManagedQuizDraft(prev => ({ ...prev, question: e.target.value }))}
+                    className="min-h-[100px] border-white/10 bg-black/30 text-white"
+                    placeholder="Question text"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Correct answer</div>
+                  <Input
+                    value={managedQuizDraft.correctAnswer || ''}
+                    onChange={(e) => setManagedQuizDraft(prev => ({ ...prev, correctAnswer: e.target.value }))}
+                    className="border-white/10 bg-black/30 text-white"
+                    placeholder="Correct answer"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">False options</div>
+                  <div className="space-y-2">
+                    {(managedQuizDraft.wrongAnswers || ['', '', '']).map((answer, idx) => (
+                      <Input
+                        key={`managed-wrong-${idx}`}
+                        value={answer}
+                        onChange={(e) => setManagedQuizDraft(prev => {
+                          const next = [...(prev.wrongAnswers || ['', '', ''])];
+                          next[idx] = e.target.value;
+                          return { ...prev, wrongAnswers: next };
+                        })}
+                        className="border-white/10 bg-black/30 text-white"
+                        placeholder={`False option ${idx + 1}`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-5 flex justify-between gap-2">
+                <Button
+                  onClick={async () => { await deleteManagedQuizQuestion(managedQuizDraft.id); closeManagedQuizEditor(); }}
+                  disabled={!managedQuizDraft.id}
+                  className="rounded-2xl border border-red-400/40 bg-gradient-to-r from-red-700 to-red-600 text-white hover:from-red-600 hover:to-red-500 disabled:opacity-50"
+                >
+                  Delete
+                </Button>
+                <div className="flex gap-2">
+                  <Button variant="secondary" onClick={closeManagedQuizEditor} className="rounded-2xl border border-white/15 bg-black/25 text-zinc-100 hover:bg-white/10">Cancel</Button>
+                  <Button onClick={saveManagedQuizDraft} className="rounded-2xl border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white hover:from-fuchsia-500 hover:to-indigo-500">Save</Button>
+                </div>
               </div>
             </div>
           </div>

@@ -12,6 +12,7 @@ export default function ManagementHub({
   filteredCount,
   onOpenAudit,
   onOpenRanks,
+  onOpenQuizBuilder,
   onOpenDirectory,
 }) {
   const items = [
@@ -64,9 +65,12 @@ export default function ManagementHub({
               <Button onClick={onOpenRanks} className="rounded-2xl border border-amber-400/35 bg-amber-500/12 text-amber-100 hover:bg-amber-500/18">
                 Open Rank Display
               </Button>
+              <Button onClick={onOpenQuizBuilder} className="rounded-2xl border border-fuchsia-400/35 bg-fuchsia-500/12 text-fuchsia-100 hover:bg-fuchsia-500/18 md:col-span-2">
+                Open Quiz Builder
+              </Button>
             </div>
             <p className="mt-4 text-sm leading-6 text-zinc-400">
-              The heavy management pages stay available, but this workspace gives you the tree-style entry point first so the top-level dashboard stays readable.
+              Audit Log, Rank Display, and Quiz Builder all stay directly reachable from Management so you do not have to route through another workspace first.
             </p>
           </div>
         </div>

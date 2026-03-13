@@ -76,6 +76,23 @@ create table if not exists public.invite_tokens (
   expires_at timestamptz
 );
 
+create table if not exists public.managed_quiz_questions (
+  id uuid primary key default gen_random_uuid(),
+  quiz_key text not null,
+  quiz_title text not null,
+  quiz_description text not null default '',
+  quiz_kind text not null default 'managed',
+  rank_key text,
+  pass_score int not null default 80,
+  question_order int not null default 0,
+  category text not null default 'General Rules',
+  question text not null,
+  correct_answer text not null,
+  wrong_answers jsonb not null default '[]'::jsonb,
+  updated_by uuid references auth.users(id),
+  updated_at timestamptz not null default now()
+);
+
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -114,6 +131,7 @@ alter table public.audit_logs enable row level security;
 alter table public.checkbox_catalog enable row level security;
 alter table public.rank_display_names enable row level security;
 alter table public.invite_tokens enable row level security;
+alter table public.managed_quiz_questions enable row level security;
 
 create or replace function public.current_user_role()
 returns text
@@ -359,3 +377,25 @@ create policy "invite_tokens_insert_admin_head"
 on public.invite_tokens for insert
 with check (public.current_user_role() = 'head_admin' or public.current_user_has_god_key() = true);
 
+
+
+drop policy if exists "managed_quiz_questions_read_authenticated" on public.managed_quiz_questions;
+create policy "managed_quiz_questions_read_authenticated"
+on public.managed_quiz_questions for select
+using (auth.uid() is not null);
+
+drop policy if exists "managed_quiz_questions_write_admin_head" on public.managed_quiz_questions;
+create policy "managed_quiz_questions_write_admin_head"
+on public.managed_quiz_questions for insert
+with check (public.current_user_role() in ('admin', 'head_admin') or public.current_user_has_god_key() = true);
+
+drop policy if exists "managed_quiz_questions_update_admin_head" on public.managed_quiz_questions;
+create policy "managed_quiz_questions_update_admin_head"
+on public.managed_quiz_questions for update
+using (public.current_user_role() in ('admin', 'head_admin') or public.current_user_has_god_key() = true)
+with check (public.current_user_role() in ('admin', 'head_admin') or public.current_user_has_god_key() = true);
+
+drop policy if exists "managed_quiz_questions_delete_admin_head" on public.managed_quiz_questions;
+create policy "managed_quiz_questions_delete_admin_head"
+on public.managed_quiz_questions for delete
+using (public.current_user_role() in ('admin', 'head_admin') or public.current_user_has_god_key() = true);
