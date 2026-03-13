@@ -12,6 +12,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/lib/supabase';
 import ExperimentalStaffQuiz from '@/components/ExperimentalStaffQuiz';
+import EmployeeHub from '@/components/EmployeeHub';
+import QuizKnowledgeHub from '@/components/QuizKnowledgeHub';
+import ManagementHub from '@/components/ManagementHub';
+import { EXPERIMENTAL_QUIZ_QUESTIONS } from '@/experimentalQuizData';
 
 const roles = ['T-MOD', 'MOD', 'S-MOD', 'ADMIN', 'S-ADMIN', 'HEAD-ADMIN'];
 const SITE_OWNER_EMAIL = 'justappletje@gmail.com';
@@ -1169,6 +1173,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const canDeleteStaff = ['head_admin', 'admin'].includes(effectiveRole);
   const isStaffInTraining = effectiveRole === 'staff_in_training';
   const canAccessExperimentalQuiz = profile?.role === 'head_admin' || Boolean(profile?.experimental_quiz_enabled);
+  const [activeMainTab, setActiveMainTab] = useState(isStaffInTraining ? 'myprogress' : 'employee');
+  const [managementView, setManagementView] = useState('directory');
+  const [managementQuery, setManagementQuery] = useState('');
+  const [selectedKnowledgeQuizKey, setSelectedKnowledgeQuizKey] = useState('mandatory-general');
 
   const [staff, setStaff] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -1695,6 +1703,30 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     if (!dbReady || !supabase || !canManageUsers) return;
     refreshManagementUsersFromDb();
   }, [dbReady, canManageUsers]);
+  useEffect(() => {
+    if (!dbReady || !supabase || !canManageUsers || !managementUsers.length || !staff.length) return;
+    let cancelled = false;
+
+    const normalize = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    const run = async () => {
+      for (const user of managementUsers) {
+        if (cancelled) return;
+        if (!user?.id || !user?.username) continue;
+        const alreadyLinked = staff.some(member => member.traineeUserId === user.id);
+        if (alreadyLinked) continue;
+        const match = staff.find(member => !member.traineeUserId && normalize(member.name) === normalize(user.username));
+        if (!match) continue;
+        await supabase.from('staff_members').update({ trainee_user_id: user.id }).eq('id', match.id);
+        setStaff(prev => prev.map(member => (member.id === match.id ? { ...member, traineeUserId: user.id } : member)));
+      }
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [dbReady, canManageUsers, managementUsers, staff]);
 
   useEffect(() => {
     if (!dbReady || !supabase || !canManageUsers) return;
@@ -2003,6 +2035,20 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   }, [sessionTargetId]);
 
   useEffect(() => {
+    const traineeTabs = ['myprogress', 'quizknowledge', 'stafftools'];
+    const staffTabs = ['employee', 'quizknowledge', 'stafftools', 'management', 'tracker', 'session', 'progression', 'discipline', 'audit', 'ranks', 'checkboxes'];
+    const allowed = isStaffInTraining ? traineeTabs : staffTabs;
+    const fallback = isStaffInTraining ? 'myprogress' : 'employee';
+    if (!allowed.includes(activeMainTab)) setActiveMainTab(fallback);
+  }, [isStaffInTraining, activeMainTab]);
+
+  useEffect(() => {
+    if (!isStaffInTraining && activeMainTab === 'myprogress') {
+      setActiveMainTab('employee');
+    }
+  }, [isStaffInTraining, activeMainTab]);
+
+  useEffect(() => {
     if (!sessionTarget) return;
     setSessionNotesDraft({
       strongSides: sessionTarget.strongSides || '',
@@ -2070,6 +2116,98 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       permission: build('permission'),
     };
   }, [checkboxCatalog, selected]);
+  const knowledgeQuizDefinitions = useMemo(() => {
+    const categoryLabels = {
+      role: 'Entry Quiz',
+      core: 'Core Values Quiz',
+      permission: 'Staff Menu Quiz',
+    };
+    const definitions = [
+      {
+        key: 'mandatory-general',
+        title: 'Mandatory Quiz - General Rules',
+        description: 'General rules, reporting, RP standards, and enforcement baseline.',
+        badge: 'Mandatory',
+        kind: 'mandatory',
+        rankLabel: null,
+        passScore: 80,
+        questions: EXPERIMENTAL_QUIZ_QUESTIONS,
+      },
+    ];
+    const grouped = new Map();
+
+    checkboxCatalog.forEach(item => {
+      if (!['role', 'core', 'permission'].includes(item.category)) return;
+      const payload = parseQuizPayload(item.answer);
+      const primaryCorrect = payload.correct?.[0];
+      if (!primaryCorrect) return;
+      const wrongAnswers = payload.manual
+        ? (payload.wrong || []).map(v => String(v || '').trim()).filter(Boolean).slice(0, 3)
+        : buildRuleAlignedFalseAnswers({
+            title: item.title,
+            question: item.question,
+            correct: primaryCorrect,
+            existingWrong: payload.wrong,
+            bracketTag: payload.bracket,
+          });
+      const scope = sortRankScope(item.ranks || parseRankScope(item.role) || []);
+      (scope.length ? scope : roles).forEach(rank => {
+        const key = `${rank}|${item.category}`;
+        if (!grouped.has(key)) {
+          grouped.set(key, {
+            key,
+            title: `${rankLabel(rank)} ${categoryLabels[item.category]}`,
+            description: `${rankLabel(rank)} ${categoryLabels[item.category].toLowerCase()} built from the current knowledge catalog.`,
+            badge: categoryLabels[item.category],
+            kind: 'pack',
+            rankLabel: rankLabel(rank),
+            passScore: 90,
+            questions: EXPERIMENTAL_QUIZ_QUESTIONS,
+          });
+        }
+        const definition = grouped.get(key);
+        const options = shuffleArray([primaryCorrect, ...wrongAnswers].filter(Boolean));
+        definition.questions.push({
+          category: payload.bracket || categoryLabels[item.category],
+          question: item.question || item.title,
+          options,
+          answer: Math.max(options.indexOf(primaryCorrect), 0),
+        });
+      });
+    });
+
+    definitions.push(
+      ...Array.from(grouped.values())
+        .filter(definition => definition.questions.length)
+        .sort((a, b) => {
+          const aRank = roles.indexOf((a.key || '').split('|')[0]);
+          const bRank = roles.indexOf((b.key || '').split('|')[0]);
+          if (aRank !== bRank) return aRank - bRank;
+          return a.title.localeCompare(b.title);
+        })
+    );
+    return definitions;
+  }, [checkboxCatalog, roles, rankLabel]);
+
+  const selectedKnowledgeQuiz = useMemo(
+    () => knowledgeQuizDefinitions.find(item => item.key === selectedKnowledgeQuizKey) || knowledgeQuizDefinitions[0] || null,
+    [knowledgeQuizDefinitions, selectedKnowledgeQuizKey]
+  );
+
+  const filteredManagementUsers = useMemo(() => {
+    const needle = managementQuery.trim().toLowerCase();
+    return (managementUsers || [])
+      .filter(user => {
+        if (managementView === 'applicants') return !user.is_active;
+        if (managementView === 'head_admins') return user.role === 'head_admin';
+        return true;
+      })
+      .filter(user => {
+        if (!needle) return true;
+        const haystack = [user.username, user.id, user.role].filter(Boolean).join(' ').toLowerCase();
+        return haystack.includes(needle);
+      });
+  }, [managementUsers, managementQuery, managementView]);
 
   useEffect(() => {
     setQuizState({
@@ -3135,6 +3273,23 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 {profile?.username || authUser?.email?.split('@')[0] || 'Guest'}
               </Badge>
             </div>
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              {quickLinks.map(link => {
+                const LinkIcon = link.icon;
+                return (
+                  <a
+                    key={`header-link-${link.label}`}
+                    href={link.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-black/25 text-zinc-200 transition hover:border-fuchsia-400/35 hover:bg-white/10 hover:text-white"
+                    title={`Open ${link.label}`}
+                  >
+                    <LinkIcon className="h-4 w-4" />
+                  </a>
+                );
+              })}
+            </div>
             {canUseViewAs && (
               <div className="mb-2 flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-black/25 px-2 py-1.5 text-xs">
                 <span className="text-zinc-400">View dashboard as</span>
@@ -3291,31 +3446,96 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           </div>
         )}
 
-        <Tabs defaultValue={isStaffInTraining ? 'myprogress' : 'tracker'} className="space-y-4">
+        <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="space-y-4">
           <TabsList className="flex w-full flex-wrap justify-start gap-2 bg-white/5 p-2 h-auto">
             {isStaffInTraining ? (
               <>
                 <TabsTrigger value="myprogress">My Progress</TabsTrigger>
-                <TabsTrigger value="hub">Overview & Resources</TabsTrigger>
+                <TabsTrigger value="quizknowledge">Quizzes & Knowledge</TabsTrigger>
                 <TabsTrigger value="stafftools">Staff Tools</TabsTrigger>
-                {canAccessExperimentalQuiz && <TabsTrigger value="experimentalquiz">Quiz</TabsTrigger>}
               </>
             ) : (
               <>
-                <TabsTrigger value="tracker">Tracker</TabsTrigger>
-                <TabsTrigger value="session">Training Session</TabsTrigger>
-                <TabsTrigger value="progression">Progression</TabsTrigger>
-                <TabsTrigger value="hub">Overview & Resources</TabsTrigger>
+                <TabsTrigger value="employee">Employee</TabsTrigger>
+                <TabsTrigger value="quizknowledge">Quizzes & Knowledge</TabsTrigger>
                 <TabsTrigger value="stafftools">Staff Tools</TabsTrigger>
-                {canAccessExperimentalQuiz && <TabsTrigger value="experimentalquiz">Quiz</TabsTrigger>}
-                <TabsTrigger value="checkboxes">Checkboxes</TabsTrigger>
                 <TabsTrigger value="management">Management</TabsTrigger>
-                <TabsTrigger value="audit">Audit Log</TabsTrigger>
-                <TabsTrigger value="ranks">Rank Display</TabsTrigger>
-                <TabsTrigger value="discipline">Discipline</TabsTrigger>
               </>
             )}
           </TabsList>
+
+          {['tracker', 'session', 'progression', 'discipline'].includes(activeMainTab) && (
+            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-black/25 p-2">
+              <Button type="button" onClick={() => setActiveMainTab('employee')} className="rounded-xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">Back to Employee</Button>
+              <Button type="button" onClick={() => setActiveMainTab('tracker')} className="rounded-xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">Tracker</Button>
+              <Button type="button" onClick={() => setActiveMainTab('session')} className="rounded-xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">Training Session</Button>
+              <Button type="button" onClick={() => setActiveMainTab('progression')} className="rounded-xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">Progression</Button>
+              <Button type="button" onClick={() => setActiveMainTab('discipline')} className="rounded-xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">Discipline</Button>
+            </div>
+          )}
+
+          {['audit', 'ranks', 'checkboxes'].includes(activeMainTab) && (
+            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-black/25 p-2">
+              <Button type="button" onClick={() => setActiveMainTab(activeMainTab === 'checkboxes' ? 'quizknowledge' : 'management')} className="rounded-xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">Back</Button>
+              <Button type="button" onClick={() => setActiveMainTab('checkboxes')} className="rounded-xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">Quiz Builder</Button>
+              <Button type="button" onClick={() => setActiveMainTab('audit')} className="rounded-xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">Audit Log</Button>
+              <Button type="button" onClick={() => setActiveMainTab('ranks')} className="rounded-xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">Rank Display</Button>
+            </div>
+          )}
+
+          <TabsContent value="employee">
+            <EmployeeHub
+              filtered={filtered}
+              selected={selected}
+              selectedId={selectedId}
+              setSelectedId={setSelectedId}
+              query={query}
+              setQuery={setQuery}
+              filterOpen={filterOpen}
+              setFilterOpen={setFilterOpen}
+              filterRole={filterRole}
+              setFilterRole={setFilterRole}
+              filterTrainerOnly={filterTrainerOnly}
+              setFilterTrainerOnly={setFilterTrainerOnly}
+              filterActiveOnly={filterActiveOnly}
+              setFilterActiveOnly={setFilterActiveOnly}
+              filterWarningOnly={filterWarningOnly}
+              setFilterWarningOnly={setFilterWarningOnly}
+              roles={roles}
+              rankLabel={rankLabel}
+              roleColor={roleColor}
+              statusColor={statusColor}
+              nameSizeClass={nameSizeClass}
+              openAddStaffModal={openAddStaffModal}
+              canEdit={canEdit}
+              onOpenTracker={() => setActiveMainTab('tracker')}
+              onOpenSession={() => setActiveMainTab('session')}
+              onOpenProgression={() => setActiveMainTab('progression')}
+              onWarning={() => {
+                setDisciplineType('Warning');
+                setDisciplineTargetId(selected?.id || null);
+                setDisciplineOpen(true);
+              }}
+              onDiscipline={() => {
+                setDisciplineType('Disciplinary Action');
+                setDisciplineTargetId(selected?.id || null);
+                setDisciplineOpen(true);
+              }}
+              onAssignQuiz={() => setActiveMainTab('quizknowledge')}
+            />
+          </TabsContent>
+
+          <TabsContent value="quizknowledge">
+            <QuizKnowledgeHub
+              quizDefinitions={knowledgeQuizDefinitions}
+              selectedQuizKey={selectedKnowledgeQuizKey}
+              setSelectedQuizKey={setSelectedKnowledgeQuizKey}
+              selectedQuiz={selectedKnowledgeQuiz}
+              canManageCheckboxes={canManageCheckboxes}
+              onOpenBuilder={() => setActiveMainTab('checkboxes')}
+              defaultName={profile?.username || authUser?.email?.split('@')[0] || ''}
+            />
+          </TabsContent>
 
           <TabsContent value="myprogress">
             <div className="grid gap-4 xl:grid-cols-[380px,1fr]">
@@ -4418,6 +4638,17 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           </TabsContent>
 
           <TabsContent value="management">
+            <div className="space-y-4">
+              <ManagementHub
+                managementView={managementView}
+                setManagementView={setManagementView}
+                managementQuery={managementQuery}
+                setManagementQuery={setManagementQuery}
+                filteredCount={filteredManagementUsers.length}
+                onOpenAudit={() => setActiveMainTab('audit')}
+                onOpenRanks={() => setActiveMainTab('ranks')}
+                onOpenDirectory={() => setActiveMainTab('management')}
+              />
             <Card className="border-white/10 bg-white/5">
               <CardHeader>
                 <CardTitle>Management Sub Dashboard</CardTitle>
@@ -4491,12 +4722,12 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                             {managementError}
                           </div>
                         )}
-                        {!managementError && !managementUsers.length && (
+                        {!managementError && !filteredManagementUsers.length && (
                           <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">
                             No users returned from profiles yet.
                           </div>
                         )}
-                        {managementUsers.map(user => {
+                        {filteredManagementUsers.map(user => {
                           const linkedStaff = staff.find(member => member.traineeUserId === user.id) || null;
                           return (
                           <div key={user.id} className="grid gap-2 rounded-xl border border-white/10 bg-black/20 p-2.5 md:grid-cols-[1.35fr,0.95fr,1fr,1.9fr,0.78fr,220px] md:items-center">
@@ -4631,6 +4862,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 )}
               </CardContent>
             </Card>
+            </div>
           </TabsContent>
 
           <TabsContent value="audit">
@@ -5682,6 +5914,27 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   );
 }
  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

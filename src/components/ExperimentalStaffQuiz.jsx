@@ -24,7 +24,14 @@ function gradeSummary(percent) {
   return { label: 'Needs Review', className: 'border-red-400/40 bg-red-500/12 text-red-100' };
 }
 
-export default function ExperimentalStaffQuiz({ defaultName = '' }) {
+export default function ExperimentalStaffQuiz({
+  defaultName = '',
+  title = 'Mandatory Quiz - General Rules',
+  subtitle = 'General rules knowledge check with immediate answer feedback.',
+  questions: providedQuestions = EXPERIMENTAL_QUIZ_QUESTIONS,
+  recommendedPass = 80,
+  accent = 'fuchsia',
+}) {
   const [playerName, setPlayerName] = useState(defaultName);
   const [attemptSeed, setAttemptSeed] = useState(0);
   const [started, setStarted] = useState(false);
@@ -32,7 +39,7 @@ export default function ExperimentalStaffQuiz({ defaultName = '' }) {
   const [selectedIndex, setSelectedIndex] = useState(null);
   const [answers, setAnswers] = useState([]);
 
-  const questions = useMemo(() => shuffleQuestions(EXPERIMENTAL_QUIZ_QUESTIONS), [attemptSeed]);
+  const questions = useMemo(() => shuffleQuestions(providedQuestions || []), [providedQuestions, attemptSeed]);
   const currentQuestion = questions[currentIndex] || null;
   const isFinished = started && currentIndex >= questions.length;
   const totalQuestions = questions.length;
@@ -40,6 +47,12 @@ export default function ExperimentalStaffQuiz({ defaultName = '' }) {
   const scorePercent = totalQuestions ? Math.round((correctAnswers / totalQuestions) * 100) : 0;
   const missedQuestions = answers.filter(item => !item.correct);
   const grade = gradeSummary(scorePercent);
+  const accentButton = accent === 'amber'
+    ? 'border-amber-400/40 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500'
+    : 'border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-600 to-indigo-600 hover:from-fuchsia-500 hover:to-indigo-500';
+  const accentSoft = accent === 'amber'
+    ? 'border-amber-500/25 bg-gradient-to-br from-amber-500/10 via-white/0 to-orange-500/10'
+    : 'border-fuchsia-500/25 bg-gradient-to-br from-fuchsia-500/10 via-white/0 to-cyan-500/10';
 
   function beginQuiz() {
     setAttemptSeed(prev => prev + 1);
@@ -85,11 +98,11 @@ export default function ExperimentalStaffQuiz({ defaultName = '' }) {
         <div className="grid gap-4 xl:grid-cols-[0.92fr,1.08fr]">
           <Card className="border-white/10 bg-white/5">
             <CardHeader>
-              <CardTitle>Experimental Quiz Access</CardTitle>
+              <CardTitle>{title}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="rounded-2xl border border-fuchsia-500/25 bg-gradient-to-br from-fuchsia-500/10 via-white/0 to-cyan-500/10 p-4 text-sm text-zinc-200">
-                This is the imported rules quiz in the Drill-UK dashboard style. It is intentionally isolated so you can test the experience before wiring it into progression logic.
+              <div className={`rounded-2xl border p-4 text-sm text-zinc-200 ${accentSoft}`}>
+                {subtitle}
               </div>
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
@@ -99,8 +112,8 @@ export default function ExperimentalStaffQuiz({ defaultName = '' }) {
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
                   <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Recommended pass</div>
-                  <div className="mt-2 text-2xl font-semibold text-white">80%</div>
-                  <div className="mt-1 text-xs text-zinc-400">Use this for trial runs first</div>
+                  <div className="mt-2 text-2xl font-semibold text-white">{recommendedPass}%</div>
+                  <div className="mt-1 text-xs text-zinc-400">Configured for this quiz pack</div>
                 </div>
               </div>
               <div>
@@ -112,12 +125,8 @@ export default function ExperimentalStaffQuiz({ defaultName = '' }) {
                   className="border-white/10 bg-black/30 text-white"
                 />
               </div>
-              <Button
-                type="button"
-                onClick={beginQuiz}
-                className="w-full rounded-2xl border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white hover:from-fuchsia-500 hover:to-indigo-500"
-              >
-                Start Experimental Quiz
+              <Button type="button" onClick={beginQuiz} className={`w-full rounded-2xl text-white ${accentButton}`}>
+                Start Quiz
               </Button>
             </CardContent>
           </Card>
@@ -129,11 +138,11 @@ export default function ExperimentalStaffQuiz({ defaultName = '' }) {
             <CardContent className="space-y-4 text-sm text-zinc-300">
               <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4">
                 <div className="flex flex-wrap gap-2">
-                  <Badge className="border-cyan-500/35 bg-cyan-500/12 text-cyan-200">Experimental</Badge>
-                  <Badge className="border-white/10 bg-white/10 text-zinc-200">Not tied to progression yet</Badge>
+                  <Badge className="border-cyan-500/35 bg-cyan-500/12 text-cyan-200">Quiz Runner</Badge>
+                  <Badge className="border-white/10 bg-white/10 text-zinc-200">Same affirmation logic everywhere</Badge>
                 </div>
                 <p className="mt-3 leading-6 text-zinc-300">
-                  The quiz mirrors the standalone concept but uses the current dashboard language: compact cards, badge states, clean review blocks, and the existing Drill-UK palette.
+                  This uses the same confirmation and results flow for mandatory quizzes and knowledge packs so the dashboard feels consistent.
                 </p>
               </div>
               <div className="space-y-3 rounded-2xl border border-white/10 bg-black/25 p-4">
@@ -142,7 +151,7 @@ export default function ExperimentalStaffQuiz({ defaultName = '' }) {
                   <li>Randomizes the question order every attempt.</li>
                   <li>Shows immediate answer feedback.</li>
                   <li>Keeps a missed-question breakdown at the end.</li>
-                  <li>Stays isolated behind per-user experimental access.</li>
+                  <li>Reuses the same polished structure across quiz types.</li>
                 </ul>
               </div>
             </CardContent>
@@ -158,7 +167,7 @@ export default function ExperimentalStaffQuiz({ defaultName = '' }) {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge className="border-fuchsia-500/35 bg-fuchsia-500/12 text-fuchsia-200">Experimental Quiz</Badge>
+                <Badge className="border-fuchsia-500/35 bg-fuchsia-500/12 text-fuchsia-200">{title}</Badge>
                 <Badge className="border-white/10 bg-white/10 text-zinc-200">{playerName || 'Staff Member'}</Badge>
               </div>
               <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
@@ -178,12 +187,7 @@ export default function ExperimentalStaffQuiz({ defaultName = '' }) {
                   <div className="mt-2 text-base font-semibold text-white">{correctAnswers} correct</div>
                 </div>
               </div>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={resetQuiz}
-                className="w-full rounded-2xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10"
-              >
+              <Button type="button" variant="secondary" onClick={resetQuiz} className="w-full rounded-2xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">
                 Exit Attempt
               </Button>
             </CardContent>
@@ -215,13 +219,7 @@ export default function ExperimentalStaffQuiz({ defaultName = '' }) {
                         ? 'border-white/10 bg-black/15 text-zinc-500 opacity-60'
                         : 'border-white/10 bg-black/25 text-zinc-200 hover:border-fuchsia-400/35 hover:bg-fuchsia-500/8';
                   return (
-                    <button
-                      key={`${currentQuestion.question}-${optionIndex}`}
-                      type="button"
-                      disabled={selectedIndex !== null}
-                      onClick={() => submitAnswer(optionIndex)}
-                      className={`flex w-full items-start gap-3 rounded-2xl border p-4 text-left transition ${stateClass}`}
-                    >
+                    <button key={`${currentQuestion.question}-${optionIndex}`} type="button" disabled={selectedIndex !== null} onClick={() => submitAnswer(optionIndex)} className={`flex w-full items-start gap-3 rounded-2xl border p-4 text-left transition ${stateClass}`}>
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-black/30 text-sm font-semibold text-white">
                         {LETTERS[optionIndex]}
                       </div>
@@ -237,12 +235,7 @@ export default function ExperimentalStaffQuiz({ defaultName = '' }) {
                     : `Incorrect. Correct answer: ${LETTERS[currentQuestion.answer]}. ${currentQuestion.options[currentQuestion.answer]}`}
                 </div>
               )}
-              <Button
-                type="button"
-                onClick={nextStep}
-                disabled={selectedIndex === null}
-                className="w-full rounded-2xl border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white hover:from-fuchsia-500 hover:to-indigo-500 disabled:opacity-50"
-              >
+              <Button type="button" onClick={nextStep} disabled={selectedIndex === null} className={`w-full rounded-2xl text-white disabled:opacity-50 ${accentButton}`}>
                 {currentIndex === totalQuestions - 1 ? 'Finish Quiz' : 'Next Question'}
               </Button>
             </CardContent>
@@ -278,19 +271,10 @@ export default function ExperimentalStaffQuiz({ defaultName = '' }) {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  onClick={beginQuiz}
-                  className="rounded-2xl border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white hover:from-fuchsia-500 hover:to-indigo-500"
-                >
+                <Button type="button" onClick={beginQuiz} className={`rounded-2xl text-white ${accentButton}`}>
                   Retake Quiz
                 </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={resetQuiz}
-                  className="rounded-2xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10"
-                >
+                <Button type="button" variant="secondary" onClick={resetQuiz} className="rounded-2xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">
                   New Attempt Setup
                 </Button>
               </div>
