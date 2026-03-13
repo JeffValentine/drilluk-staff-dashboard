@@ -2773,7 +2773,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     signedOff: staffRecords.filter(s => s.signedOff).length,
   };
 
-
+  const selectedKnowledgeQuiz = useMemo(
+    () => displayedKnowledgeQuizDefinitions.find(item => item.key === selectedKnowledgeQuizKey) || displayedKnowledgeQuizDefinitions[0] || null,
+    [displayedKnowledgeQuizDefinitions, selectedKnowledgeQuizKey]
+  );
 
   const selectedTrainingSummary = useMemo(() => getMemberTrainingSummary(selected), [selected, getMemberTrainingSummary]);
   const sessionTargetTrainingSummary = useMemo(() => getMemberTrainingSummary(sessionTarget), [sessionTarget, getMemberTrainingSummary]);
@@ -2949,7 +2952,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     const answerRows = (attempt.items || []).map((item, index) => ({
       attempt_id: attemptRow.id,
       question_order: index + 1,
-      question_prompt: item.title || Question ,
+      question_prompt: item.title || ('Question ' + (index + 1)),
       selected_answer: item.selected === null || item.selected === undefined ? null : String(item.selected),
       correct_answer: item.correct || null,
       is_correct: Boolean(item.isCorrect),
@@ -6910,7 +6913,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                   <Button disabled={!canDeleteStaff} onClick={removeSessionTargetStaff} className="w-full rounded-2xl bg-red-700/80 text-white hover:bg-red-700">Remove staff member</Button>
                 </div>
                 <div className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/10 p-4 text-sm text-fuchsia-100">
-                  Suggested next step: {completionPercent(sessionTarget) >= 90 ? `review ${sessionTarget.name} for ${sessionTarget.promotion}` : `continue ${sessionTarget.role} training until all required checks are complete`}.
+                  Suggested next step: {getTrainingRecommendation(sessionTarget, sessionTargetTrainingSummary)}
                 </div>
                 <div className="flex justify-end gap-2">
                   <Button type="button" variant="secondary" onClick={() => setSessionActionsOpen(false)} className="rounded-2xl border border-white/15 bg-black/25 text-zinc-100 hover:bg-white/10">Cancel</Button>
