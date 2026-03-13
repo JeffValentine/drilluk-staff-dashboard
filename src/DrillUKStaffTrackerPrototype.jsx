@@ -656,6 +656,60 @@ function legacyCompletionPercent(record) {
   return total ? Math.round((done / total) * 100) : 0;
 }
 
+function normalizeReviewStatus(status) {
+  if (status === 'reviewed' || status === 'approved') return 'approved';
+  if (status === 'failed_review' || status === 'needs_retake') return 'needs_retake';
+  return 'pending';
+}
+
+function toDatabaseReviewStatus(status) {
+  if (status === 'approved') return 'reviewed';
+  if (status === 'needs_retake') return 'failed_review';
+  return 'pending';
+}
+
+function buildReviewSummary(requiredDefinitions, member, getProgress, getAttemptSummary) {
+  if (!member) {
+    return { total: 0, completed: 0, approved: 0, pending: 0, retake: 0, readiness: 0 };
+  }
+  const summaries = requiredDefinitions.map(definition => {
+    const progress = getProgress(definition, member);
+    const attemptSummary = getAttemptSummary(member, definition.key);
+    const reviewStatus = normalizeReviewStatus(attemptSummary.latest?.reviewStatus);
+    return {
+      key: definition.key,
+      progressPercent: progress.percent,
+      passed: Boolean(attemptSummary.latest?.passed),
+      reviewStatus,
+    };
+  });
+  const completed = summaries.filter(item => item.progressPercent >= 100).length;
+  const approved = summaries.filter(item => item.reviewStatus === 'approved').length;
+  const pending = summaries.filter(item => item.passed && item.reviewStatus === 'pending').length;
+  const retake = summaries.filter(item => item.reviewStatus === 'needs_retake').length;
+  const readiness = summaries.length
+    ? Math.round(summaries.reduce((sum, item) => sum + item.progressPercent, 0) / summaries.length)
+    : legacyCompletionPercent(member);
+  return {
+    total: summaries.length,
+    completed,
+    approved,
+    pending,
+    retake,
+    readiness,
+  };
+}
+
+function getTrainingRecommendation(member, summary) {
+  if (!member) return 'Select a staff member to review their current training state.';
+  if (!summary.total) return 'assign baseline quizzes to ' + member.name + ' before planning promotion.';
+  if (summary.retake > 0) return 'coach ' + member.name + ' on failed quiz areas and assign a retake.';
+  if (summary.pending > 0) return 'review ' + member.name + "'s pending quiz attempts before progressing them.";
+  if (summary.approved < summary.total) return 'approve ' + member.name + "'s completed quiz attempts or add trainer notes.";
+  if (!member.signedOff) return 'sign off ' + member.name + ' once coaching notes are complete.';
+  return 'review ' + member.name + ' for ' + member.promotion + '.';
+}
+
 function emptyManualChecks() {
   return { checks: {}, values: {}, permissions: {} };
 }
@@ -2038,7 +2092,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         category: quiz?.quiz_category || 'quiz',
         score: Number(item.score || 0),
         passed: Boolean(item.passed),
-        reviewStatus: item.review_status || 'pending',
+        reviewStatus: normalizeReviewStatus(item.review_status || 'pending'),
         reviewNote: item.review_note || '',
         reviewedBy: item.reviewed_by || null,
         reviewedAt: item.reviewed_at || null,
@@ -2699,30 +2753,30 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     return knowledgeQuizDefinitions.filter(definition => isQuizVisibleForMember(definition, member));
   }, [knowledgeQuizDefinitions]);
 
+  const getMemberTrainingSummary = useCallback((member) => {
+    const requiredDefinitions = getRequiredQuizDefinitions(member);
+    return buildReviewSummary(requiredDefinitions, member, getKnowledgeQuizProgress, getQuizAttemptSummary);
+  }, [getRequiredQuizDefinitions]);
+
   const completionPercent = useCallback((member) => {
     if (!member) return 0;
-    const requiredDefinitions = getRequiredQuizDefinitions(member);
-    if (requiredDefinitions.length) {
-      const totalPercent = requiredDefinitions.reduce(
-        (sum, definition) => sum + getKnowledgeQuizProgress(definition, member).percent,
-        0
-      );
-      return Math.round(totalPercent / requiredDefinitions.length);
-    }
-    return legacyCompletionPercent(member);
-  }, [getRequiredQuizDefinitions]);
+    return getMemberTrainingSummary(member).readiness;
+  }, [getMemberTrainingSummary]);
 
   const totals = {
     total: staffRecords.length,
     inTraining: staffRecords.filter(s => s.status === 'In Training').length,
-    promotionReady: staffRecords.filter(s => completionPercent(s) >= 90).length,
+    promotionReady: staffRecords.filter(s => {
+      const summary = getMemberTrainingSummary(s);
+      return summary.total > 0 && summary.approved === summary.total && s.signedOff;
+    }).length,
     signedOff: staffRecords.filter(s => s.signedOff).length,
   };
 
-  const selectedKnowledgeQuiz = useMemo(
-    () => displayedKnowledgeQuizDefinitions.find(item => item.key === selectedKnowledgeQuizKey) || displayedKnowledgeQuizDefinitions[0] || null,
-    [displayedKnowledgeQuizDefinitions, selectedKnowledgeQuizKey]
-  );
+
+
+  const selectedTrainingSummary = useMemo(() => getMemberTrainingSummary(selected), [selected, getMemberTrainingSummary]);
+  const sessionTargetTrainingSummary = useMemo(() => getMemberTrainingSummary(sessionTarget), [sessionTarget, getMemberTrainingSummary]);
 
   useEffect(() => {
     if (displayedKnowledgeQuizDefinitions.some(item => item.key === selectedKnowledgeQuizKey)) return;
@@ -2865,21 +2919,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     }
   }
 
-  async function syncQuizAssignmentToUnifiedModel(staffMemberId, quizKey, assigned) {
-    if (!dbReady || !supabase || !staffMemberId || !quizKey) return;
-    const quizRow = await resolveUnifiedQuizRow(quizKey);
-    if (!quizRow?.id) return;
-    if (assigned) {
-      await supabase.from('quiz_assignments').upsert({
-        quiz_id: quizRow.id,
-        staff_member_id: staffMemberId,
-        assigned_by: authUser?.id || null,
-        status: 'active',
-      });
-      return;
-    }
-    await supabase.from('quiz_assignments').delete().eq('quiz_id', quizRow.id).eq('staff_member_id', staffMemberId);
-  }
+
 
   async function syncQuizAttemptToUnifiedModel(staffMember, quizDefinition, attempt) {
     if (!dbReady || !supabase || !staffMember?.id || !quizDefinition?.key || !attempt?.id) return;
@@ -2896,7 +2936,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         score: Number(attempt.score || 0),
         passed: Boolean(attempt.passed),
         submitted_at: attempt.at || new Date().toISOString(),
-        review_status: attempt.reviewStatus || 'pending',
+        review_status: toDatabaseReviewStatus(attempt.reviewStatus || 'pending'),
         review_note: attempt.reviewNote || null,
         reviewed_by: attempt.reviewedBy || null,
         reviewed_at: attempt.reviewedAt || null,
@@ -2909,7 +2949,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     const answerRows = (attempt.items || []).map((item, index) => ({
       attempt_id: attemptRow.id,
       question_order: index + 1,
-      question_prompt: item.title || `Question ${index + 1}`,
+      question_prompt: item.title || Question ,
       selected_answer: item.selected === null || item.selected === undefined ? null : String(item.selected),
       correct_answer: item.correct || null,
       is_correct: Boolean(item.isCorrect),
@@ -2917,6 +2957,22 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     if (answerRows.length) {
       await supabase.from('quiz_attempt_answers').insert(answerRows);
     }
+  }
+
+  async function syncQuizAttemptReviewToUnifiedModel(attemptId, patch) {
+    if (!dbReady || !supabase || !attemptId) return;
+    const payload = {
+      review_status: toDatabaseReviewStatus(patch.reviewStatus || 'pending'),
+      review_note: patch.reviewNote || null,
+      reviewed_by: patch.reviewedBy || null,
+      reviewed_at: patch.reviewedAt || null,
+    };
+    const { data: found } = await supabase.from('quiz_attempts').select('id').eq('legacy_attempt_id', attemptId).limit(1);
+    if (found?.length) {
+      await supabase.from('quiz_attempts').update(payload).eq('legacy_attempt_id', attemptId);
+      return;
+    }
+    await supabase.from('quiz_attempts').update(payload).eq('id', attemptId);
   }
 
   function updateSelected(patch) {
@@ -3297,6 +3353,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       attempt.id === attemptId ? { ...attempt, ...patch } : attempt
     );
     updateSessionTarget({ quizHistory: nextHistory });
+    void syncQuizAttemptReviewToUnifiedModel(attemptId, patch);
   }
 
   function applyQuizReview(attemptId, status) {
