@@ -198,7 +198,7 @@ export default function App() {
 
     const { data, error: profileError } = await supabase
       .from("profiles")
-      .select("id, username, role, is_active, avatar_url, god_key_enabled")
+      .select("id, username, role, is_active, avatar_url, god_key_enabled, experimental_quiz_enabled")
       .eq("id", session.user.id)
       .single();
 
@@ -209,7 +209,7 @@ export default function App() {
         .eq("id", session.user.id)
         .single();
       if (fallbackData) {
-        setProfile({ ...fallbackData, avatar_url: null, god_key_enabled: false });
+        setProfile({ ...fallbackData, avatar_url: null, god_key_enabled: false, experimental_quiz_enabled: false });
         return;
       }
     }
@@ -342,3 +342,5 @@ export default function App() {
     />
   );
 }
+
+

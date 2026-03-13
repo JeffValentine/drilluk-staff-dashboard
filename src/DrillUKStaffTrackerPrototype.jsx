@@ -1,4 +1,4 @@
-ï»¿import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Search, Plus, Shield, GraduationCap, CheckCircle2, Users, ArrowUpRight, ClipboardList, Star, HelpCircle, ExternalLink, BookOpen, MessageSquareWarning, Gavel, Swords, FileVideo, Radio, LifeBuoy, ShieldAlert, Upload, Trash2, KeyRound, Copy } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,6 +11,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/lib/supabase';
+import ExperimentalStaffQuiz from '@/components/ExperimentalStaffQuiz';
 
 const roles = ['T-MOD', 'MOD', 'S-MOD', 'ADMIN', 'S-ADMIN', 'HEAD-ADMIN'];
 const SITE_OWNER_EMAIL = 'justappletje@gmail.com';
@@ -1139,7 +1140,7 @@ function QuizHint({ item, answer, category }) {
       >
         <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-fuchsia-200">
           <HelpCircle className="h-3.5 w-3.5" />
-          Quiz check {category ? `Â· ${category}` : ''}
+          Quiz check {category ? `· ${category}` : ''}
         </div>
         <span className="text-[11px] text-zinc-400">{open ? 'Hide' : 'Show'}</span>
       </button>
@@ -1167,6 +1168,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const canManageCheckboxes = canManageUsers || effectiveRole === 'admin';
   const canDeleteStaff = ['head_admin', 'admin'].includes(effectiveRole);
   const isStaffInTraining = effectiveRole === 'staff_in_training';
+  const canAccessExperimentalQuiz = profile?.role === 'head_admin' || Boolean(profile?.experimental_quiz_enabled);
 
   const [staff, setStaff] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -1236,6 +1238,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   });
   const [staffToolsSection, setStaffToolsSection] = useState('');
   const [staffToolsPunishSection, setStaffToolsPunishSection] = useState('');
+  const [staffToolsExperimentalSection, setStaffToolsExperimentalSection] = useState('');
   const [staffToolCopiedOpen, setStaffToolCopiedOpen] = useState(false);
   const ownProfileFileInputRef = useRef(null);
   const [activeUsersOpen, setActiveUsersOpen] = useState(false);
@@ -1461,7 +1464,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     try {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, username, role, is_active, avatar_url, god_key_enabled, last_seen_at')
+      .select('id, username, role, is_active, avatar_url, god_key_enabled, experimental_quiz_enabled, last_seen_at')
       .order('username', { ascending: true });
 
       if (error?.code === '42703') {
@@ -2685,6 +2688,14 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     if (profile?.id === userId) onProfileRefresh?.();
   }
 
+  async function toggleExperimentalQuizAccess(userId, enabled) {
+    if (effectiveRole !== 'head_admin' || !dbReady || !supabase) return;
+    await supabase.from('profiles').update({ experimental_quiz_enabled: enabled }).eq('id', userId);
+    setManagementUsers(prev => prev.map(u => (u.id === userId ? { ...u, experimental_quiz_enabled: enabled } : u)));
+    await writeAudit('user.experimental_quiz.update', userId, null, { experimental_quiz_enabled: enabled });
+    if (profile?.id === userId) onProfileRefresh?.();
+  }
+
   async function forceHeadAdminReset() {
     if (!profile?.god_key_enabled || !dbReady || !supabase || !authUser?.id) return;
     const { error } = await supabase
@@ -3287,6 +3298,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 <TabsTrigger value="myprogress">My Progress</TabsTrigger>
                 <TabsTrigger value="hub">Overview & Resources</TabsTrigger>
                 <TabsTrigger value="stafftools">Staff Tools</TabsTrigger>
+                {canAccessExperimentalQuiz && <TabsTrigger value="experimentalquiz">Quiz</TabsTrigger>}
               </>
             ) : (
               <>
@@ -3295,6 +3307,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 <TabsTrigger value="progression">Progression</TabsTrigger>
                 <TabsTrigger value="hub">Overview & Resources</TabsTrigger>
                 <TabsTrigger value="stafftools">Staff Tools</TabsTrigger>
+                {canAccessExperimentalQuiz && <TabsTrigger value="experimentalquiz">Quiz</TabsTrigger>}
                 <TabsTrigger value="checkboxes">Checkboxes</TabsTrigger>
                 <TabsTrigger value="management">Management</TabsTrigger>
                 <TabsTrigger value="audit">Audit Log</TabsTrigger>
@@ -3690,7 +3703,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                         <div className="mt-3 space-y-2">
                           {(selected.disciplinary?.logs || []).slice(0, 3).map(log => (
                             <div key={log.id} className="rounded-lg border border-white/10 bg-black/25 p-2 text-xs text-zinc-300">
-                              <div className="font-medium text-white">{log.type} Â· {log.date}</div>
+                              <div className="font-medium text-white">{log.type} · {log.date}</div>
                               <div className="mt-1">{log.reason}</div>
                             </div>
                           ))}
@@ -3719,7 +3732,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                               <Badge className="border-white/10 bg-white/10 text-zinc-200">{entry.trainerName || 'Trainer'}</Badge>
                               <Badge className="border-cyan-500/35 bg-cyan-500/12 text-cyan-200">{entry.bracket || 'General Policy'}</Badge>
                             </div>
-                            <div className="text-xs text-zinc-500">{entry.at ? new Date(entry.at).toLocaleString() : 'â€”'}</div>
+                            <div className="text-xs text-zinc-500">{entry.at ? new Date(entry.at).toLocaleString() : '—'}</div>
                           </div>
                           <div className="mt-2 whitespace-pre-wrap text-sm text-zinc-200">{entry.note}</div>
                         </div>
@@ -3783,7 +3796,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <div className="text-sm font-semibold text-white">{sessionTarget?.name || 'No staff selected'}</div>
-                        <div className="mt-1 text-xs text-zinc-400">{sessionTarget ? `${sessionTarget.role} Â· Trainer: ${sessionTarget.trainer}` : 'Select a staff member to start a training session.'}</div>
+                        <div className="mt-1 text-xs text-zinc-400">{sessionTarget ? `${sessionTarget.role} · Trainer: ${sessionTarget.trainer}` : 'Select a staff member to start a training session.'}</div>
                       </div>
                       {sessionTarget && (
                         <Badge className={`${statusColor(sessionTarget.status)} px-2 text-[10px]`}>{sessionTarget.status}</Badge>
@@ -3830,7 +3843,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                       <div key={attempt.id} className="rounded-xl border border-white/10 bg-black/20 p-3">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="text-sm font-semibold text-white">
-                            {attempt.category?.toUpperCase?.() || 'QUIZ'} Â· {new Date(attempt.at).toLocaleString()}
+                            {attempt.category?.toUpperCase?.() || 'QUIZ'} · {new Date(attempt.at).toLocaleString()}
                           </div>
                           <Badge className={attempt.passed ? 'border-emerald-500/35 bg-emerald-500/15 text-emerald-200' : 'border-red-500/35 bg-red-500/15 text-red-200'}>
                             {attempt.score}% {attempt.passed ? 'Pass' : 'Fail'}
@@ -3847,7 +3860,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                             Review: {attempt.reviewStatus || 'pending'}
                           </Badge>
                           {attempt.reviewedBy && (
-                            <span className="text-zinc-500">By {attempt.reviewedBy}{attempt.reviewedAt ? ` Â· ${new Date(attempt.reviewedAt).toLocaleString()}` : ''}</span>
+                            <span className="text-zinc-500">By {attempt.reviewedBy}{attempt.reviewedAt ? ` · ${new Date(attempt.reviewedAt).toLocaleString()}` : ''}</span>
                           )}
                         </div>
                         <div className="mt-3 space-y-2">
@@ -3937,7 +3950,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                             <Badge className="border-white/10 bg-white/10 text-zinc-200">{entry.trainerName || 'Trainer'}</Badge>
                             <Badge className="border-cyan-500/35 bg-cyan-500/12 text-cyan-200">{entry.bracket || 'General Policy'}</Badge>
                           </div>
-                          <div className="text-xs text-zinc-500">{entry.at ? new Date(entry.at).toLocaleString() : 'â€”'}</div>
+                          <div className="text-xs text-zinc-500">{entry.at ? new Date(entry.at).toLocaleString() : '—'}</div>
                         </div>
                         <div className="mt-2 whitespace-pre-wrap text-sm text-zinc-200">{entry.note}</div>
                       </div>
@@ -4118,6 +4131,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                       onClick={() => {
                         setStaffToolsSection('punish');
                         setStaffToolsPunishSection('');
+                        setStaffToolsExperimentalSection('');
                       }}
                       className={`rounded-full border px-3 py-1.5 text-xs ${
                         staffToolsSection === 'punish'
@@ -4127,6 +4141,23 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                     >
                       Punish
                     </button>
+                    {effectiveRole === 'head_admin' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStaffToolsSection('experimental');
+                          setStaffToolsPunishSection('');
+                          setStaffToolsExperimentalSection('');
+                        }}
+                        className={`rounded-full border px-3 py-1.5 text-xs ${
+                          staffToolsSection === 'experimental'
+                            ? 'border-amber-500/40 bg-amber-500/16 text-amber-100'
+                            : 'border-white/10 bg-black/25 text-zinc-300 hover:bg-white/10'
+                        }`}
+                      >
+                        Experimental
+                      </button>
+                    )}
                   </div>
                   {staffToolsSection === 'punish' && (
                     <div className="flex flex-wrap gap-2 border-t border-white/10 pt-3">
@@ -4140,6 +4171,21 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                         }`}
                       >
                         Review Form
+                      </button>
+                    </div>
+                  )}
+                  {staffToolsSection === 'experimental' && effectiveRole === 'head_admin' && (
+                    <div className="flex flex-wrap gap-2 border-t border-white/10 pt-3">
+                      <button
+                        type="button"
+                        onClick={() => setStaffToolsExperimentalSection('quiz-access')}
+                        className={`rounded-full border px-3 py-1.5 text-xs ${
+                          staffToolsExperimentalSection === 'quiz-access'
+                            ? 'border-amber-500/40 bg-amber-500/16 text-amber-100'
+                            : 'border-white/10 bg-black/25 text-zinc-300 hover:bg-white/10'
+                        }`}
+                      >
+                        Quiz Access
                       </button>
                     </div>
                   )}
@@ -4160,12 +4206,27 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                       onClick={() => {
                         setStaffToolsSection('punish');
                         setStaffToolsPunishSection('');
+                        setStaffToolsExperimentalSection('');
                       }}
                       className="w-full rounded-2xl border border-fuchsia-500/30 bg-gradient-to-r from-fuchsia-500/10 to-indigo-500/10 p-4 text-left transition hover:border-fuchsia-400/40 hover:bg-fuchsia-500/12"
                     >
                       <div className="text-sm font-semibold text-white">Punish</div>
                       <div className="mt-1 text-xs text-zinc-400">Discord review forms and punishment formatting tools.</div>
                     </button>
+                    {effectiveRole === 'head_admin' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStaffToolsSection('experimental');
+                          setStaffToolsPunishSection('');
+                          setStaffToolsExperimentalSection('');
+                        }}
+                        className="w-full rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 to-orange-500/10 p-4 text-left transition hover:border-amber-400/40 hover:bg-amber-500/12"
+                      >
+                        <div className="text-sm font-semibold text-white">Experimental</div>
+                        <div className="mt-1 text-xs text-zinc-400">Enable or revoke access to the imported quiz for specific dashboard users.</div>
+                      </button>
+                    )}
                   </CardContent>
                 </Card>
               )}
@@ -4187,6 +4248,64 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                       <div className="text-sm font-semibold text-white">Review Form</div>
                       <div className="mt-1 text-xs text-zinc-400">Generate a Discord-ready report block with license, Discord ID, reason, and clip link.</div>
                     </button>
+                  </CardContent>
+                </Card>
+              )}
+
+              {staffToolsSection === 'experimental' && !staffToolsExperimentalSection && effectiveRole === 'head_admin' && (
+                <Card className="border-white/10 bg-white/5">
+                  <CardHeader>
+                    <CardTitle>Experimental Tools</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className={infoCalloutClass}>
+                      Experimental tools stay gated here until you explicitly enable them per user.
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setStaffToolsExperimentalSection('quiz-access')}
+                      className="w-full rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 to-orange-500/10 p-4 text-left transition hover:border-amber-400/40 hover:bg-amber-500/12"
+                    >
+                      <div className="text-sm font-semibold text-white">Quiz Access</div>
+                      <div className="mt-1 text-xs text-zinc-400">Choose exactly which dashboard users can see the experimental quiz tab.</div>
+                    </button>
+                  </CardContent>
+                </Card>
+              )}
+
+              {staffToolsSection === 'experimental' && staffToolsExperimentalSection === 'quiz-access' && effectiveRole === 'head_admin' && (
+                <Card className="border-white/10 bg-white/5">
+                  <CardHeader>
+                    <CardTitle>Experimental Quiz Access</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className={subtleInfoCalloutClass}>
+                      Head Admin only. Turning this on adds the <span className="font-semibold text-white">Quiz</span> tab to that account. Existing access for your own account is automatic as Head Admin.
+                    </div>
+                    <div className="space-y-3">
+                      {managementUsers.map(user => (
+                        <div key={`quiz-access-${user.id}`} className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-black/25 p-4 md:flex-row md:items-center md:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <div className="truncate text-sm font-semibold text-white">{user.username || user.id}</div>
+                              <Badge className={`${accountRoleColor(user.role)} px-1.5 text-[10px]`}>{accountRoleLabel(user.role)}</Badge>
+                              {user.experimental_quiz_enabled && (
+                                <Badge className="border-amber-500/40 bg-amber-500/16 px-1.5 text-[10px] text-amber-100">Quiz Enabled</Badge>
+                              )}
+                            </div>
+                            <div className="mt-1 text-xs text-zinc-500">{user.id}</div>
+                          </div>
+                          <label className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-zinc-200 md:min-w-[220px]">
+                            Grant quiz tab
+                            <Checkbox
+                              checked={Boolean(user.experimental_quiz_enabled) || user.role === 'head_admin'}
+                              disabled={user.role === 'head_admin'}
+                              onCheckedChange={(checked) => toggleExperimentalQuizAccess(user.id, Boolean(checked))}
+                            />
+                          </label>
+                        </div>
+                      ))}
+                    </div>
                   </CardContent>
                 </Card>
               )}
@@ -4292,6 +4411,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 </div>
               )}
             </div>
+          </TabsContent>
+
+          <TabsContent value="experimentalquiz">
+            <ExperimentalStaffQuiz defaultName={profile?.username || authUser?.email?.split('@')[0] || ''} />
           </TabsContent>
 
           <TabsContent value="management">
@@ -4641,11 +4764,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                               </div>
                               <div className="min-w-0">
                                 <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">Target</div>
-                                <div className="truncate text-sm text-zinc-300">{log.target_id || 'â€”'}</div>
+                                <div className="truncate text-sm text-zinc-300">{log.target_id || '—'}</div>
                               </div>
                               <div className="text-right">
                                 <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">When</div>
-                                <div className="text-sm text-zinc-300">{log.created_at ? new Date(log.created_at).toLocaleString() : 'â€”'}</div>
+                                <div className="text-sm text-zinc-300">{log.created_at ? new Date(log.created_at).toLocaleString() : '—'}</div>
                               </div>
                               {!!changedFields.length && (
                                 <div className="md:col-span-5">
@@ -5261,7 +5384,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
             <div className="w-full max-w-2xl rounded-2xl border border-fuchsia-500/35 bg-zinc-950 p-5">
               <div className="mb-4 flex items-center justify-between">
-                <div className="text-lg font-semibold text-white">Session Notes Â· {sessionTarget.name}</div>
+                <div className="text-lg font-semibold text-white">Session Notes · {sessionTarget.name}</div>
                 <button type="button" onClick={() => setSessionNotesOpen(false)} className="text-sm text-zinc-400 hover:text-white">Close</button>
               </div>
               <div className="space-y-4">
@@ -5302,7 +5425,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
             <div className="w-full max-w-xl rounded-2xl border border-emerald-500/35 bg-zinc-950 p-5">
               <div className="mb-4 flex items-center justify-between">
-                <div className="text-lg font-semibold text-white">Session Actions Â· {sessionTarget.name}</div>
+                <div className="text-lg font-semibold text-white">Session Actions · {sessionTarget.name}</div>
                 <button type="button" onClick={() => setSessionActionsOpen(false)} className="text-sm text-zinc-400 hover:text-white">Close</button>
               </div>
               <div className="space-y-4">
@@ -5559,6 +5682,20 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   );
 }
  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
