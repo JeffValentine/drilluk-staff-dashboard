@@ -22,6 +22,9 @@ export default function QuizKnowledgeHub({
 }) {
   const [questionBankOpen, setQuestionBankOpen] = useState(false);
 
+  const modalActionClass = 'rounded-2xl border px-4 py-2 text-sm font-medium shadow-[0_12px_32px_rgba(0,0,0,0.24)]';
+  const cardBadgeClass = 'rounded-full border px-2.5 py-1 text-[10px] font-semibold tracking-[0.16em] uppercase';
+
   useEffect(() => {
     if (!canManageCheckboxes) {
       setQuestionBankOpen(false);
@@ -74,11 +77,11 @@ export default function QuizKnowledgeHub({
                 className={`rounded-2xl border p-4 text-left transition ${selectedQuizKey === definition.key ? 'border-fuchsia-500/45 bg-fuchsia-500/12' : 'border-white/10 bg-black/25 hover:bg-white/5'}`}
               >
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge className={definition.kind === 'mandatory' ? 'border-amber-500/35 bg-amber-500/12 text-amber-100' : 'border-cyan-500/35 bg-cyan-500/12 text-cyan-100'}>
+                  <Badge className={`${cardBadgeClass} ${definition.kind === 'mandatory' ? 'border-amber-400/45 bg-amber-500/18 text-amber-50' : 'border-cyan-400/45 bg-cyan-500/18 text-cyan-50'}`}>
                     {definition.badge}
                   </Badge>
-                  {definition.rankLabel && <Badge className={`${rankBadgeClass?.(definition.rankKey) || 'border-white/10 bg-white/10 text-zinc-200'}`}>{definition.rankLabel}</Badge>}
-                  {definition.progressLabel && <Badge className="border-emerald-500/35 bg-emerald-500/12 text-emerald-100">{definition.progressLabel}</Badge>}
+                  {definition.rankLabel && <Badge className={`${cardBadgeClass} ${rankBadgeClass?.(definition.rankKey) || 'border-white/10 bg-white/10 text-zinc-200'}`}>{definition.rankLabel}</Badge>}
+                  {definition.progressLabel && <Badge className={`${cardBadgeClass} border-emerald-400/45 bg-emerald-500/18 text-emerald-50`}>{definition.progressLabel}</Badge>}
                 </div>
                 <div className="mt-3 text-sm font-semibold text-white">{definition.title}</div>
                 <div className="mt-1 text-xs text-zinc-400">{definition.description}</div>
@@ -106,50 +109,50 @@ export default function QuizKnowledgeHub({
 
       {selectedQuiz && canManageCheckboxes && questionBankOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="max-h-[88vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-white/15 bg-zinc-950 p-5">
-            <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="max-h-[88vh] w-full max-w-5xl overflow-y-auto rounded-[30px] border border-white/15 bg-[linear-gradient(180deg,rgba(24,24,27,0.98),rgba(10,10,15,0.98))] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.5)]">
+            <div className="mb-5 flex items-center justify-between gap-3 border-b border-white/10 pb-4">
               <div>
                 <div className="text-lg font-semibold text-white">{selectedQuiz.title} Question Bank</div>
                 <div className="mt-1 text-sm text-zinc-400">{selectedQuiz.description}</div>
               </div>
-              <button type="button" onClick={() => setQuestionBankOpen(false)} className="text-sm text-zinc-400 hover:text-white">Close</button>
+              <button type="button" onClick={() => setQuestionBankOpen(false)} className="rounded-2xl border border-white/10 bg-black/25 px-3 py-1.5 text-sm text-zinc-300 transition hover:border-white/20 hover:bg-white/10 hover:text-white">Close</button>
             </div>
             <div className="mb-4 flex flex-wrap gap-2">
               {selectedStaff && typeof onToggleAssignment === 'function' && (
                 <Button
                   onClick={() => onToggleAssignment(selectedQuiz)}
-                  className={`rounded-2xl border ${isAssignedToSelected ? 'border-emerald-400/35 bg-emerald-500/12 text-emerald-100 hover:bg-emerald-500/18' : 'border-cyan-400/35 bg-cyan-500/12 text-cyan-100 hover:bg-cyan-500/18'}`}
+                  className={`${modalActionClass} ${isAssignedToSelected ? 'border-emerald-400/45 bg-emerald-500/18 text-emerald-50 hover:bg-emerald-500/24' : 'border-cyan-400/45 bg-cyan-500/18 text-cyan-50 hover:bg-cyan-500/24'}` }
                 >
                   {isAssignedToSelected ? `Unassign from ${selectedStaff.name}` : `Assign to ${selectedStaff.name}`}
                 </Button>
               )}
-              <Button onClick={() => onAddManagedQuestion?.(selectedQuiz.sourceType === 'managed' ? selectedQuiz.key : null)} className="rounded-2xl border border-amber-400/35 bg-amber-500/12 text-amber-100 hover:bg-amber-500/18">
+              <Button onClick={() => onAddManagedQuestion?.(selectedQuiz.sourceType === 'managed' ? selectedQuiz.key : null)} className={`${modalActionClass} border-amber-400/45 bg-amber-500/18 text-amber-50 hover:bg-amber-500/24`}>
                 {selectedQuiz.sourceType === 'managed' ? 'Add Question' : 'Create Managed Quiz'}
               </Button>
-              <Button onClick={onOpenBuilder} className="rounded-2xl border border-white/15 bg-black/25 text-zinc-100 hover:bg-white/10">
+              <Button onClick={onOpenBuilder} className={`${modalActionClass} border-white/15 bg-white/8 text-zinc-100 hover:bg-white/12`}>
                 Open Quiz Builder
               </Button>
             </div>
             <div className="space-y-3">
               {selectedQuiz.sourceItems?.map((item, index) => (
-                <div key={item.id || `${selectedQuiz.key}-${index}`} className="rounded-2xl border border-white/10 bg-black/25 p-4">
+                <div key={item.id || `${selectedQuiz.key}-${index}`} className="rounded-3xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] p-4 shadow-[0_14px_36px_rgba(0,0,0,0.18)]">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <Badge className="border-white/10 bg-white/10 text-zinc-200">Question {index + 1}</Badge>
-                        <Badge className="border-cyan-500/35 bg-cyan-500/12 text-cyan-100">{item.category || 'General'}</Badge>
+                        <Badge className={`${cardBadgeClass} border-white/10 bg-white/12 text-zinc-100`}>Question {index + 1}</Badge>
+                        <Badge className={`${cardBadgeClass} border-cyan-400/45 bg-cyan-500/18 text-cyan-50`}>{item.category || 'General'}</Badge>
                       </div>
-                      <div className="mt-3 text-sm font-semibold text-white">{item.question}</div>
+                      <div className="mt-3 text-base font-semibold leading-6 text-white">{item.question}</div>
                       <div className="mt-3 space-y-2 text-sm text-zinc-300">
-                        <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/8 px-3 py-2 text-emerald-100">Correct: {item.correctAnswer}</div>
+                        <div className="rounded-2xl border border-emerald-400/35 bg-emerald-500/14 px-3 py-2.5 text-emerald-50">Correct: {item.correctAnswer}</div>
                         {(item.wrongAnswers || []).map((answer, wrongIndex) => (
-                          <div key={`${item.id || index}-wrong-${wrongIndex}`} className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-zinc-300">
+                          <div key={`${item.id || index}-wrong-${wrongIndex}`} className="rounded-2xl border border-white/10 bg-black/30 px-3 py-2.5 text-zinc-200">
                             Wrong option: {answer}
                           </div>
                         ))}
                       </div>
                     </div>
-                    <Button onClick={() => onEditQuizQuestion?.(selectedQuiz, item)} className="rounded-2xl border border-fuchsia-400/35 bg-fuchsia-500/12 text-fuchsia-100 hover:bg-fuchsia-500/18">
+                    <Button onClick={() => onEditQuizQuestion?.(selectedQuiz, item)} className={`${modalActionClass} border-fuchsia-400/45 bg-fuchsia-500/18 text-fuchsia-50 hover:bg-fuchsia-500/24`}>
                       Edit
                     </Button>
                   </div>
