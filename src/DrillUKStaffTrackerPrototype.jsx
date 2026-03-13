@@ -1239,6 +1239,9 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [managedQuizLoading, setManagedQuizLoading] = useState(false);
   const [managedQuizEditorOpen, setManagedQuizEditorOpen] = useState(false);
   const [managedQuizDraft, setManagedQuizDraft] = useState(null);
+  const [unifiedQuizzes, setUnifiedQuizzes] = useState([]);
+  const [unifiedQuizAssignments, setUnifiedQuizAssignments] = useState([]);
+  const [unifiedQuizAttempts, setUnifiedQuizAttempts] = useState([]);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileName, setProfileName] = useState(profile?.username || '');
   const [profileAvatar, setProfileAvatar] = useState(profile?.avatar_url || '');
@@ -1649,6 +1652,29 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     setManagedQuizLoading(false);
   }
 
+  async function refreshUnifiedQuizModelFromDb() {
+    if (!dbReady || !supabase) return;
+    const [quizzesResult, assignmentsResult, attemptsResult] = await Promise.all([
+      supabase
+        .from('quizzes')
+        .select('id, quiz_key, title, description, quiz_kind, quiz_category, rank_scope, pass_score, is_active, sort_order, source_type')
+        .order('sort_order', { ascending: true })
+        .order('title', { ascending: true }),
+      supabase
+        .from('quiz_assignments')
+        .select('id, quiz_id, staff_member_id, status, assigned_at')
+        .order('assigned_at', { ascending: false }),
+      supabase
+        .from('quiz_attempts')
+        .select('id, legacy_attempt_id, quiz_id, staff_member_id, profile_id, score, passed, submitted_at, review_status, review_note, reviewed_by, reviewed_at')
+        .order('submitted_at', { ascending: false }),
+    ]);
+
+    if (!quizzesResult.error) setUnifiedQuizzes(quizzesResult.data || []);
+    if (!assignmentsResult.error) setUnifiedQuizAssignments(assignmentsResult.data || []);
+    if (!attemptsResult.error) setUnifiedQuizAttempts(attemptsResult.data || []);
+  }
+
   async function refreshRankDisplayNamesFromDb() {
     if (!dbReady || !supabase) return;
     setRankDisplayLoading(true);
@@ -1821,6 +1847,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   useEffect(() => {
     if (!dbReady || !supabase) return;
+    refreshUnifiedQuizModelFromDb();
+  }, [dbReady, authUser?.id]);
+
+  useEffect(() => {
+    if (!dbReady || !supabase) return;
     const channel = supabase
       .channel('rank_display_names_sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rank_display_names' }, () => {
@@ -1840,6 +1871,19 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         if (payload?.eventType === 'UPDATE' && payload?.new?.updated_by === authUser?.id) return;
         requestRefresh('managedQuiz');
       })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [dbReady, authUser?.id]);
+
+  useEffect(() => {
+    if (!dbReady || !supabase) return;
+    const channel = supabase
+      .channel('unified_quiz_model_sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'quizzes' }, () => { refreshUnifiedQuizModelFromDb(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'quiz_assignments' }, () => { refreshUnifiedQuizModelFromDb(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'quiz_attempts' }, () => { refreshUnifiedQuizModelFromDb(); })
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
@@ -1955,14 +1999,69 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     return scopedRanks.includes(rank);
   }
 
+  const unifiedQuizMap = useMemo(
+    () => new Map((unifiedQuizzes || []).map(item => [item.id, item])),
+    [unifiedQuizzes]
+  );
+
+  const unifiedAssignedQuizKeysByStaff = useMemo(() => {
+    const map = new Map();
+    (unifiedQuizAssignments || []).forEach(item => {
+      if (!item || item.status === 'revoked') return;
+      const quiz = unifiedQuizMap.get(item.quiz_id);
+      if (!quiz?.quiz_key || !item.staff_member_id) return;
+      if (!map.has(item.staff_member_id)) map.set(item.staff_member_id, new Set());
+      map.get(item.staff_member_id).add(quiz.quiz_key);
+    });
+    return map;
+  }, [unifiedQuizAssignments, unifiedQuizMap]);
+
+  const unifiedQuizHistoryByStaff = useMemo(() => {
+    const map = new Map();
+    (unifiedQuizAttempts || []).forEach(item => {
+      if (!item?.staff_member_id) return;
+      const quiz = unifiedQuizMap.get(item.quiz_id);
+      const attempt = {
+        id: item.legacy_attempt_id || item.id,
+        at: item.submitted_at,
+        quizKey: quiz?.quiz_key || 'unknown',
+        title: quiz?.title || quiz?.quiz_key || 'Quiz attempt',
+        category: quiz?.quiz_category || 'quiz',
+        score: Number(item.score || 0),
+        passed: Boolean(item.passed),
+        reviewStatus: item.review_status || 'pending',
+        reviewNote: item.review_note || '',
+        reviewedBy: item.reviewed_by || null,
+        reviewedAt: item.reviewed_at || null,
+        items: [],
+      };
+      if (!map.has(item.staff_member_id)) map.set(item.staff_member_id, []);
+      map.get(item.staff_member_id).push(attempt);
+    });
+    map.forEach(value => value.sort((a, b) => new Date(b.at || 0).getTime() - new Date(a.at || 0).getTime()));
+    return map;
+  }, [unifiedQuizAttempts, unifiedQuizMap]);
+
+  const staffRecords = useMemo(() => {
+    return staff.map(member => {
+      const assignedFromUnified = unifiedAssignedQuizKeysByStaff.get(member.id);
+      const historyFromUnified = unifiedQuizHistoryByStaff.get(member.id);
+      return {
+        ...member,
+        assignedQuizKeys: assignedFromUnified ? Array.from(assignedFromUnified).sort((a, b) => a.localeCompare(b)) : member.assignedQuizKeys,
+        quizHistory: historyFromUnified || member.quizHistory,
+      };
+    });
+  }, [staff, unifiedAssignedQuizKeysByStaff, unifiedQuizHistoryByStaff]);
+
   const filtered = useMemo(() => {
     const trainerNames = new Set(
-      staff
+      staffRecords
         .map(s => s.trainer)
         .filter(name => name && name !== 'Unassigned' && name !== 'Head Team')
     );
     const roleOrder = new Map(roles.map((role, index) => [role, index]));
-    const list = staff.filter(s =>
+    const list = staffRecords.filter(s =>
       (s.name.toLowerCase().includes(deferredQuery.toLowerCase()) ||
       s.role.toLowerCase().includes(deferredQuery.toLowerCase()) ||
       s.status.toLowerCase().includes(deferredQuery.toLowerCase())) &&
@@ -1976,15 +2075,15 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       if (rankDiff !== 0) return rankDiff;
       return a.name.localeCompare(b.name);
     });
-  }, [staff, deferredQuery, filterRole, filterTrainerOnly, filterActiveOnly, filterWarningOnly]);
+  }, [staffRecords, deferredQuery, filterRole, filterTrainerOnly, filterActiveOnly, filterWarningOnly]);
 
   const traineeRecord = (canUseViewAs && viewAsRole === 'staff_in_training')
-    ? (staff.find(s => s.id === viewAsStaffId) || staff.find(s => s.id === selectedId) || staff[0] || null)
-    : (staff.find(s => s.traineeUserId === authUser?.id) || null);
-  const selected = isStaffInTraining ? traineeRecord : (staff.find(s => s.id === selectedId) || staff[0] || null);
+    ? (staffRecords.find(s => s.id === viewAsStaffId) || staffRecords.find(s => s.id === selectedId) || staffRecords[0] || null)
+    : (staffRecords.find(s => s.traineeUserId === authUser?.id) || null);
+  const selected = isStaffInTraining ? traineeRecord : (staffRecords.find(s => s.id === selectedId) || staffRecords[0] || null);
   const sessionCandidates = useMemo(() => {
     const q = deferredSessionUserQuery.trim().toLowerCase();
-    return staff
+    return staffRecords
       .filter(member => sessionRankFilter === 'All' || member.role === sessionRankFilter)
       .filter(member => {
         if (!q) return true;
@@ -1992,11 +2091,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         return haystack.includes(q);
       })
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [staff, sessionRankFilter, deferredSessionUserQuery]);
-  const sessionTarget = staff.find(member => member.id === sessionTargetId) || sessionCandidates[0] || null;
+  }, [staffRecords, sessionRankFilter, deferredSessionUserQuery]);
+  const sessionTarget = staffRecords.find(member => member.id === sessionTargetId) || sessionCandidates[0] || null;
   const disciplineCandidates = useMemo(() => {
     const q = deferredDisciplineUserQuery.trim().toLowerCase();
-    return staff
+    return staffRecords
       .filter(member => disciplineRankFilter === 'All' || member.role === disciplineRankFilter)
       .filter(member => {
         if (!q) return true;
@@ -2004,8 +2103,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         return haystack.includes(q);
       })
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [staff, disciplineRankFilter, deferredDisciplineUserQuery]);
-  const disciplineTarget = staff.find(member => member.id === disciplineTargetId) || disciplineCandidates[0] || null;
+  }, [staffRecords, disciplineRankFilter, deferredDisciplineUserQuery]);
+  const disciplineTarget = staffRecords.find(member => member.id === disciplineTargetId) || disciplineCandidates[0] || null;
   const auditActionOptions = useMemo(
     () => [...new Set([...KNOWN_AUDIT_ACTIONS, ...(auditLogs || []).map(log => String(log.action || '')).filter(Boolean)])].sort((a, b) => a.localeCompare(b)),
     [auditLogs]
@@ -2067,28 +2166,28 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   useEffect(() => {
     if (!(canUseViewAs && viewAsRole === 'staff_in_training')) return;
-    if (!staff.length) {
+    if (!staffRecords.length) {
       setViewAsStaffId(null);
       return;
     }
-    const exists = viewAsStaffId !== null && staff.some(member => member.id === viewAsStaffId);
-    if (!exists) setViewAsStaffId(selectedId ?? staff[0].id);
-  }, [canUseViewAs, viewAsRole, viewAsStaffId, staff, selectedId]);
+    const exists = viewAsStaffId !== null && staffRecords.some(member => member.id === viewAsStaffId);
+    if (!exists) setViewAsStaffId(selectedId ?? staffRecords[0].id);
+  }, [canUseViewAs, viewAsRole, viewAsStaffId, staffRecords, selectedId]);
 
   useEffect(() => {
-    if (!staff.length) {
+    if (!staffRecords.length) {
       setSessionTargetId(null);
       setDisciplineTargetId(null);
       return;
     }
-    const sessionTargetStillExists = sessionTargetId !== null && staff.some(member => member.id === sessionTargetId);
+    const sessionTargetStillExists = sessionTargetId !== null && staffRecords.some(member => member.id === sessionTargetId);
     if (!sessionTargetStillExists) {
-      setSessionTargetId(selected?.id ?? staff[0].id);
+      setSessionTargetId(selected?.id ?? staffRecords[0].id);
     }
-    const targetStillExists = disciplineTargetId !== null && staff.some(member => member.id === disciplineTargetId);
+    const targetStillExists = disciplineTargetId !== null && staffRecords.some(member => member.id === disciplineTargetId);
     if (targetStillExists) return;
-    setDisciplineTargetId(selected?.id ?? staff[0].id);
-  }, [staff, selected?.id, disciplineTargetId, sessionTargetId]);
+    setDisciplineTargetId(selected?.id ?? staffRecords[0].id);
+  }, [staffRecords, selected?.id, disciplineTargetId, sessionTargetId]);
 
   useEffect(() => {
     setTrainingLogDraft(prev => ({ ...prev, note: '' }));
@@ -2122,10 +2221,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   }, [sessionTarget?.id, sessionTarget?.strongSides, sessionTarget?.attentionPoints, sessionTarget?.notes, sessionTarget?.trainer, sessionTarget?.status]);
 
   const totals = {
-    total: staff.length,
-    inTraining: staff.filter(s => s.status === 'In Training').length,
-    promotionReady: staff.filter(s => completionPercent(s) >= 90).length,
-    signedOff: staff.filter(s => s.signedOff).length,
+    total: staffRecords.length,
+    inTraining: staffRecords.filter(s => s.status === 'In Training').length,
+    promotionReady: staffRecords.filter(s => completionPercent(s) >= 90).length,
+    signedOff: staffRecords.filter(s => s.signedOff).length,
   };
 
   const currentChecks = selected ? (baseChecksByRole[selected.role] || []) : [];
@@ -2159,7 +2258,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   }
 
   function getQuizAttemptSummary(member, quizKey) {
-    const attempts = (member?.quizHistory || []).filter(item => item.quizKey === quizKey);
+    const attempts = (member?.quizHistory || []).filter(item => item.quizKey === quizKey || item.quiz_key === quizKey);
     const latest = attempts[0] || null;
     return {
       latest,
