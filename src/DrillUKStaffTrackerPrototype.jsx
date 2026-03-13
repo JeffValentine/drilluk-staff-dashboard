@@ -2161,6 +2161,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
             badge: categoryLabels[item.category],
             kind: 'pack',
             rankLabel: rankLabel(rank),
+            rankKey: rank,
             passScore: 90,
             questions: [],
           });
@@ -3534,6 +3535,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               canManageCheckboxes={canManageCheckboxes}
               onOpenBuilder={() => setActiveMainTab('checkboxes')}
               defaultName={profile?.username || authUser?.email?.split('@')[0] || ''}
+              rankBadgeClass={roleColor}
             />
           </TabsContent>
 
@@ -5914,6 +5916,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   );
 }
  
+
 
 
 

@@ -12,6 +12,7 @@ export default function QuizKnowledgeHub({
   canManageCheckboxes,
   onOpenBuilder,
   defaultName,
+  rankBadgeClass,
 }) {
   return (
     <div className="space-y-4">
@@ -52,7 +53,7 @@ export default function QuizKnowledgeHub({
                   <Badge className={definition.kind === 'mandatory' ? 'border-amber-500/35 bg-amber-500/12 text-amber-100' : 'border-cyan-500/35 bg-cyan-500/12 text-cyan-100'}>
                     {definition.badge}
                   </Badge>
-                  {definition.rankLabel && <Badge className="border-white/10 bg-white/10 text-zinc-200">{definition.rankLabel}</Badge>}
+                  {definition.rankLabel && <Badge className={`${rankBadgeClass?.(definition.rankKey) || 'border-white/10 bg-white/10 text-zinc-200'}`}>{definition.rankLabel}</Badge>}
                 </div>
                 <div className="mt-3 text-sm font-semibold text-white">{definition.title}</div>
                 <div className="mt-1 text-xs text-zinc-400">{definition.description}</div>
