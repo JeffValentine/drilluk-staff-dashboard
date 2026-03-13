@@ -2162,7 +2162,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
             kind: 'pack',
             rankLabel: rankLabel(rank),
             passScore: 90,
-            questions: EXPERIMENTAL_QUIZ_QUESTIONS,
+            questions: [],
           });
         }
         const definition = grouped.get(key);
@@ -5914,6 +5914,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   );
 }
  
+
 
 
 
