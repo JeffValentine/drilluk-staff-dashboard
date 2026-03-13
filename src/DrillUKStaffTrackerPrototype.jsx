@@ -1240,6 +1240,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [managedQuizEditorOpen, setManagedQuizEditorOpen] = useState(false);
   const [managedQuizDraft, setManagedQuizDraft] = useState(null);
   const [unifiedQuizzes, setUnifiedQuizzes] = useState([]);
+  const [unifiedQuizQuestions, setUnifiedQuizQuestions] = useState([]);
   const [unifiedQuizAssignments, setUnifiedQuizAssignments] = useState([]);
   const [unifiedQuizAttempts, setUnifiedQuizAttempts] = useState([]);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -1654,12 +1655,17 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   async function refreshUnifiedQuizModelFromDb() {
     if (!dbReady || !supabase) return;
-    const [quizzesResult, assignmentsResult, attemptsResult] = await Promise.all([
+    const [quizzesResult, questionsResult, assignmentsResult, attemptsResult] = await Promise.all([
       supabase
         .from('quizzes')
         .select('id, quiz_key, title, description, quiz_kind, quiz_category, rank_scope, pass_score, is_active, sort_order, source_type')
         .order('sort_order', { ascending: true })
         .order('title', { ascending: true }),
+      supabase
+        .from('quiz_questions')
+        .select('id, quiz_id, legacy_source_id, question_order, category, question, correct_answers, wrong_answers, explanation, updated_at')
+        .order('question_order', { ascending: true })
+        .order('updated_at', { ascending: true }),
       supabase
         .from('quiz_assignments')
         .select('id, quiz_id, staff_member_id, status, assigned_at')
@@ -1671,6 +1677,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     ]);
 
     if (!quizzesResult.error) setUnifiedQuizzes(quizzesResult.data || []);
+    if (!questionsResult.error) setUnifiedQuizQuestions(questionsResult.data || []);
     if (!assignmentsResult.error) setUnifiedQuizAssignments(assignmentsResult.data || []);
     if (!attemptsResult.error) setUnifiedQuizAttempts(attemptsResult.data || []);
   }
@@ -1882,6 +1889,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     const channel = supabase
       .channel('unified_quiz_model_sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'quizzes' }, () => { refreshUnifiedQuizModelFromDb(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'quiz_questions' }, () => { refreshUnifiedQuizModelFromDb(); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'quiz_assignments' }, () => { refreshUnifiedQuizModelFromDb(); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'quiz_attempts' }, () => { refreshUnifiedQuizModelFromDb(); })
       .subscribe();
@@ -2333,6 +2341,105 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       permission: 'Staff Menu Quiz',
     };
 
+    if (unifiedQuizzes.length && unifiedQuizQuestions.length) {
+      const questionsByQuiz = new Map();
+      (unifiedQuizQuestions || []).forEach(item => {
+        if (!item?.quiz_id) return;
+        if (!questionsByQuiz.has(item.quiz_id)) questionsByQuiz.set(item.quiz_id, []);
+        questionsByQuiz.get(item.quiz_id).push(item);
+      });
+
+      const definitions = (unifiedQuizzes || [])
+        .filter(item => item?.is_active !== false)
+        .map(quiz => {
+          const sortedQuestions = [...(questionsByQuiz.get(quiz.id) || [])].sort((a, b) => Number(a.question_order || 0) - Number(b.question_order || 0));
+          const rankScope = Array.isArray(quiz.rank_scope) ? quiz.rank_scope.map(value => String(value || '')).filter(Boolean) : [];
+          const rankKey = rankScope[0] || '';
+          const badge = quiz.quiz_category === 'entry'
+            ? 'Entry Quiz'
+            : quiz.quiz_category === 'core_values'
+              ? 'Core Values Quiz'
+              : quiz.quiz_category === 'staff_menu'
+                ? 'Staff Menu Quiz'
+                : quiz.quiz_kind === 'mandatory'
+                  ? 'Mandatory'
+                  : 'Managed Quiz';
+          const kind = quiz.quiz_kind === 'rank_pack'
+            ? 'pack'
+            : quiz.quiz_kind === 'mandatory'
+              ? 'mandatory'
+              : 'managed';
+          const sourceType = quiz.source_type === 'legacy_checkbox' ? 'checkbox' : 'managed';
+          const sourceItems = sortedQuestions.map(item => {
+            const correctAnswer = Array.isArray(item.correct_answers) ? String(item.correct_answers[0] || '') : '';
+            const wrongAnswers = Array.isArray(item.wrong_answers) ? item.wrong_answers.map(value => String(value || '')).filter(Boolean).slice(0, 3) : [];
+            const sourceCheckbox = sourceType === 'checkbox'
+              ? checkboxCatalog.find(entry => String(entry.id) === String(item.legacy_source_id)) || null
+              : null;
+            return {
+              id: item.id,
+              legacySourceId: item.legacy_source_id || null,
+              category: item.category || 'General Rules',
+              question: item.question || 'Question',
+              correctAnswer,
+              wrongAnswers,
+              sourceCheckbox,
+              quizKey: quiz.quiz_key,
+              quizTitle: quiz.title,
+              quizDescription: quiz.description || '',
+              rankKey,
+              passScore: Number(quiz.pass_score || 80),
+              questionOrder: Number(item.question_order || 0),
+            };
+          });
+
+          return {
+            key: quiz.quiz_key,
+            title: quiz.title,
+            description: quiz.description || 'Knowledge quiz.',
+            badge,
+            kind,
+            rankLabel: rankKey ? rankLabel(rankKey) : null,
+            rankKey,
+            passScore: Number(quiz.pass_score || 80),
+            sourceType,
+            sourceItems,
+            questions: sourceItems.map(item => {
+              const options = shuffleArray([item.correctAnswer, ...(item.wrongAnswers || [])].filter(Boolean));
+              return {
+                category: item.category || 'General Rules',
+                question: item.question,
+                options,
+                answer: Math.max(options.indexOf(item.correctAnswer), 0),
+              };
+            }),
+          };
+        })
+        .filter(definition => definition.questions.length);
+
+      return definitions
+        .map(definition => {
+          const sortMeta = getKnowledgeQuizSortMeta(definition);
+          return {
+            ...definition,
+            sortLabel: definition.kind === 'pack'
+              ? `${rankLabel(definition.rankKey)} · ${definition.badge}`
+              : definition.kind === 'mandatory'
+                ? 'All trainees'
+                : definition.rankKey
+                  ? `${rankLabel(definition.rankKey)} · Additional`
+                  : 'Additional quiz',
+            sortWeight: sortMeta,
+          };
+        })
+        .sort((a, b) => {
+          if (a.sortWeight.group !== b.sortWeight.group) return a.sortWeight.group - b.sortWeight.group;
+          if (a.sortWeight.rank !== b.sortWeight.rank) return a.sortWeight.rank - b.sortWeight.rank;
+          if (a.sortWeight.category !== b.sortWeight.category) return a.sortWeight.category - b.sortWeight.category;
+          return a.title.localeCompare(b.title);
+        });
+    }
+
     const managedByQuizKey = new Map();
     managedQuizQuestions.forEach(item => {
       if (!managedByQuizKey.has(item.quizKey)) managedByQuizKey.set(item.quizKey, []);
@@ -2488,8 +2595,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         if (a.sortWeight.category !== b.sortWeight.category) return a.sortWeight.category - b.sortWeight.category;
         return a.title.localeCompare(b.title);
       });
-  }, [checkboxCatalog, managedQuizQuestions, roles, rankLabel]);
-
+  }, [checkboxCatalog, managedQuizQuestions, unifiedQuizzes, unifiedQuizQuestions, roles, rankLabel]);
   const displayedKnowledgeQuizDefinitions = useMemo(() => {
     const source = isStaffInTraining
       ? knowledgeQuizDefinitions.filter(definition => isQuizVisibleForMember(definition, selected))
@@ -6697,6 +6803,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   );
 }
  
+
+
+
+
 
 
 
