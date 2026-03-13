@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,6 +31,7 @@ export default function ExperimentalStaffQuiz({
   questions: providedQuestions = EXPERIMENTAL_QUIZ_QUESTIONS,
   recommendedPass = 80,
   accent = 'fuchsia',
+  onComplete = null,
 }) {
   const [playerName, setPlayerName] = useState(defaultName);
   const [attemptSeed, setAttemptSeed] = useState(0);
@@ -38,6 +39,7 @@ export default function ExperimentalStaffQuiz({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedIndex, setSelectedIndex] = useState(null);
   const [answers, setAnswers] = useState([]);
+  const completionReportedRef = useRef(false);
 
   const questions = useMemo(() => shuffleQuestions(providedQuestions || []), [providedQuestions, attemptSeed]);
   const currentQuestion = questions[currentIndex] || null;
@@ -60,6 +62,7 @@ export default function ExperimentalStaffQuiz({
     setSelectedIndex(null);
     setCurrentIndex(0);
     setStarted(true);
+    completionReportedRef.current = false;
   }
 
   function submitAnswer(answerIndex) {
@@ -90,7 +93,23 @@ export default function ExperimentalStaffQuiz({
     setCurrentIndex(0);
     setSelectedIndex(null);
     setAnswers([]);
+    completionReportedRef.current = false;
   }
+
+  useEffect(() => {
+    if (!isFinished || completionReportedRef.current || typeof onComplete !== 'function') return;
+    completionReportedRef.current = true;
+    onComplete({
+      playerName: playerName || 'Staff Member',
+      totalQuestions,
+      correctAnswers,
+      scorePercent,
+      recommendedPass,
+      passed: scorePercent >= recommendedPass,
+      answers,
+      questions,
+    });
+  }, [answers, correctAnswers, isFinished, onComplete, playerName, questions, recommendedPass, scorePercent, totalQuestions]);
 
   return (
     <div className="space-y-4">

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,7 +15,18 @@ export default function QuizKnowledgeHub({
   onAddManagedQuestion,
   defaultName,
   rankBadgeClass,
+  selectedStaff = null,
+  isAssignedToSelected = false,
+  onToggleAssignment = null,
+  onQuizComplete = null,
 }) {
+  const questionBankRef = useRef(null);
+
+  useEffect(() => {
+    if (!selectedQuiz || !questionBankRef.current) return;
+    questionBankRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [selectedQuizKey, selectedQuiz]);
+
   return (
     <div className="space-y-4">
       <Card className="border-white/10 bg-white/5">
@@ -56,10 +67,14 @@ export default function QuizKnowledgeHub({
                     {definition.badge}
                   </Badge>
                   {definition.rankLabel && <Badge className={`${rankBadgeClass?.(definition.rankKey) || 'border-white/10 bg-white/10 text-zinc-200'}`}>{definition.rankLabel}</Badge>}
+                  {definition.progressLabel && <Badge className="border-emerald-500/35 bg-emerald-500/12 text-emerald-100">{definition.progressLabel}</Badge>}
                 </div>
                 <div className="mt-3 text-sm font-semibold text-white">{definition.title}</div>
                 <div className="mt-1 text-xs text-zinc-400">{definition.description}</div>
-                <div className="mt-3 text-[11px] uppercase tracking-[0.18em] text-zinc-500">{definition.questions.length} questions</div>
+                <div className="mt-3 flex items-center justify-between gap-2 text-[11px] uppercase tracking-[0.18em] text-zinc-500">
+                  <span>{definition.questions.length} questions</span>
+                  {definition.sortLabel && <span>{definition.sortLabel}</span>}
+                </div>
               </button>
             ))}
           </div>
@@ -67,11 +82,19 @@ export default function QuizKnowledgeHub({
       </Card>
 
       {selectedQuiz && canManageCheckboxes && (
-        <Card className="border-white/10 bg-white/5">
+        <Card ref={questionBankRef} className="border-white/10 bg-white/5">
           <CardHeader>
             <CardTitle className="flex items-center justify-between gap-3">
               <span>{selectedQuiz.title} Question Bank</span>
               <div className="flex flex-wrap gap-2">
+                {selectedStaff && typeof onToggleAssignment === 'function' && (
+                  <Button
+                    onClick={() => onToggleAssignment(selectedQuiz)}
+                    className={`rounded-2xl border ${isAssignedToSelected ? 'border-emerald-400/35 bg-emerald-500/12 text-emerald-100 hover:bg-emerald-500/18' : 'border-cyan-400/35 bg-cyan-500/12 text-cyan-100 hover:bg-cyan-500/18'}`}
+                  >
+                    {isAssignedToSelected ? `Unassign from ${selectedStaff.name}` : `Assign to ${selectedStaff.name}`}
+                  </Button>
+                )}
                 {selectedQuiz.sourceType === 'managed' && (
                   <Button onClick={() => onAddManagedQuestion?.(selectedQuiz.key)} className="rounded-2xl border border-amber-400/35 bg-amber-500/12 text-amber-100 hover:bg-amber-500/18">
                     Add Question
@@ -125,6 +148,7 @@ export default function QuizKnowledgeHub({
           questions={selectedQuiz.questions}
           recommendedPass={selectedQuiz.passScore || 80}
           accent={selectedQuiz.kind === 'mandatory' ? 'amber' : 'fuchsia'}
+          onComplete={onQuizComplete}
         />
       )}
     </div>

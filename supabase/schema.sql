@@ -119,6 +119,7 @@ alter table public.profiles add column if not exists last_seen_at timestamptz;
 alter table public.staff_members add column if not exists trainee_user_id uuid references auth.users(id);
 alter table public.staff_members add column if not exists quiz_history jsonb not null default '[]'::jsonb;
 alter table public.staff_members add column if not exists training_logs jsonb not null default '[]'::jsonb;
+alter table public.staff_members add column if not exists assigned_quiz_keys jsonb not null default '[]'::jsonb;
 
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
@@ -399,3 +400,5 @@ drop policy if exists "managed_quiz_questions_delete_admin_head" on public.manag
 create policy "managed_quiz_questions_delete_admin_head"
 on public.managed_quiz_questions for delete
 using (public.current_user_role() in ('admin', 'head_admin') or public.current_user_has_god_key() = true);
+
+

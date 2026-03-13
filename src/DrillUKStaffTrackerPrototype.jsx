@@ -1457,6 +1457,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       disciplinary: row.disciplinary || { warnings: 0, actions: 0, logs: [] },
       quizHistory: Array.isArray(row.quiz_history) ? row.quiz_history : [],
       trainingLogs: Array.isArray(row.training_logs) ? row.training_logs : [],
+      assignedQuizKeys: Array.isArray(row.assigned_quiz_keys) ? row.assigned_quiz_keys.map(value => String(value || '')).filter(Boolean) : [],
       notes: row.notes || '',
     }));
     const shouldPreserveLocalSelected = Date.now() - lastLocalStaffEditRef.current < 1400;
@@ -2139,6 +2140,57 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     const done = keys.filter(key => Boolean(source?.[key])).length;
     return Math.round((done / keys.length) * 100);
   }
+  function getKnowledgeQuizSortMeta(definition) {
+    if (definition.kind === 'mandatory') return { group: 0, rank: -1, category: 0 };
+    if (definition.kind === 'pack') {
+      const categoryMap = { 'Entry Quiz': 0, 'Core Values Quiz': 1, 'Staff Menu Quiz': 2 };
+      return {
+        group: 1,
+        rank: roles.indexOf(definition.rankKey || ''),
+        category: categoryMap[definition.badge] ?? 9,
+      };
+    }
+    return {
+      group: 2,
+      rank: definition.rankKey ? roles.indexOf(definition.rankKey) : 99,
+      category: 9,
+    };
+  }
+
+  function getQuizAttemptSummary(member, quizKey) {
+    const attempts = (member?.quizHistory || []).filter(item => item.quizKey === quizKey);
+    const latest = attempts[0] || null;
+    return {
+      latest,
+      count: attempts.length,
+      passed: Boolean(latest?.passed),
+      score: latest?.score ?? null,
+    };
+  }
+
+  function getKnowledgeQuizProgress(definition, member) {
+    if (!member || !definition) return { percent: 0, label: 'Not started' };
+    if (definition.kind === 'pack') {
+      const titles = (definition.sourceItems || []).map(item => item.sourceCheckbox?.title).filter(Boolean);
+      const source = definition.key.endsWith('|role')
+        ? member.checks
+        : definition.key.endsWith('|core')
+          ? member.values
+          : member.permissions;
+      const percent = checklistPercent(titles, source);
+      return { percent, label: `${percent}% complete` };
+    }
+    const summary = getQuizAttemptSummary(member, definition.key);
+    if (!summary.latest) return { percent: 0, label: 'Not attempted' };
+    return { percent: summary.passed ? 100 : Math.max(Number(summary.score || 0), 0), label: summary.passed ? `Passed ${summary.score}%` : `Latest ${summary.score}%` };
+  }
+
+  function isQuizVisibleForMember(definition, member) {
+    if (!definition || !member) return false;
+    if (definition.kind === 'mandatory') return true;
+    if ((member.assignedQuizKeys || []).includes(definition.key)) return true;
+    return definition.rankKey === member.role;
+  }
 
   const quizItemsByCategory = useMemo(() => {
     if (!selected) return { role: [], core: [], permission: [] };
@@ -2312,22 +2364,52 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     });
 
     definitions.push(
-      ...Array.from(grouped.values())
-        .filter(definition => definition.questions.length)
-        .sort((a, b) => {
-          const aRank = roles.indexOf((a.key || '').split('|')[0]);
-          const bRank = roles.indexOf((b.key || '').split('|')[0]);
-          if (aRank !== bRank) return aRank - bRank;
-          return a.title.localeCompare(b.title);
-        })
+      ...Array.from(grouped.values()).filter(definition => definition.questions.length)
     );
-    return definitions;
+
+    return definitions
+      .map(definition => {
+        const sortMeta = getKnowledgeQuizSortMeta(definition);
+        return {
+          ...definition,
+          sortLabel: definition.kind === 'pack'
+            ? `${rankLabel(definition.rankKey)} · ${definition.badge}`
+            : definition.kind === 'mandatory'
+              ? 'All trainees'
+              : definition.rankKey
+                ? `${rankLabel(definition.rankKey)} · Additional`
+                : 'Additional quiz',
+          sortWeight: sortMeta,
+        };
+      })
+      .sort((a, b) => {
+        if (a.sortWeight.group !== b.sortWeight.group) return a.sortWeight.group - b.sortWeight.group;
+        if (a.sortWeight.rank !== b.sortWeight.rank) return a.sortWeight.rank - b.sortWeight.rank;
+        if (a.sortWeight.category !== b.sortWeight.category) return a.sortWeight.category - b.sortWeight.category;
+        return a.title.localeCompare(b.title);
+      });
   }, [checkboxCatalog, managedQuizQuestions, roles, rankLabel]);
+
+  const displayedKnowledgeQuizDefinitions = useMemo(() => {
+    const source = isStaffInTraining
+      ? knowledgeQuizDefinitions.filter(definition => isQuizVisibleForMember(definition, selected))
+      : knowledgeQuizDefinitions;
+    return source.map(definition => ({
+      ...definition,
+      progressLabel: getKnowledgeQuizProgress(definition, selected).label,
+      progressPercent: getKnowledgeQuizProgress(definition, selected).percent,
+    }));
+  }, [getKnowledgeQuizProgress, isStaffInTraining, knowledgeQuizDefinitions, selected]);
+
   const selectedKnowledgeQuiz = useMemo(
-    () => knowledgeQuizDefinitions.find(item => item.key === selectedKnowledgeQuizKey) || knowledgeQuizDefinitions[0] || null,
-    [knowledgeQuizDefinitions, selectedKnowledgeQuizKey]
+    () => displayedKnowledgeQuizDefinitions.find(item => item.key === selectedKnowledgeQuizKey) || displayedKnowledgeQuizDefinitions[0] || null,
+    [displayedKnowledgeQuizDefinitions, selectedKnowledgeQuizKey]
   );
 
+  useEffect(() => {
+    if (displayedKnowledgeQuizDefinitions.some(item => item.key === selectedKnowledgeQuizKey)) return;
+    setSelectedKnowledgeQuizKey(displayedKnowledgeQuizDefinitions[0]?.key || 'mandatory-general');
+  }, [displayedKnowledgeQuizDefinitions, selectedKnowledgeQuizKey]);
   const filteredManagementUsers = useMemo(() => {
     const needle = managementQuery.trim().toLowerCase();
     return (managementUsers || [])
@@ -2377,6 +2459,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       disciplinary: member.disciplinary || { warnings: 0, actions: 0, logs: [] },
       quiz_history: Array.isArray(member.quizHistory) ? member.quizHistory : [],
       training_logs: Array.isArray(member.trainingLogs) ? member.trainingLogs : [],
+      assigned_quiz_keys: Array.isArray(member.assignedQuizKeys) ? member.assignedQuizKeys : [],
       notes: member.notes || '',
       updated_by: authUser?.id || null,
     };
@@ -2415,6 +2498,58 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     }
   }
 
+  function toggleQuizAssignment(quizDefinition) {
+    if (!selected || !canEdit || !quizDefinition) return;
+    const current = new Set(selected.assignedQuizKeys || []);
+    const assigning = !current.has(quizDefinition.key);
+    if (assigning) current.add(quizDefinition.key);
+    else current.delete(quizDefinition.key);
+    const nextAssignedQuizKeys = [...current].sort((a, b) => a.localeCompare(b));
+    updateSelected({ assignedQuizKeys: nextAssignedQuizKeys });
+    writeAudit('staff.quiz_assignment', selected.id, null, { quizKey: quizDefinition.key, assigned: assigning });
+  }
+
+  function handleKnowledgeQuizComplete(result) {
+    if (!selected || !selectedKnowledgeQuiz) return;
+    const answeredItems = Array.isArray(result?.answers) ? result.answers : [];
+    const attempt = {
+      id: `${Date.now()}-${selectedKnowledgeQuiz.key}`,
+      at: new Date().toISOString(),
+      quizKey: selectedKnowledgeQuiz.key,
+      title: selectedKnowledgeQuiz.title,
+      category: selectedKnowledgeQuiz.badge,
+      score: Number(result?.scorePercent || 0),
+      passed: Boolean(result?.passed),
+      reviewStatus: 'pending',
+      reviewNote: '',
+      reviewedBy: null,
+      reviewedAt: null,
+      items: answeredItems.map((item, index) => ({
+        id: `${selectedKnowledgeQuiz.key}-${index + 1}`,
+        title: item.question,
+        selected: item.selectedIndex === null || item.selectedIndex === undefined ? null : item.selectedIndex,
+        correct: item.correctAnswer,
+        isCorrect: Boolean(item.correct),
+      })),
+    };
+
+    const quizHistory = [attempt, ...(selected.quizHistory || [])].slice(0, 200);
+    const patch = { quizHistory };
+
+    if (attempt.passed && selectedKnowledgeQuiz.kind === 'pack') {
+      const sourceTitles = (selectedKnowledgeQuiz.sourceItems || []).map(item => item.sourceCheckbox?.title).filter(Boolean);
+      if (selectedKnowledgeQuiz.key.endsWith('|role')) {
+        patch.checks = { ...selected.checks, ...Object.fromEntries(sourceTitles.map(title => [title, true])) };
+      } else if (selectedKnowledgeQuiz.key.endsWith('|core')) {
+        patch.values = { ...selected.values, ...Object.fromEntries(sourceTitles.map(title => [title, true])) };
+      } else {
+        patch.permissions = { ...selected.permissions, ...Object.fromEntries(sourceTitles.map(title => [title, true])) };
+      }
+    }
+
+    updateSelected(patch);
+    writeAudit('quiz.submit', selected.id, null, { quizKey: selectedKnowledgeQuiz.key, score: attempt.score, passed: attempt.passed });
+  }
   function buildResetProgressForRole(nextRole) {
     return {
       checks: Object.fromEntries((baseChecksByRole[nextRole] || []).map(item => [item, false])),
@@ -3782,7 +3917,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
           <TabsContent value="quizknowledge">
             <QuizKnowledgeHub
-              quizDefinitions={knowledgeQuizDefinitions}
+              quizDefinitions={displayedKnowledgeQuizDefinitions}
               selectedQuizKey={selectedKnowledgeQuizKey}
               setSelectedQuizKey={setSelectedKnowledgeQuizKey}
               selectedQuiz={selectedKnowledgeQuiz}
@@ -3795,11 +3930,15 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               onAddManagedQuestion={addManagedQuizQuestion}
               defaultName={profile?.username || authUser?.email?.split('@')[0] || ''}
               rankBadgeClass={roleColor}
+              selectedStaff={!isStaffInTraining ? selected : null}
+              isAssignedToSelected={Boolean(selectedKnowledgeQuiz && (selected?.assignedQuizKeys || []).includes(selectedKnowledgeQuiz.key))}
+              onToggleAssignment={toggleQuizAssignment}
+              onQuizComplete={handleKnowledgeQuizComplete}
             />
           </TabsContent>
 
           <TabsContent value="myprogress">
-            <div className="grid gap-4 xl:grid-cols-[380px,1fr]">
+            <div className="grid gap-4 xl:grid-cols-[360px,1fr]">
               <Card className="border-white/10 bg-white/5">
                 <CardHeader>
                   <CardTitle>My Staff Profile</CardTitle>
@@ -3819,88 +3958,38 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                       <div className="mt-1 text-xs text-zinc-500">Trainer: {selected.trainer}</div>
                     </div>
                   </div>
-                  <div className="space-y-2">
+                  <div className="grid gap-3">
                     <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Role Checklist</div>
-                      <div className="mt-1 text-sm text-white">{checklistPercent((quizItemsByCategory.role || []).map(q => q.title), selected.checks)}%</div>
+                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Available quizzes</div>
+                      <div className="mt-1 text-2xl font-semibold text-white">{displayedKnowledgeQuizDefinitions.length}</div>
+                      <div className="mt-1 text-xs text-zinc-500">Rank-matched or directly assigned to you</div>
                     </div>
                     <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Core Values</div>
-                      <div className="mt-1 text-sm text-white">{checklistPercent((quizItemsByCategory.core || []).map(q => q.title), selected.values)}%</div>
+                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Completed quizzes</div>
+                      <div className="mt-1 text-2xl font-semibold text-white">{displayedKnowledgeQuizDefinitions.filter(definition => getKnowledgeQuizProgress(definition, selected).percent >= 100).length}</div>
+                      <div className="mt-1 text-xs text-zinc-500">Passed or fully signed off</div>
                     </div>
                     <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Permissions</div>
-                      <div className="mt-1 text-sm text-white">{checklistPercent((quizItemsByCategory.permission || []).map(q => q.title), selected.permissions)}%</div>
+                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Overall readiness</div>
+                      <div className="mt-1 text-2xl font-semibold text-white">{completionPercent(selected)}%</div>
+                      <div className="mt-2"><Progress value={completionPercent(selected)} className="h-2.5 bg-white/10" /></div>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
               <div className="space-y-4">
-                {[
-                  { id: 'role', label: 'Role Checklist Quiz', source: selected.checks },
-                  { id: 'core', label: 'Core Values Quiz', source: selected.values },
-                  { id: 'permission', label: 'Permissions Quiz', source: selected.permissions },
-                ].map(section => {
-                  const items = quizItemsByCategory[section.id] || [];
-                  const state = quizState[section.id];
-                  const progress = checklistPercent(items.map(item => item.title), section.source);
-                  return (
-                    <Card key={`quiz-${section.id}`} className="border-white/10 bg-white/5">
-                      <CardHeader>
-                        <CardTitle className="flex items-center justify-between">
-                          <span>{section.label}</span>
-                          <Badge className="border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-200">{progress}% complete</Badge>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        {!items.length && (
-                          <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">
-                            No quiz items configured for your rank yet.
-                          </div>
-                        )}
-                        {items.length > 0 && !state.started && (
-                          <Button onClick={() => startQuiz(section.id)} className="rounded-xl border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white hover:from-fuchsia-500 hover:to-indigo-500">
-                            Start {section.label}
-                          </Button>
-                        )}
-                        {items.length > 0 && state.started && (
-                          <div className="space-y-3">
-                            {items.map((item, idx) => (
-                              <div key={`q-${section.id}-${item.id}`} className="rounded-xl border border-white/10 bg-black/20 p-3">
-                                <div className="text-sm font-semibold text-white">{idx + 1}. {item.title}</div>
-                                <div className="mt-1 text-xs text-zinc-400">{item.question}</div>
-                                <div className="mt-3 space-y-2">
-                                  {item.options.map(option => (
-                                    <label key={`opt-${item.id}-${option}`} className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/25 px-3 py-2 text-sm text-zinc-200">
-                                      <input
-                                        type="radio"
-                                        name={`quiz-${section.id}-${item.id}`}
-                                        checked={state.answers[item.id] === option}
-                                        onChange={() => setQuizAnswer(section.id, item.id, option)}
-                                      />
-                                      <span>{option}</span>
-                                    </label>
-                                  ))}
-                                </div>
-                              </div>
-                            ))}
-                            <div className="flex items-center gap-2">
-                              <Button onClick={() => finishQuiz(section.id)} className="rounded-xl border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white hover:from-fuchsia-500 hover:to-indigo-500">
-                                Submit Quiz
-                              </Button>
-                              {state.score !== null && (
-                                <Badge className={state.score >= 90 ? 'border-emerald-500/35 bg-emerald-500/15 text-emerald-200' : 'border-red-500/35 bg-red-500/15 text-red-200'}>
-                                  Score: {state.score}% ({state.score >= 90 ? 'Pass' : 'Fail'})
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+                <QuizKnowledgeHub
+                  quizDefinitions={displayedKnowledgeQuizDefinitions}
+                  selectedQuizKey={selectedKnowledgeQuizKey}
+                  setSelectedQuizKey={setSelectedKnowledgeQuizKey}
+                  selectedQuiz={selectedKnowledgeQuiz}
+                  canManageCheckboxes={false}
+                  onOpenBuilder={() => setActiveMainTab('quizknowledge')}
+                  defaultName={profile?.username || authUser?.email?.split('@')[0] || ''}
+                  rankBadgeClass={roleColor}
+                  onQuizComplete={handleKnowledgeQuizComplete}
+                />
               </div>
             </div>
           </TabsContent>
