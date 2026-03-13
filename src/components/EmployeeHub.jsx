@@ -164,12 +164,12 @@ export default function EmployeeHub({
                   </div>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  <Button onClick={onOpenTracker} className="rounded-2xl border border-cyan-400/35 bg-gradient-to-r from-cyan-600/30 to-sky-600/20 text-cyan-50 shadow-[0_10px_28px_rgba(14,116,144,0.22)] hover:from-cyan-500/35 hover:to-sky-500/25"><ClipboardList className="mr-2 h-4 w-4" /> Full tracker</Button>
-                  <Button onClick={onOpenSession} className="rounded-2xl border border-emerald-400/35 bg-gradient-to-r from-emerald-600/30 to-green-600/20 text-emerald-50 shadow-[0_10px_28px_rgba(22,163,74,0.22)] hover:from-emerald-500/35 hover:to-green-500/25"><GraduationCap className="mr-2 h-4 w-4" /> Training session</Button>
-                  <Button onClick={onOpenProgression} className="rounded-2xl border border-amber-400/35 bg-gradient-to-r from-amber-600/30 to-orange-600/20 text-amber-50 shadow-[0_10px_28px_rgba(217,119,6,0.22)] hover:from-amber-500/35 hover:to-orange-500/25"><ArrowUpRight className="mr-2 h-4 w-4" /> Progression</Button>
+                  <Button onClick={onOpenTracker} className="rounded-2xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10"><ClipboardList className="mr-2 h-4 w-4" /> Full tracker</Button>
+                  <Button onClick={onOpenSession} className="rounded-2xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10"><GraduationCap className="mr-2 h-4 w-4" /> Training session</Button>
+                  <Button onClick={onOpenProgression} className="rounded-2xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10"><ArrowUpRight className="mr-2 h-4 w-4" /> Progression</Button>
                   <Button onClick={onWarning} className="rounded-2xl border border-amber-400/35 bg-amber-500/12 text-amber-100 hover:bg-amber-500/18"><Gavel className="mr-2 h-4 w-4" /> Warning</Button>
                   <Button onClick={onDiscipline} className="rounded-2xl border border-red-400/35 bg-red-500/12 text-red-100 hover:bg-red-500/18"><ShieldAlert className="mr-2 h-4 w-4" /> Disciplinary action</Button>
-                  <Button onClick={onAssignQuiz} className="rounded-2xl border border-fuchsia-400/35 bg-gradient-to-r from-fuchsia-600/30 to-indigo-600/20 text-fuchsia-50 shadow-[0_10px_28px_rgba(192,38,211,0.2)] hover:from-fuchsia-500/35 hover:to-indigo-500/25"><ClipboardList className="mr-2 h-4 w-4" /> Assign quiz</Button>
+                  <Button onClick={onAssignQuiz} className="rounded-2xl border border-cyan-400/35 bg-cyan-500/12 text-cyan-100 hover:bg-cyan-500/18"><ClipboardList className="mr-2 h-4 w-4" /> Assign quiz</Button>
                 </div>
               </div>
             </div>
@@ -226,6 +226,7 @@ export default function EmployeeHub({
     </div>
   );
 }
+
 
 
 
