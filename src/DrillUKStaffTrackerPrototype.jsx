@@ -2495,6 +2495,123 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     });
   }
 
+  async function resolveUnifiedQuizRow(quizKey) {
+    if (!dbReady || !supabase || !quizKey) return null;
+    const { data, error } = await supabase
+      .from('quizzes')
+      .select('id, quiz_key')
+      .eq('quiz_key', quizKey)
+      .maybeSingle();
+    if (error) return null;
+    return data || null;
+  }
+
+  async function syncManagedQuestionToUnifiedModel(item) {
+    if (!dbReady || !supabase || !item?.quizKey) return;
+    const rankScope = item.rankKey ? [item.rankKey] : [];
+    const quizKind = item.quizKey === 'mandatory-general' ? 'mandatory' : 'managed';
+    const quizCategory = item.quizKey === 'mandatory-general' ? 'mandatory' : 'custom';
+    const { data: quizRow, error: quizError } = await supabase
+      .from('quizzes')
+      .upsert({
+        quiz_key: item.quizKey,
+        title: item.quizTitle,
+        description: item.quizDescription || '',
+        quiz_kind: quizKind,
+        quiz_category: quizCategory,
+        rank_scope: rankScope,
+        pass_score: Number(item.passScore || 80),
+        source_type: 'native',
+        updated_by: authUser?.id || null,
+      })
+      .select('id')
+      .single();
+    if (quizError || !quizRow?.id) return;
+
+    await supabase
+      .from('quiz_questions')
+      .upsert({
+        quiz_id: quizRow.id,
+        legacy_source_id: item.id || null,
+        question_order: Number(item.questionOrder || 0),
+        category: item.category || 'General Rules',
+        question: item.question || '',
+        correct_answers: [item.correctAnswer || ''],
+        wrong_answers: (item.wrongAnswers || []).filter(Boolean),
+        updated_by: authUser?.id || null,
+      });
+  }
+
+  async function removeManagedQuestionFromUnifiedModel(itemId, quizKey) {
+    if (!dbReady || !supabase) return;
+    let quizId = null;
+    if (quizKey) {
+      const quizRow = await resolveUnifiedQuizRow(quizKey);
+      quizId = quizRow?.id || null;
+    }
+    if (quizId && itemId) {
+      await supabase.from('quiz_questions').delete().eq('quiz_id', quizId).eq('legacy_source_id', itemId);
+      const { count } = await supabase.from('quiz_questions').select('id', { count: 'exact', head: true }).eq('quiz_id', quizId);
+      if (!count) {
+        await supabase.from('quizzes').delete().eq('id', quizId);
+      }
+    }
+  }
+
+  async function syncQuizAssignmentToUnifiedModel(staffMemberId, quizKey, assigned) {
+    if (!dbReady || !supabase || !staffMemberId || !quizKey) return;
+    const quizRow = await resolveUnifiedQuizRow(quizKey);
+    if (!quizRow?.id) return;
+    if (assigned) {
+      await supabase.from('quiz_assignments').upsert({
+        quiz_id: quizRow.id,
+        staff_member_id: staffMemberId,
+        assigned_by: authUser?.id || null,
+        status: 'active',
+      });
+      return;
+    }
+    await supabase.from('quiz_assignments').delete().eq('quiz_id', quizRow.id).eq('staff_member_id', staffMemberId);
+  }
+
+  async function syncQuizAttemptToUnifiedModel(staffMember, quizDefinition, attempt) {
+    if (!dbReady || !supabase || !staffMember?.id || !quizDefinition?.key || !attempt?.id) return;
+    const quizRow = await resolveUnifiedQuizRow(quizDefinition.key);
+    if (!quizRow?.id) return;
+
+    const { data: attemptRow, error: attemptError } = await supabase
+      .from('quiz_attempts')
+      .upsert({
+        legacy_attempt_id: attempt.id,
+        quiz_id: quizRow.id,
+        staff_member_id: staffMember.id,
+        profile_id: staffMember.traineeUserId || null,
+        score: Number(attempt.score || 0),
+        passed: Boolean(attempt.passed),
+        submitted_at: attempt.at || new Date().toISOString(),
+        review_status: attempt.reviewStatus || 'pending',
+        review_note: attempt.reviewNote || null,
+        reviewed_by: attempt.reviewedBy || null,
+        reviewed_at: attempt.reviewedAt || null,
+      })
+      .select('id')
+      .single();
+    if (attemptError || !attemptRow?.id) return;
+
+    await supabase.from('quiz_attempt_answers').delete().eq('attempt_id', attemptRow.id);
+    const answerRows = (attempt.items || []).map((item, index) => ({
+      attempt_id: attemptRow.id,
+      question_order: index + 1,
+      question_prompt: item.title || `Question ${index + 1}`,
+      selected_answer: item.selected === null || item.selected === undefined ? null : String(item.selected),
+      correct_answer: item.correct || null,
+      is_correct: Boolean(item.isCorrect),
+    }));
+    if (answerRows.length) {
+      await supabase.from('quiz_attempt_answers').insert(answerRows);
+    }
+  }
+
   function updateSelected(patch) {
     if (!selected || (!canEdit && !isStaffInTraining)) return;
     let updated = null;
@@ -2517,6 +2634,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     else current.delete(quizDefinition.key);
     const nextAssignedQuizKeys = [...current].sort((a, b) => a.localeCompare(b));
     updateSelected({ assignedQuizKeys: nextAssignedQuizKeys });
+    void syncQuizAssignmentToUnifiedModel(selected.id, quizDefinition.key, assigning);
     writeAudit('staff.quiz_assignment', selected.id, null, { quizKey: quizDefinition.key, assigned: assigning });
   }
 
@@ -2559,6 +2677,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     }
 
     updateSelected(patch);
+    void syncQuizAttemptToUnifiedModel(selected, selectedKnowledgeQuiz, attempt);
     writeAudit('quiz.submit', selected.id, null, { quizKey: selectedKnowledgeQuiz.key, score: attempt.score, passed: attempt.passed });
   }
   function buildResetProgressForRole(nextRole) {
@@ -3401,6 +3520,19 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       });
       return next.sort((a, b) => String(a.quizKey).localeCompare(String(b.quizKey)) || Number(a.questionOrder || 0) - Number(b.questionOrder || 0) || String(a.question).localeCompare(String(b.question)));
     });
+    await syncManagedQuestionToUnifiedModel({
+      id: data.id,
+      quizKey: data.quiz_key,
+      quizTitle: data.quiz_title,
+      quizDescription: data.quiz_description || '',
+      rankKey: data.rank_key || '',
+      passScore: Number(data.pass_score || 80),
+      questionOrder: Number(data.question_order || 0),
+      category: data.category || 'General Rules',
+      question: data.question || '',
+      correctAnswer: data.correct_answer || '',
+      wrongAnswers: Array.isArray(data.wrong_answers) ? data.wrong_answers : [],
+    });
     await writeAudit('managed_quiz_questions.save', payload.quiz_key, null, payload);
     return data;
   }
@@ -3409,7 +3541,9 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     if (!canManageCheckboxes || !itemId) return;
     setManagedQuizQuestions(prev => prev.filter(item => item.id !== itemId));
     if (dbReady && supabase) {
+      const existing = managedQuizQuestions.find(item => item.id === itemId);
       await supabase.from('managed_quiz_questions').delete().eq('id', itemId);
+      await removeManagedQuestionFromUnifiedModel(itemId, existing?.quizKey || null);
       await writeAudit('managed_quiz_questions.delete', itemId, null, null);
     }
   }

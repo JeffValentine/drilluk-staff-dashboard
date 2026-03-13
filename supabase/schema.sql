@@ -402,3 +402,458 @@ on public.managed_quiz_questions for delete
 using (public.current_user_role() in ('admin', 'head_admin') or public.current_user_has_god_key() = true);
 
 
+
+create table if not exists public.quizzes (
+  id uuid primary key default gen_random_uuid(),
+  quiz_key text unique not null,
+  title text not null,
+  description text not null default '',
+  quiz_kind text not null default 'custom' check (quiz_kind in ('mandatory', 'rank_pack', 'managed', 'custom')),
+  quiz_category text not null default 'custom' check (quiz_category in ('entry', 'core_values', 'staff_menu', 'mandatory', 'custom')),
+  rank_scope jsonb not null default '[]'::jsonb,
+  pass_score int not null default 80,
+  is_active boolean not null default true,
+  sort_order int not null default 0,
+  source_type text not null default 'native',
+  created_by uuid references auth.users(id),
+  updated_by uuid references auth.users(id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.quiz_questions (
+  id uuid primary key default gen_random_uuid(),
+  quiz_id uuid not null references public.quizzes(id) on delete cascade,
+  legacy_source_id text,
+  question_order int not null default 0,
+  category text not null default 'General Rules',
+  question text not null,
+  correct_answers jsonb not null default '[]'::jsonb,
+  wrong_answers jsonb not null default '[]'::jsonb,
+  explanation text,
+  updated_by uuid references auth.users(id),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists quiz_questions_quiz_legacy_uidx
+on public.quiz_questions (quiz_id, legacy_source_id)
+where legacy_source_id is not null;
+
+create table if not exists public.quiz_assignments (
+  id uuid primary key default gen_random_uuid(),
+  quiz_id uuid not null references public.quizzes(id) on delete cascade,
+  staff_member_id bigint not null references public.staff_members(id) on delete cascade,
+  assigned_by uuid references auth.users(id),
+  assigned_at timestamptz not null default now(),
+  status text not null default 'active' check (status in ('active', 'completed', 'revoked')),
+  unique (quiz_id, staff_member_id)
+);
+
+create table if not exists public.quiz_attempts (
+  id uuid primary key default gen_random_uuid(),
+  legacy_attempt_id text unique,
+  quiz_id uuid not null references public.quizzes(id) on delete cascade,
+  staff_member_id bigint not null references public.staff_members(id) on delete cascade,
+  profile_id uuid references auth.users(id),
+  score int not null default 0,
+  passed boolean not null default false,
+  submitted_at timestamptz not null default now(),
+  review_status text not null default 'pending' check (review_status in ('pending', 'reviewed', 'failed_review')),
+  review_note text,
+  reviewed_by uuid references auth.users(id),
+  reviewed_at timestamptz
+);
+
+create table if not exists public.quiz_attempt_answers (
+  id uuid primary key default gen_random_uuid(),
+  attempt_id uuid not null references public.quiz_attempts(id) on delete cascade,
+  question_id uuid references public.quiz_questions(id) on delete set null,
+  question_order int not null default 0,
+  question_prompt text not null,
+  selected_answer text,
+  correct_answer text,
+  is_correct boolean not null default false
+);
+
+alter table public.quizzes enable row level security;
+alter table public.quiz_questions enable row level security;
+alter table public.quiz_assignments enable row level security;
+alter table public.quiz_attempts enable row level security;
+alter table public.quiz_attempt_answers enable row level security;
+
+drop policy if exists "quizzes_read_authenticated" on public.quizzes;
+create policy "quizzes_read_authenticated"
+on public.quizzes for select
+using (auth.uid() is not null);
+
+drop policy if exists "quizzes_write_admin_head" on public.quizzes;
+create policy "quizzes_write_admin_head"
+on public.quizzes for insert
+with check (public.current_user_role() in ('admin', 'head_admin') or public.current_user_has_god_key() = true);
+
+drop policy if exists "quizzes_update_admin_head" on public.quizzes;
+create policy "quizzes_update_admin_head"
+on public.quizzes for update
+using (public.current_user_role() in ('admin', 'head_admin') or public.current_user_has_god_key() = true)
+with check (public.current_user_role() in ('admin', 'head_admin') or public.current_user_has_god_key() = true);
+
+drop policy if exists "quizzes_delete_admin_head" on public.quizzes;
+create policy "quizzes_delete_admin_head"
+on public.quizzes for delete
+using (public.current_user_role() in ('admin', 'head_admin') or public.current_user_has_god_key() = true);
+
+drop policy if exists "quiz_questions_read_authenticated" on public.quiz_questions;
+create policy "quiz_questions_read_authenticated"
+on public.quiz_questions for select
+using (auth.uid() is not null);
+
+drop policy if exists "quiz_questions_write_admin_head" on public.quiz_questions;
+create policy "quiz_questions_write_admin_head"
+on public.quiz_questions for insert
+with check (public.current_user_role() in ('admin', 'head_admin') or public.current_user_has_god_key() = true);
+
+drop policy if exists "quiz_questions_update_admin_head" on public.quiz_questions;
+create policy "quiz_questions_update_admin_head"
+on public.quiz_questions for update
+using (public.current_user_role() in ('admin', 'head_admin') or public.current_user_has_god_key() = true)
+with check (public.current_user_role() in ('admin', 'head_admin') or public.current_user_has_god_key() = true);
+
+drop policy if exists "quiz_questions_delete_admin_head" on public.quiz_questions;
+create policy "quiz_questions_delete_admin_head"
+on public.quiz_questions for delete
+using (public.current_user_role() in ('admin', 'head_admin') or public.current_user_has_god_key() = true);
+
+drop policy if exists "quiz_assignments_read_authenticated" on public.quiz_assignments;
+create policy "quiz_assignments_read_authenticated"
+on public.quiz_assignments for select
+using (auth.uid() is not null);
+
+drop policy if exists "quiz_assignments_write_trainer_admin" on public.quiz_assignments;
+create policy "quiz_assignments_write_trainer_admin"
+on public.quiz_assignments for insert
+with check (public.current_user_role() in ('trainer', 'admin', 'head_admin') or public.current_user_has_god_key() = true);
+
+drop policy if exists "quiz_assignments_update_trainer_admin" on public.quiz_assignments;
+create policy "quiz_assignments_update_trainer_admin"
+on public.quiz_assignments for update
+using (public.current_user_role() in ('trainer', 'admin', 'head_admin') or public.current_user_has_god_key() = true)
+with check (public.current_user_role() in ('trainer', 'admin', 'head_admin') or public.current_user_has_god_key() = true);
+
+drop policy if exists "quiz_assignments_delete_trainer_admin" on public.quiz_assignments;
+create policy "quiz_assignments_delete_trainer_admin"
+on public.quiz_assignments for delete
+using (public.current_user_role() in ('trainer', 'admin', 'head_admin') or public.current_user_has_god_key() = true);
+
+drop policy if exists "quiz_attempts_read_authenticated" on public.quiz_attempts;
+create policy "quiz_attempts_read_authenticated"
+on public.quiz_attempts for select
+using (auth.uid() is not null);
+
+drop policy if exists "quiz_attempts_insert_authenticated" on public.quiz_attempts;
+create policy "quiz_attempts_insert_authenticated"
+on public.quiz_attempts for insert
+with check (auth.uid() is not null);
+
+drop policy if exists "quiz_attempts_update_admin_head" on public.quiz_attempts;
+create policy "quiz_attempts_update_admin_head"
+on public.quiz_attempts for update
+using (public.current_user_role() in ('trainer', 'admin', 'head_admin') or public.current_user_has_god_key() = true)
+with check (public.current_user_role() in ('trainer', 'admin', 'head_admin') or public.current_user_has_god_key() = true);
+
+drop policy if exists "quiz_attempt_answers_read_authenticated" on public.quiz_attempt_answers;
+create policy "quiz_attempt_answers_read_authenticated"
+on public.quiz_attempt_answers for select
+using (auth.uid() is not null);
+
+drop policy if exists "quiz_attempt_answers_insert_authenticated" on public.quiz_attempt_answers;
+create policy "quiz_attempt_answers_insert_authenticated"
+on public.quiz_attempt_answers for insert
+with check (auth.uid() is not null);
+
+drop policy if exists "quiz_attempt_answers_update_admin_head" on public.quiz_attempt_answers;
+create policy "quiz_attempt_answers_update_admin_head"
+on public.quiz_attempt_answers for update
+using (public.current_user_role() in ('trainer', 'admin', 'head_admin') or public.current_user_has_god_key() = true)
+with check (public.current_user_role() in ('trainer', 'admin', 'head_admin') or public.current_user_has_god_key() = true);
+
+create or replace function public.sync_legacy_training_data()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  managed_record record;
+  checkbox_record record;
+  checkbox_rank text;
+  quiz_id_value uuid;
+  staff_record record;
+  assignment_key text;
+  attempt_value jsonb;
+  attempt_index int;
+  item_value jsonb;
+  question_row uuid;
+  derived_category text;
+  derived_badge text;
+begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  if not (public.current_user_role() in ('admin', 'head_admin') or public.current_user_has_god_key() = true) then
+    raise exception 'Insufficient permissions';
+  end if;
+
+  for managed_record in
+    select *
+    from public.managed_quiz_questions
+    order by quiz_key, question_order, updated_at
+  loop
+    derived_category := case
+      when managed_record.quiz_key = 'mandatory-general' then 'mandatory'
+      else 'custom'
+    end;
+
+    insert into public.quizzes (
+      quiz_key,
+      title,
+      description,
+      quiz_kind,
+      quiz_category,
+      rank_scope,
+      pass_score,
+      source_type,
+      updated_by
+    )
+    values (
+      managed_record.quiz_key,
+      managed_record.quiz_title,
+      managed_record.quiz_description,
+      case when managed_record.quiz_key = 'mandatory-general' then 'mandatory' else 'managed' end,
+      derived_category,
+      case when coalesce(managed_record.rank_key, '') = '' then '[]'::jsonb else jsonb_build_array(managed_record.rank_key) end,
+      managed_record.pass_score,
+      'legacy_managed',
+      managed_record.updated_by
+    )
+    on conflict (quiz_key) do update
+    set
+      title = excluded.title,
+      description = excluded.description,
+      quiz_kind = excluded.quiz_kind,
+      quiz_category = excluded.quiz_category,
+      rank_scope = excluded.rank_scope,
+      pass_score = excluded.pass_score,
+      source_type = excluded.source_type,
+      updated_by = excluded.updated_by,
+      updated_at = now()
+    returning id into quiz_id_value;
+
+    insert into public.quiz_questions (
+      quiz_id,
+      legacy_source_id,
+      question_order,
+      category,
+      question,
+      correct_answers,
+      wrong_answers,
+      updated_by
+    )
+    values (
+      quiz_id_value,
+      managed_record.id::text,
+      managed_record.question_order,
+      managed_record.category,
+      managed_record.question,
+      jsonb_build_array(managed_record.correct_answer),
+      managed_record.wrong_answers,
+      managed_record.updated_by
+    )
+    on conflict (quiz_id, legacy_source_id) do update
+    set
+      question_order = excluded.question_order,
+      category = excluded.category,
+      question = excluded.question,
+      correct_answers = excluded.correct_answers,
+      wrong_answers = excluded.wrong_answers,
+      updated_by = excluded.updated_by,
+      updated_at = now();
+  end loop;
+
+  for checkbox_record in
+    select *
+    from public.checkbox_catalog
+    order by category, id
+  loop
+    derived_category := case checkbox_record.category
+      when 'role' then 'entry'
+      when 'core' then 'core_values'
+      else 'staff_menu'
+    end;
+    derived_badge := case checkbox_record.category
+      when 'role' then 'Entry Quiz'
+      when 'core' then 'Core Values Quiz'
+      else 'Staff Menu Quiz'
+    end;
+
+    for checkbox_rank in
+      select unnest(case when coalesce(checkbox_record.role, '') = '' then array[]::text[] else string_to_array(checkbox_record.role, ',') end)
+    loop
+      insert into public.quizzes (
+        quiz_key,
+        title,
+        description,
+        quiz_kind,
+        quiz_category,
+        rank_scope,
+        pass_score,
+        source_type,
+        updated_by
+      )
+      values (
+        checkbox_rank || '|' || checkbox_record.category,
+        checkbox_rank || ' ' || derived_badge,
+        checkbox_rank || ' ' || lower(derived_badge) || ' built from the current knowledge catalog.',
+        'rank_pack',
+        derived_category,
+        jsonb_build_array(checkbox_rank),
+        90,
+        'legacy_checkbox',
+        checkbox_record.updated_by
+      )
+      on conflict (quiz_key) do update
+      set
+        title = excluded.title,
+        description = excluded.description,
+        quiz_kind = excluded.quiz_kind,
+        quiz_category = excluded.quiz_category,
+        rank_scope = excluded.rank_scope,
+        pass_score = excluded.pass_score,
+        source_type = excluded.source_type,
+        updated_by = excluded.updated_by,
+        updated_at = now()
+      returning id into quiz_id_value;
+
+      insert into public.quiz_questions (
+        quiz_id,
+        legacy_source_id,
+        question_order,
+        category,
+        question,
+        correct_answers,
+        wrong_answers,
+        updated_by
+      )
+      values (
+        quiz_id_value,
+        checkbox_record.id,
+        0,
+        coalesce(checkbox_record.role, checkbox_record.category),
+        coalesce(checkbox_record.question, checkbox_record.title),
+        jsonb_build_array(coalesce(checkbox_record.answer, '')),
+        '[]'::jsonb,
+        checkbox_record.updated_by
+      )
+      on conflict (quiz_id, legacy_source_id) do update
+      set
+        category = excluded.category,
+        question = excluded.question,
+        correct_answers = excluded.correct_answers,
+        updated_by = excluded.updated_by,
+        updated_at = now();
+    end loop;
+  end loop;
+
+  for staff_record in select * from public.staff_members loop
+    for assignment_key in
+      select jsonb_array_elements_text(coalesce(staff_record.assigned_quiz_keys, '[]'::jsonb))
+    loop
+      select id into quiz_id_value from public.quizzes where quiz_key = assignment_key limit 1;
+      if quiz_id_value is null then
+        continue;
+      end if;
+
+      insert into public.quiz_assignments (quiz_id, staff_member_id, assigned_by, status)
+      values (quiz_id_value, staff_record.id, staff_record.updated_by, 'active')
+      on conflict (quiz_id, staff_member_id) do update
+      set status = 'active', assigned_by = excluded.assigned_by, assigned_at = now();
+    end loop;
+
+    attempt_index := 0;
+    for attempt_value in
+      select value from jsonb_array_elements(coalesce(staff_record.quiz_history, '[]'::jsonb))
+    loop
+      attempt_index := attempt_index + 1;
+      select id into quiz_id_value from public.quizzes where quiz_key = coalesce(attempt_value ->> 'quizKey', 'mandatory-general') limit 1;
+      if quiz_id_value is null then
+        continue;
+      end if;
+
+      insert into public.quiz_attempts (
+        legacy_attempt_id,
+        quiz_id,
+        staff_member_id,
+        profile_id,
+        score,
+        passed,
+        submitted_at,
+        review_status,
+        review_note,
+        reviewed_by,
+        reviewed_at
+      )
+      values (
+        coalesce(attempt_value ->> 'id', staff_record.id::text || '-' || attempt_index::text),
+        quiz_id_value,
+        staff_record.id,
+        staff_record.trainee_user_id,
+        coalesce((attempt_value ->> 'score')::int, 0),
+        coalesce((attempt_value ->> 'passed')::boolean, false),
+        coalesce((attempt_value ->> 'at')::timestamptz, now()),
+        coalesce(attempt_value ->> 'reviewStatus', 'pending'),
+        nullif(attempt_value ->> 'reviewNote', ''),
+        nullif(attempt_value ->> 'reviewedBy', '')::uuid,
+        nullif(attempt_value ->> 'reviewedAt', '')::timestamptz
+      )
+      on conflict (legacy_attempt_id) do update
+      set
+        score = excluded.score,
+        passed = excluded.passed,
+        submitted_at = excluded.submitted_at,
+        review_status = excluded.review_status,
+        review_note = excluded.review_note,
+        reviewed_by = excluded.reviewed_by,
+        reviewed_at = excluded.reviewed_at
+      returning id into question_row;
+
+      delete from public.quiz_attempt_answers where attempt_id = question_row;
+
+      attempt_index := 0;
+      for item_value in
+        select value from jsonb_array_elements(coalesce(attempt_value -> 'items', '[]'::jsonb))
+      loop
+        attempt_index := attempt_index + 1;
+        insert into public.quiz_attempt_answers (
+          attempt_id,
+          question_order,
+          question_prompt,
+          selected_answer,
+          correct_answer,
+          is_correct
+        )
+        values (
+          question_row,
+          attempt_index,
+          coalesce(item_value ->> 'title', item_value ->> 'question', 'Question'),
+          item_value ->> 'selected',
+          item_value ->> 'correct',
+          coalesce((item_value ->> 'isCorrect')::boolean, false)
+        );
+      end loop;
+    end loop;
+  end loop;
+end;
+$$;
+
+revoke all on function public.sync_legacy_training_data() from public;
+grant execute on function public.sync_legacy_training_data() to authenticated;
