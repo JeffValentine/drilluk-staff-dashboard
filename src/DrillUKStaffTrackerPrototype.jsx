@@ -2371,11 +2371,26 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               : 'managed';
           const sourceType = quiz.source_type === 'legacy_checkbox' ? 'checkbox' : 'managed';
           const sourceItems = sortedQuestions.map(item => {
-            const correctAnswer = Array.isArray(item.correct_answers) ? String(item.correct_answers[0] || '') : '';
-            const wrongAnswers = Array.isArray(item.wrong_answers) ? item.wrong_answers.map(value => String(value || '')).filter(Boolean).slice(0, 3) : [];
             const sourceCheckbox = sourceType === 'checkbox'
               ? checkboxCatalog.find(entry => String(entry.id) === String(item.legacy_source_id)) || null
               : null;
+            const checkboxPayload = sourceCheckbox ? parseQuizPayload(sourceCheckbox.answer) : null;
+            const fallbackCorrectAnswer = Array.isArray(item.correct_answers) ? String(item.correct_answers[0] || '') : '';
+            const fallbackWrongAnswers = Array.isArray(item.wrong_answers) ? item.wrong_answers.map(value => String(value || '')).filter(Boolean).slice(0, 3) : [];
+            const correctAnswer = checkboxPayload?.correct?.length
+              ? String(checkboxPayload.correct[0] || '')
+              : fallbackCorrectAnswer;
+            const wrongAnswers = checkboxPayload
+              ? (checkboxPayload.manual
+                  ? (checkboxPayload.wrong || []).map(value => String(value || '').trim()).filter(Boolean).slice(0, 3)
+                  : buildRuleAlignedFalseAnswers({
+                      title: sourceCheckbox?.title || item.question || 'Question',
+                      question: sourceCheckbox?.question || item.question || '',
+                      correct: correctAnswer,
+                      existingWrong: checkboxPayload.wrong,
+                      bracketTag: checkboxPayload.bracket,
+                    }))
+              : fallbackWrongAnswers;
             return {
               id: item.id,
               legacySourceId: item.legacy_source_id || null,
@@ -6803,6 +6818,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   );
 }
  
+
 
 
 

@@ -746,12 +746,18 @@ begin
       )
       values (
         quiz_id_value,
-        checkbox_record.id,
+        checkbox_record.id::text,
         0,
-        coalesce(checkbox_record.role, checkbox_record.category),
+        coalesce(nullif((checkbox_record.answer::jsonb ->> 'bracket'), ''), coalesce(checkbox_record.role, checkbox_record.category)),
         coalesce(checkbox_record.question, checkbox_record.title),
-        jsonb_build_array(coalesce(checkbox_record.answer, '')),
-        '[]'::jsonb,
+        case
+          when jsonb_typeof(checkbox_record.answer::jsonb -> 'correct') = 'array' then checkbox_record.answer::jsonb -> 'correct'
+          else jsonb_build_array(coalesce(checkbox_record.answer, ''))
+        end,
+        case
+          when jsonb_typeof(checkbox_record.answer::jsonb -> 'wrong') = 'array' then checkbox_record.answer::jsonb -> 'wrong'
+          else '[]'::jsonb
+        end,
         checkbox_record.updated_by
       )
       on conflict (quiz_id, legacy_source_id) do update
@@ -857,3 +863,4 @@ $$;
 
 revoke all on function public.sync_legacy_training_data() from public;
 grant execute on function public.sync_legacy_training_data() to authenticated;
+
