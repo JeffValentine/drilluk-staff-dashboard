@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Search, Plus, ClipboardList, GraduationCap, Gavel, ShieldAlert, ArrowUpRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -39,6 +39,7 @@ export default function EmployeeHub({
   onDiscipline,
   onAssignQuiz,
   readinessPercent,
+  trainingSummary,
   activeQuizSummaries,
   quizHistory,
   getReadinessPercent,
@@ -162,6 +163,12 @@ export default function EmployeeHub({
                     <div className="rounded-2xl border border-white/10 bg-white/5 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Rank since</div><div className="mt-2 text-sm text-white">{selected?.modSince}</div></div>
                     <div className="rounded-2xl border border-white/10 bg-white/5 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Readiness</div><div className="mt-2 text-sm text-white">{readinessPercent}%</div></div>
                   </div>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/8 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-emerald-200">Approved</div><div className="mt-2 text-sm text-white">{trainingSummary?.approved || 0} / {trainingSummary?.total || 0}</div></div>
+                    <div className="rounded-2xl border border-amber-500/20 bg-amber-500/8 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-amber-200">Pending Review</div><div className="mt-2 text-sm text-white">{trainingSummary?.pending || 0}</div></div>
+                    <div className="rounded-2xl border border-red-500/20 bg-red-500/8 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-red-200">Retake Required</div><div className="mt-2 text-sm text-white">{trainingSummary?.retake || 0}</div></div>
+                    <div className="rounded-2xl border border-white/10 bg-white/5 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Signed Off</div><div className="mt-2 text-sm text-white">{selected?.signedOff ? 'Yes' : 'No'}</div></div>
+                  </div>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                   <Button onClick={onOpenTracker} className="rounded-2xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10"><ClipboardList className="mr-2 h-4 w-4" /> Full tracker</Button>
@@ -190,6 +197,9 @@ export default function EmployeeHub({
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="text-sm font-semibold text-white">{quiz.title}</div>
                     <Badge className="border-emerald-500/35 bg-emerald-500/12 text-emerald-100">{quiz.progress.label}</Badge>
+                    {quiz.reviewStatus === 'approved' && <Badge className="border-emerald-500/35 bg-emerald-500/12 text-emerald-100">Approved</Badge>}
+                    {quiz.reviewStatus === 'pending' && quiz.attemptSummary?.passed && <Badge className="border-amber-500/35 bg-amber-500/12 text-amber-100">Pending Review</Badge>}
+                    {quiz.reviewStatus === 'needs_retake' && <Badge className="border-red-500/35 bg-red-500/12 text-red-100">Retake</Badge>}
                     {quiz.assigned && <Badge className="border-cyan-500/35 bg-cyan-500/12 text-cyan-100">Assigned</Badge>}
                   </div>
                   <div className="mt-2"><Progress value={quiz.progress.percent} className="h-2 bg-white/10" /></div>
@@ -226,6 +236,8 @@ export default function EmployeeHub({
     </div>
   );
 }
+
+
 
 
 
