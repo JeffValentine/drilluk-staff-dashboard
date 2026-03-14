@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,6 +24,13 @@ function gradeSummary(percent) {
   return { label: 'Needs Review', className: 'border-red-400/40 bg-red-500/12 text-red-100' };
 }
 
+function cloneQuestion(question) {
+  return {
+    ...question,
+    options: Array.isArray(question?.options) ? [...question.options] : [],
+  };
+}
+
 export default function ExperimentalStaffQuiz({
   defaultName = '',
   title = 'Mandatory Quiz - General Rules',
@@ -39,9 +46,19 @@ export default function ExperimentalStaffQuiz({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedIndex, setSelectedIndex] = useState(null);
   const [answers, setAnswers] = useState([]);
+  const [attemptSnapshot, setAttemptSnapshot] = useState(null);
   const completionReportedRef = useRef(false);
 
-  const questions = useMemo(() => shuffleQuestions(providedQuestions || []), [providedQuestions, attemptSeed]);
+  const sourceQuestions = useMemo(
+    () => (Array.isArray(providedQuestions) ? providedQuestions.map(cloneQuestion) : []),
+    [providedQuestions]
+  );
+  const previewQuestions = useMemo(() => shuffleQuestions(sourceQuestions), [sourceQuestions, attemptSeed]);
+  const questions = attemptSnapshot?.questions || previewQuestions;
+  const activeTitle = attemptSnapshot?.title || title;
+  const activeSubtitle = attemptSnapshot?.subtitle || subtitle;
+  const activeRecommendedPass = attemptSnapshot?.recommendedPass ?? recommendedPass;
+  const activeAccent = attemptSnapshot?.accent || accent;
   const currentQuestion = questions[currentIndex] || null;
   const isFinished = started && currentIndex >= questions.length;
   const totalQuestions = questions.length;
@@ -49,15 +66,24 @@ export default function ExperimentalStaffQuiz({
   const scorePercent = totalQuestions ? Math.round((correctAnswers / totalQuestions) * 100) : 0;
   const missedQuestions = answers.filter(item => !item.correct);
   const grade = gradeSummary(scorePercent);
-  const accentButton = accent === 'amber'
+  const accentButton = activeAccent === 'amber'
     ? 'border-amber-400/40 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500'
     : 'border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-600 to-indigo-600 hover:from-fuchsia-500 hover:to-indigo-500';
-  const accentSoft = accent === 'amber'
+  const accentSoft = activeAccent === 'amber'
     ? 'border-amber-500/25 bg-gradient-to-br from-amber-500/10 via-white/0 to-orange-500/10'
     : 'border-fuchsia-500/25 bg-gradient-to-br from-fuchsia-500/10 via-white/0 to-cyan-500/10';
 
   function beginQuiz() {
     setAttemptSeed(prev => prev + 1);
+    const frozenQuestions = shuffleQuestions(sourceQuestions.map(cloneQuestion));
+    setAttemptSnapshot({
+      title,
+      subtitle,
+      recommendedPass,
+      accent,
+      questions: frozenQuestions,
+      startedAt: new Date().toISOString(),
+    });
     setAnswers([]);
     setSelectedIndex(null);
     setCurrentIndex(0);
@@ -93,6 +119,7 @@ export default function ExperimentalStaffQuiz({
     setCurrentIndex(0);
     setSelectedIndex(null);
     setAnswers([]);
+    setAttemptSnapshot(null);
     completionReportedRef.current = false;
   }
 
@@ -104,12 +131,13 @@ export default function ExperimentalStaffQuiz({
       totalQuestions,
       correctAnswers,
       scorePercent,
-      recommendedPass,
-      passed: scorePercent >= recommendedPass,
+      recommendedPass: activeRecommendedPass,
+      passed: scorePercent >= activeRecommendedPass,
       answers,
       questions,
+      attemptSnapshot,
     });
-  }, [answers, correctAnswers, isFinished, onComplete, playerName, questions, recommendedPass, scorePercent, totalQuestions]);
+  }, [activeRecommendedPass, answers, attemptSnapshot, correctAnswers, isFinished, onComplete, playerName, questions, scorePercent, totalQuestions]);
 
   return (
     <div className="space-y-4">
@@ -117,11 +145,11 @@ export default function ExperimentalStaffQuiz({
         <div className="grid gap-4 xl:grid-cols-[0.92fr,1.08fr]">
           <Card className="border-white/10 bg-white/5">
             <CardHeader>
-              <CardTitle>{title}</CardTitle>
+              <CardTitle>{activeTitle}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className={`rounded-2xl border p-4 text-sm text-zinc-200 ${accentSoft}`}>
-                {subtitle}
+                {activeSubtitle}
               </div>
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
@@ -131,7 +159,7 @@ export default function ExperimentalStaffQuiz({
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
                   <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Recommended pass</div>
-                  <div className="mt-2 text-2xl font-semibold text-white">{recommendedPass}%</div>
+                  <div className="mt-2 text-2xl font-semibold text-white">{activeRecommendedPass}%</div>
                   <div className="mt-1 text-xs text-zinc-400">Configured for this quiz pack</div>
                 </div>
               </div>
@@ -186,7 +214,7 @@ export default function ExperimentalStaffQuiz({
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge className="border-fuchsia-500/35 bg-fuchsia-500/12 text-fuchsia-200">{title}</Badge>
+                <Badge className="border-fuchsia-500/35 bg-fuchsia-500/12 text-fuchsia-200">{activeTitle}</Badge>
                 <Badge className="border-white/10 bg-white/10 text-zinc-200">{playerName || 'Staff Member'}</Badge>
               </div>
               <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
@@ -329,3 +357,4 @@ export default function ExperimentalStaffQuiz({
     </div>
   );
 }
+
