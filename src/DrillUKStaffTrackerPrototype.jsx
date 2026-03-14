@@ -1331,7 +1331,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     ranks: false,
     audit: false,
     managedQuiz: false,
-  });
+  });
+
   const deferredQuery = useDeferredValue(query);
   const deferredSessionUserQuery = useDeferredValue(sessionUserQuery);
   const deferredDisciplineUserQuery = useDeferredValue(disciplineUserQuery);
@@ -2334,7 +2335,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     if ((member.assignedQuizKeys || []).includes(definition.key)) return true;
     return definition.rankKey === member.role;
   }
-
+
+
   const knowledgeQuizDefinitions = useMemo(() => {
     const categoryLabels = {
       role: 'Entry Quiz',
@@ -4778,7 +4780,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <div className="text-sm font-semibold text-white">{sessionTarget?.name || 'No staff selected'}</div>
-                        <div className="mt-1 text-xs text-zinc-400">{sessionTarget ? `${sessionTarget.role}  Trainer: ${sessionTarget.trainer}` : 'Select a staff member to start a training session.'}</div>
+                        <div className="mt-1 text-xs text-zinc-400">{sessionTarget ? `${sessionTarget.role} - Trainer: ${sessionTarget.trainer}` : 'Select a staff member to start a training session.'}</div>
                       </div>
                       {sessionTarget && (
                         <Badge className={`${statusColor(sessionTarget.status)} px-2 text-[10px]`}>{sessionTarget.status}</Badge>
@@ -7025,6 +7027,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   );
 }
  
+
 
 
 
