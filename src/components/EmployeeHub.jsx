@@ -39,6 +39,7 @@ export default function EmployeeHub({
   onDiscipline,
   onAssignQuiz,
   onRemoveStaff,
+  onQuizStatusChange,
   canDeleteStaff,
   deletingStaff,
   readinessPercent,
@@ -205,8 +206,17 @@ export default function EmployeeHub({
                     {quiz.reviewStatus === 'pending' && quiz.attemptSummary?.passed && <Badge className="border-amber-500/35 bg-amber-500/12 text-amber-100">Pending Review</Badge>}
                     {quiz.reviewStatus === 'needs_retake' && <Badge className="border-red-500/35 bg-red-500/12 text-red-100">Retake</Badge>}
                     {quiz.assigned && <Badge className="border-cyan-500/35 bg-cyan-500/12 text-cyan-100">Assigned</Badge>}
+                    {typeof quiz.attemptSummary?.count === 'number' && quiz.attemptSummary.count > 0 && <Badge className="border-white/10 bg-white/10 text-zinc-200">{quiz.attemptSummary.count} attempt{quiz.attemptSummary.count === 1 ? '' : 's'}</Badge>}
                   </div>
                   <div className="mt-2"><Progress value={quiz.progress.percent} className="h-2 bg-white/10" /></div>
+                  {canEdit && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button type="button" onClick={() => onQuizStatusChange?.(quiz, 'approved')} className="rounded-xl border border-emerald-400/40 bg-gradient-to-r from-emerald-600 to-green-500 text-white hover:from-emerald-500 hover:to-green-400">Approve</Button>
+                      <Button type="button" onClick={() => onQuizStatusChange?.(quiz, 'pending')} className="rounded-xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">Pending</Button>
+                      <Button type="button" onClick={() => onQuizStatusChange?.(quiz, 'needs_retake')} className="rounded-xl border border-amber-400/40 bg-gradient-to-r from-amber-600 to-orange-500 text-white hover:from-amber-500 hover:to-orange-400">Retake</Button>
+                      <Button type="button" onClick={() => onQuizStatusChange?.(quiz, 'reset')} className="rounded-xl border border-red-500/35 bg-red-500/12 text-red-100 hover:bg-red-500/18">Reset</Button>
+                    </div>
+                  )}
                 </div>
               ))}
             </CardContent>
@@ -231,6 +241,22 @@ export default function EmployeeHub({
                       {attempt.score}%
                     </Badge>
                   </div>
+                  <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                    {attempt.reviewStatus === 'approved' && <Badge className="border-emerald-500/35 bg-emerald-500/12 text-emerald-100">Approved</Badge>}
+                    {attempt.reviewStatus === 'pending' && attempt.passed && <Badge className="border-amber-500/35 bg-amber-500/12 text-amber-100">Pending Review</Badge>}
+                    {attempt.reviewStatus === 'needs_retake' && <Badge className="border-red-500/35 bg-red-500/12 text-red-100">Retake</Badge>}
+                  </div>
+                  {!!attempt.items?.length && (
+                    <div className="mt-3 space-y-2">
+                      {attempt.items.map(item => (
+                        <div key={attempt.id + '-' + item.id} className="rounded-lg border border-white/10 bg-black/25 p-2 text-xs">
+                          <div className="font-medium text-zinc-100">{item.title}</div>
+                          <div className="mt-1 text-zinc-400">Selected: <span className="text-zinc-200">{item.selected ?? 'No answer'}</span></div>
+                          <div className="text-zinc-400">Correct: <span className="text-zinc-200">{item.correct ?? 'No answer set'}</span></div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </CardContent>

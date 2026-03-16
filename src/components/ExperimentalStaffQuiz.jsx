@@ -106,6 +106,7 @@ export default function ExperimentalStaffQuiz({
         question: currentQuestion.question,
         correct,
         selectedIndex,
+        selectedAnswer: currentQuestion.options[selectedIndex] ?? null,
         correctIndex: currentQuestion.answer,
         correctAnswer: currentQuestion.options[currentQuestion.answer],
       },
