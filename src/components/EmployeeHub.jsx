@@ -1,5 +1,5 @@
-﻿import React from 'react';
-import { Search, Plus, ClipboardList, GraduationCap, Gavel, ShieldAlert, ArrowUpRight } from 'lucide-react';
+import React from 'react';
+import { Search, Plus, ClipboardList, GraduationCap, Gavel, ShieldAlert, ArrowUpRight, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,6 +38,9 @@ export default function EmployeeHub({
   onWarning,
   onDiscipline,
   onAssignQuiz,
+  onRemoveStaff,
+  canDeleteStaff,
+  deletingStaff,
   readinessPercent,
   trainingSummary,
   activeQuizSummaries,
@@ -176,6 +179,7 @@ export default function EmployeeHub({
                   <Button onClick={onOpenProgression} className="rounded-2xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10"><ArrowUpRight className="mr-2 h-4 w-4" /> Progression</Button>
                   <Button onClick={onWarning} className="rounded-2xl border border-amber-400/35 bg-amber-500/12 text-amber-100 hover:bg-amber-500/18"><Gavel className="mr-2 h-4 w-4" /> Warning</Button>
                   <Button onClick={onDiscipline} className="rounded-2xl border border-red-400/35 bg-red-500/12 text-red-100 hover:bg-red-500/18"><ShieldAlert className="mr-2 h-4 w-4" /> Disciplinary action</Button>
+                  <Button disabled={!canDeleteStaff || deletingStaff} onClick={onRemoveStaff} className="rounded-2xl border border-red-500/45 bg-red-600/15 text-red-100 hover:bg-red-600/22 disabled:opacity-50"><Trash2 className="mr-2 h-4 w-4" /> {deletingStaff ? 'Deleting staff...' : 'Delete staff member'}</Button>
                   <Button onClick={onAssignQuiz} className="rounded-2xl border border-cyan-400/35 bg-cyan-500/12 text-cyan-100 hover:bg-cyan-500/18"><ClipboardList className="mr-2 h-4 w-4" /> Assign quiz</Button>
                 </div>
               </div>
@@ -236,6 +240,7 @@ export default function EmployeeHub({
     </div>
   );
 }
+
 
 
 

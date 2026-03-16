@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Search, Plus, Shield, GraduationCap, CheckCircle2, Users, ArrowUpRight, ClipboardList, Star, HelpCircle, ExternalLink, BookOpen, MessageSquareWarning, Gavel, Swords, FileVideo, Radio, LifeBuoy, ShieldAlert, Upload, Trash2, KeyRound, Copy } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -1220,6 +1220,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [selectedKnowledgeQuizKey, setSelectedKnowledgeQuizKey] = useState('mandatory-general');
   const [assignQuizOpen, setAssignQuizOpen] = useState(false);
   const [employeeQuickView, setEmployeeQuickView] = useState('');
+  const [deletingStaffId, setDeletingStaffId] = useState(null);
 
   const [staff, setStaff] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -2791,8 +2792,16 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   }
 
   async function removeStaffMemberFromDb(staffId) {
-    if (!dbReady || !supabase) return;
-    await supabase.from('staff_members').delete().eq('id', staffId);
+    if (!dbReady || !supabase) {
+      throw new Error('Database is not ready yet.');
+    }
+    const { error, data } = await supabase.from('staff_members').delete().eq('id', staffId).select('id').maybeSingle();
+    if (error) {
+      throw error;
+    }
+    if (!data?.id) {
+      throw new Error('Staff member could not be deleted.');
+    }
   }
 
   async function writeAudit(action, targetId, beforeValue, afterValue) {
@@ -3055,17 +3064,26 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     });
   }
 
-  function removeSessionTargetStaff() {
-    if (!sessionTarget || !canDeleteStaff || staff.length <= 1) return;
-    const confirmed = window.confirm(`Remove ${sessionTarget.name} from staff records? This cannot be undone.`);
+  async function removeSessionTargetStaff() {
+    if (!sessionTarget || !canDeleteStaff || staff.length <= 1 || deletingStaffId) return;
+    const target = sessionTarget;
+    const confirmed = window.confirm(`Remove ${target.name} from staff records? This cannot be undone.`);
     if (!confirmed) return;
 
-    const remaining = staff.filter(s => s.id !== sessionTarget.id);
-    setStaff(remaining);
-    setSelectedId(remaining[0].id);
-    setSessionTargetId(remaining[0].id);
-    removeStaffMemberFromDb(sessionTarget.id);
-    writeAudit('staff.delete', sessionTarget.id, sessionTarget, null);
+    setDeletingStaffId(target.id);
+    try {
+      await removeStaffMemberFromDb(target.id);
+      const remaining = staff.filter(s => s.id !== target.id);
+      setStaff(remaining);
+      setSelectedId(remaining[0]?.id || null);
+      setSessionTargetId(remaining[0]?.id || null);
+      setSessionActionsOpen(false);
+      await writeAudit('staff.delete', target.id, target, null);
+    } catch (error) {
+      window.alert(`Delete failed: ${error.message}`);
+    } finally {
+      setDeletingStaffId(null);
+    }
   }
 
   function toggleCheck(key, category) {
@@ -3162,16 +3180,24 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     });
   }
 
-  function removeSelectedStaff() {
-    if (!selected || !canDeleteStaff || staff.length <= 1) return;
-    const confirmed = window.confirm(`Remove ${selected.name} from staff records? This cannot be undone.`);
+  async function removeSelectedStaff() {
+    if (!selected || !canDeleteStaff || staff.length <= 1 || deletingStaffId) return;
+    const target = selected;
+    const confirmed = window.confirm(`Remove ${target.name} from staff records? This cannot be undone.`);
     if (!confirmed) return;
 
-    const remaining = staff.filter(s => s.id !== selected.id);
-    setStaff(remaining);
-    setSelectedId(remaining[0].id);
-    removeStaffMemberFromDb(selected.id);
-    writeAudit('staff.delete', selected.id, selected, null);
+    setDeletingStaffId(target.id);
+    try {
+      await removeStaffMemberFromDb(target.id);
+      const remaining = staff.filter(s => s.id !== target.id);
+      setStaff(remaining);
+      setSelectedId(remaining[0]?.id || null);
+      await writeAudit('staff.delete', target.id, target, null);
+    } catch (error) {
+      window.alert(`Delete failed: ${error.message}`);
+    } finally {
+      setDeletingStaffId(null);
+    }
   }
 
   async function fileToDataUrl(file) {
@@ -4297,6 +4323,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               openAddStaffModal={openAddStaffModal}
               canEdit={canEdit}
               readinessPercent={completionPercent(selected)}
+              trainingSummary={selectedTrainingSummary}
               activeQuizSummaries={selectedStaffQuizDefinitions}
               quizHistory={selected?.quizHistory || []}
               getReadinessPercent={completionPercent}
@@ -4314,6 +4341,9 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 setDisciplineOpen(true);
               }}
               onAssignQuiz={() => setAssignQuizOpen(true)}
+              onRemoveStaff={removeSelectedStaff}
+              canDeleteStaff={canDeleteStaff}
+              deletingStaff={deletingStaffId === selected?.id}
             />
           </TabsContent>
 
@@ -6804,7 +6834,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 </div>
                 <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4">
                   <div className="mb-3 text-xs uppercase tracking-[0.2em] text-red-200">Remove from tracker</div>
-                  <Button disabled={!canDeleteStaff} onClick={removeSessionTargetStaff} className="w-full rounded-2xl bg-red-700/80 text-white hover:bg-red-700">Remove staff member</Button>
+                  <Button disabled={!canDeleteStaff || deletingStaffId === sessionTarget?.id} onClick={removeSessionTargetStaff} className="w-full rounded-2xl bg-red-700/80 text-white hover:bg-red-700 disabled:opacity-50">{deletingStaffId === sessionTarget?.id ? 'Deleting staff...' : 'Remove staff member'}</Button>
                 </div>
                 <div className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/10 p-4 text-sm text-fuchsia-100">
                   Suggested next step: {getTrainingRecommendation(sessionTarget, sessionTargetTrainingSummary)}
@@ -7027,6 +7057,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   );
 }
  
+
 
 
 
