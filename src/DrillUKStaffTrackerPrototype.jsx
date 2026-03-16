@@ -2114,8 +2114,12 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       const historyFromUnified = unifiedQuizHistoryByStaff.get(member.id);
       return {
         ...member,
-        assignedQuizKeys: Array.from(assignedFromUnified || []).sort((a, b) => a.localeCompare(b)),
-        quizHistory: historyFromUnified || [],
+        assignedQuizKeys: assignedFromUnified
+          ? Array.from(assignedFromUnified).sort((a, b) => a.localeCompare(b))
+          : Array.isArray(member.assignedQuizKeys)
+            ? [...member.assignedQuizKeys].sort((a, b) => a.localeCompare(b))
+            : [],
+        quizHistory: historyFromUnified !== undefined ? historyFromUnified : (Array.isArray(member.quizHistory) ? member.quizHistory : []),
       };
     });
   }, [staff, unifiedAssignedQuizKeysByStaff, unifiedQuizHistoryByStaff]);
@@ -3065,10 +3069,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       nextAttempt.passed = true;
       nextAttempt.score = 100;
       nextAttempt.reviewStatus = 'approved';
-      nextAttempt.reviewNote = 'Manually approved from Staff Team Overview.';
+      nextAttempt.reviewNote = 'Marked 100% complete from Staff Team Overview.';
       nextAttempt.reviewedBy = reviewerName;
       nextAttempt.reviewedAt = now;
-      nextAttempt.items = baseItems.map(item => ({ ...item, isCorrect: true }));
+      nextAttempt.items = baseItems.map(item => ({ ...item, selected: item.correct, isCorrect: true }));
     } else if (status === 'needs_retake') {
       nextAttempt.passed = false;
       nextAttempt.score = Math.min(Number(nextAttempt.score || 0), 99);
