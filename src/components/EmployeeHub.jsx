@@ -210,11 +210,15 @@ export default function EmployeeHub({
                   </div>
                   <div className="mt-2"><Progress value={quiz.progress.percent} className="h-2 bg-white/10" /></div>
                   {canEdit && (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <Button type="button" onClick={() => onQuizStatusChange?.(quiz, 'approved')} className="rounded-xl border border-emerald-400/40 bg-gradient-to-r from-emerald-600 to-green-500 text-white hover:from-emerald-500 hover:to-green-400">Approve</Button>
-                      <Button type="button" onClick={() => onQuizStatusChange?.(quiz, 'pending')} className="rounded-xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">Pending</Button>
-                      <Button type="button" onClick={() => onQuizStatusChange?.(quiz, 'needs_retake')} className="rounded-xl border border-amber-400/40 bg-gradient-to-r from-amber-600 to-orange-500 text-white hover:from-amber-500 hover:to-orange-400">Retake</Button>
-                      <Button type="button" onClick={() => onQuizStatusChange?.(quiz, 'reset')} className="rounded-xl border border-red-500/35 bg-red-500/12 text-red-100 hover:bg-red-500/18">Reset</Button>
+                    <div className="mt-3 rounded-2xl border border-white/10 bg-black/25 p-3">
+                      <div className="mb-3 text-[11px] uppercase tracking-[0.18em] text-zinc-500">Manual progress override</div>
+                      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                        <Button type="button" onClick={() => onQuizStatusChange?.(quiz, 'approved')} className="min-h-11 rounded-2xl border border-emerald-400/40 bg-gradient-to-r from-emerald-600 to-green-500 px-4 text-sm font-semibold text-white hover:from-emerald-500 hover:to-green-400">Mark 100%</Button>
+                        <Button type="button" onClick={() => onQuizStatusChange?.(quiz, 'pending')} className="min-h-11 rounded-2xl border border-white/15 bg-black/35 px-4 text-sm font-semibold text-zinc-100 hover:bg-white/10">Set Pending</Button>
+                        <Button type="button" onClick={() => onQuizStatusChange?.(quiz, 'needs_retake')} className="min-h-11 rounded-2xl border border-amber-400/40 bg-gradient-to-r from-amber-600 to-orange-500 px-4 text-sm font-semibold text-white hover:from-amber-500 hover:to-orange-400">Require Retake</Button>
+                        <Button type="button" onClick={() => onQuizStatusChange?.(quiz, 'reset')} className="min-h-11 rounded-2xl border border-red-500/35 bg-red-500/12 px-4 text-sm font-semibold text-red-100 hover:bg-red-500/18">Reset Progress</Button>
+                      </div>
+                      <div className="mt-3 text-xs leading-5 text-zinc-400">Use <span className="text-zinc-200">Mark 100%</span> if the quiz was completed verbally and you want to sign it off without a trainee submission.</div>
                     </div>
                   )}
                 </div>
@@ -266,6 +270,7 @@ export default function EmployeeHub({
     </div>
   );
 }
+
 
 
 
