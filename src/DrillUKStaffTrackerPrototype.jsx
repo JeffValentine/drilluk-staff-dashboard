@@ -2294,6 +2294,12 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     ? dynamicPermissions.filter(item => itemMatchesRank(item, selected.role)).map(item => item.title)
     : [];
 
+  function syncOperationalTargets(memberId) {
+    if (memberId === null || memberId === undefined) return;
+    setSessionTargetId(memberId);
+    setDisciplineTargetId(memberId);
+  }
+
   function checklistPercent(keys, source) {
     if (!keys.length) return 0;
     const done = keys.filter(key => Boolean(source?.[key])).length;
@@ -4424,9 +4430,9 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               activeQuizSummaries={selectedStaffQuizDefinitions}
               quizHistory={selected?.quizHistory || []}
               getReadinessPercent={completionPercent}
-              onOpenTracker={() => setEmployeeQuickView('tracker')}
-              onOpenSession={() => setEmployeeQuickView('session')}
-              onOpenProgression={() => setEmployeeQuickView('progression')}
+              onOpenTracker={() => { syncOperationalTargets(selected?.id); setEmployeeQuickView('tracker'); }}
+              onOpenSession={() => { syncOperationalTargets(selected?.id); setEmployeeQuickView('session'); }}
+              onOpenProgression={() => { syncOperationalTargets(selected?.id); setEmployeeQuickView('progression'); }}
               onWarning={() => {
                 setDisciplineType('Warning');
                 setDisciplineTargetId(selected?.id || null);
@@ -4924,10 +4930,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                           <Progress value={completionPercent(sessionTarget)} className="h-2 bg-white/10" />
                         </div>
                         <div className="grid gap-2 sm:grid-cols-2">
-                          <Button disabled={!canEdit || !sessionTarget} onClick={() => setSessionNotesOpen(true)} className="rounded-2xl border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white hover:from-fuchsia-500 hover:to-indigo-500">
+                          <Button disabled={!canEdit || !sessionTarget} onClick={() => { syncOperationalTargets(selected?.id); setSessionNotesOpen(true); }} className="rounded-2xl border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white hover:from-fuchsia-500 hover:to-indigo-500">
                             Open Notes
                           </Button>
-                          <Button disabled={!canEdit || !sessionTarget} onClick={() => setSessionActionsOpen(true)} className="rounded-2xl border border-emerald-400/40 bg-gradient-to-r from-emerald-600 to-green-500 text-white hover:from-emerald-500 hover:to-green-400">
+                          <Button disabled={!canEdit || !sessionTarget} onClick={() => { syncOperationalTargets(selected?.id); setSessionActionsOpen(true); }} className="rounded-2xl border border-emerald-400/40 bg-gradient-to-r from-emerald-600 to-green-500 text-white hover:from-emerald-500 hover:to-green-400">
                             Open Actions
                           </Button>
                         </div>
@@ -6225,6 +6231,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                   <Button
                     type="button"
                     onClick={() => {
+                      syncOperationalTargets(selected?.id);
                       setActiveMainTab(employeeQuickView);
                       setEmployeeQuickView('');
                     }}
@@ -6308,8 +6315,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                       </div>
                       <Progress value={completionPercent(selected)} className="h-2.5 bg-white/10" />
                       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        <Button disabled={!canEdit} onClick={() => setSessionNotesOpen(true)} className="rounded-2xl border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white hover:from-fuchsia-500 hover:to-indigo-500">Open Notes</Button>
-                        <Button disabled={!canEdit} onClick={() => setSessionActionsOpen(true)} className="rounded-2xl border border-emerald-400/40 bg-gradient-to-r from-emerald-600 to-green-500 text-white hover:from-emerald-500 hover:to-green-400">Open Actions</Button>
+                        <Button disabled={!canEdit} onClick={() => { syncOperationalTargets(selected?.id); setSessionNotesOpen(true); }} className="rounded-2xl border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white hover:from-fuchsia-500 hover:to-indigo-500">Open Notes</Button>
+                        <Button disabled={!canEdit} onClick={() => { syncOperationalTargets(selected?.id); setSessionActionsOpen(true); }} className="rounded-2xl border border-emerald-400/40 bg-gradient-to-r from-emerald-600 to-green-500 text-white hover:from-emerald-500 hover:to-green-400">Open Actions</Button>
                       </div>
                     </div>
                     <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
@@ -7155,6 +7162,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   );
 }
  
+
 
 
 
