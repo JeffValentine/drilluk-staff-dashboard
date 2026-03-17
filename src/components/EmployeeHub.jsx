@@ -49,6 +49,8 @@ export default function EmployeeHub({
   quizHistory,
   getReadinessPercent,
 }) {
+  const overviewProfileFileInputRef = useRef(null);
+
   return (
     <div className="grid items-start gap-4 xl:grid-cols-[380px,1fr]">
       <Card className="border-white/10 bg-white/5 xl:sticky xl:top-6">
