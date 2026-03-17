@@ -3088,10 +3088,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     void syncQuizAttemptToUnifiedModel(selected, selectedKnowledgeQuiz, attempt);
     writeAudit('quiz.submit', selected.id, null, { quizKey: selectedKnowledgeQuiz.key, score: attempt.score, passed: attempt.passed });
   }
-  function setSelectedQuizManualState(quizDefinition, status) {
+  async function setSelectedQuizManualState(quizDefinition, status) {
     if (!selected || !canEdit || !quizDefinition) return;
     const now = new Date().toISOString();
     const reviewerName = profile?.username || authUser?.email?.split('@')[0] || 'Reviewer';
+    const targetId = selected.id;
     const summary = getQuizAttemptSummary(selected, quizDefinition.key);
     const latest = summary.latest;
     const baseItems = latest?.items?.length
@@ -3156,14 +3157,21 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       ...(selected.quizHistory || []).filter(attempt => attempt.id !== nextAttempt.id),
     ].sort((a, b) => new Date(b.at || 0).getTime() - new Date(a.at || 0).getTime()).slice(0, 200);
 
-    updateSelected({ quizHistory: nextHistory });
-    void syncQuizAttemptToUnifiedModel(selected, quizDefinition, nextAttempt);
-    writeAudit('staff.quiz_review_override', selected.id, null, {
-      quizKey: quizDefinition.key,
-      status,
-      score: nextAttempt.score,
-      passed: nextAttempt.passed,
-    });
+    const nextMember = { ...selected, quizHistory: nextHistory };
+    setStaff(prev => prev.map(member => (member.id === targetId ? { ...member, quizHistory: nextHistory } : member)));
+
+    try {
+      await saveStaffMember(nextMember);
+      await syncQuizAttemptToUnifiedModel(nextMember, quizDefinition, nextAttempt);
+      await writeAudit('staff.quiz_review_override', selected.id, null, {
+        quizKey: quizDefinition.key,
+        status,
+        score: nextAttempt.score,
+        passed: nextAttempt.passed,
+      });
+    } catch (error) {
+      window.alert('Quiz override failed: ' + (error?.message || 'Unknown error'));
+    }
   }
 
   function buildResetProgressForRole(nextRole) {
