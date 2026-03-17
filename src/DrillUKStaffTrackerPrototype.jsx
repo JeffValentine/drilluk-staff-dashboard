@@ -4429,7 +4429,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               nameSizeClass={nameSizeClass}
               openAddStaffModal={openAddStaffModal}
               canEdit={canEdit}
-              onSelectProfileImage={() => profileFileInputRef.current?.click()}
+              onSelectProfileImage={handleProfileFile}
               readinessPercent={completionPercent(selected)}
               trainingSummary={selectedTrainingSummary}
               activeQuizSummaries={selectedStaffQuizDefinitions}
@@ -7167,6 +7167,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   );
 }
  
+
 
 
 
