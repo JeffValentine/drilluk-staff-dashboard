@@ -2812,6 +2812,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       values: member.values || {},
       permissions: member.permissions || {},
       disciplinary: member.disciplinary || { warnings: 0, actions: 0, logs: [] },
+      quiz_history: Array.isArray(member.quizHistory) ? member.quizHistory : [],
+      assigned_quiz_keys: Array.isArray(member.assignedQuizKeys) ? member.assignedQuizKeys : [],
       training_logs: Array.isArray(member.trainingLogs) ? member.trainingLogs : [],
       notes: member.notes || '',
       updated_by: authUser?.id || null,
@@ -7167,6 +7169,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   );
 }
  
+
 
 
 
