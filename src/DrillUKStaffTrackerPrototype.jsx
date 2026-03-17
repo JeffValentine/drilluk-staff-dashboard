@@ -1221,6 +1221,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [assignQuizOpen, setAssignQuizOpen] = useState(false);
   const [employeeQuickView, setEmployeeQuickView] = useState('');
   const [deletingStaffId, setDeletingStaffId] = useState(null);
+  const [removeStaffOpen, setRemoveStaffOpen] = useState(false);
+  const [removeStaffTargetId, setRemoveStaffTargetId] = useState(null);
+  const [removeStaffReason, setRemoveStaffReason] = useState('');
+  const [removeStaffNotes, setRemoveStaffNotes] = useState('');
+  const [removedStaffOpen, setRemovedStaffOpen] = useState(false);
 
   const [staff, setStaff] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -1504,6 +1509,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       trainingLogs: Array.isArray(row.training_logs) ? row.training_logs : [],
       assignedQuizKeys: Array.isArray(row.assigned_quiz_keys) ? row.assigned_quiz_keys : [],
       notes: row.notes || '',
+      isRemoved: Boolean(row.is_removed),
+      removedAt: row.removed_at || null,
+      removedBy: row.removed_by || null,
+      removalReason: row.removal_reason || '',
+      removalNotes: row.removal_notes || '',
     }));
     const shouldPreserveLocalSelected = Date.now() - lastLocalStaffEditRef.current < 1400;
     if (shouldPreserveLocalSelected && selectedId) {
@@ -2124,14 +2134,17 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     });
   }, [staff, unifiedAssignedQuizKeysByStaff, unifiedQuizHistoryByStaff]);
 
+  const activeStaffRecords = useMemo(() => staffRecords.filter(member => !member.isRemoved), [staffRecords]);
+  const removedStaffRecords = useMemo(() => staffRecords.filter(member => member.isRemoved).sort((a, b) => new Date(b.removedAt || 0).getTime() - new Date(a.removedAt || 0).getTime()), [staffRecords]);
+
   const filtered = useMemo(() => {
     const trainerNames = new Set(
-      staffRecords
+      activeStaffRecords
         .map(s => s.trainer)
         .filter(name => name && name !== 'Unassigned' && name !== 'Head Team')
     );
     const roleOrder = new Map(roles.map((role, index) => [role, index]));
-    const list = staffRecords.filter(s =>
+    const list = activeStaffRecords.filter(s =>
       (s.name.toLowerCase().includes(deferredQuery.toLowerCase()) ||
       s.role.toLowerCase().includes(deferredQuery.toLowerCase()) ||
       s.status.toLowerCase().includes(deferredQuery.toLowerCase())) &&
@@ -2145,15 +2158,15 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       if (rankDiff !== 0) return rankDiff;
       return a.name.localeCompare(b.name);
     });
-  }, [staffRecords, deferredQuery, filterRole, filterTrainerOnly, filterActiveOnly, filterWarningOnly]);
+  }, [activeStaffRecords, deferredQuery, filterRole, filterTrainerOnly, filterActiveOnly, filterWarningOnly]);
 
   const traineeRecord = (canUseViewAs && viewAsRole === 'staff_in_training')
-    ? (staffRecords.find(s => s.id === viewAsStaffId) || staffRecords.find(s => s.id === selectedId) || staffRecords[0] || null)
-    : (staffRecords.find(s => s.traineeUserId === authUser?.id) || null);
-  const selected = isStaffInTraining ? traineeRecord : (staffRecords.find(s => s.id === selectedId) || staffRecords[0] || null);
+    ? (activeStaffRecords.find(s => s.id === viewAsStaffId) || activeStaffRecords.find(s => s.id === selectedId) || activeStaffRecords[0] || null)
+    : (activeStaffRecords.find(s => s.traineeUserId === authUser?.id) || null);
+  const selected = isStaffInTraining ? traineeRecord : (activeStaffRecords.find(s => s.id === selectedId) || activeStaffRecords[0] || null);
   const sessionCandidates = useMemo(() => {
     const q = deferredSessionUserQuery.trim().toLowerCase();
-    return staffRecords
+    return activeStaffRecords
       .filter(member => sessionRankFilter === 'All' || member.role === sessionRankFilter)
       .filter(member => {
         if (!q) return true;
@@ -2161,11 +2174,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         return haystack.includes(q);
       })
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [staffRecords, sessionRankFilter, deferredSessionUserQuery]);
-  const sessionTarget = staffRecords.find(member => member.id === sessionTargetId) || sessionCandidates[0] || null;
+  }, [activeStaffRecords, sessionRankFilter, deferredSessionUserQuery]);
+  const sessionTarget = activeStaffRecords.find(member => member.id === sessionTargetId) || sessionCandidates[0] || null;
   const disciplineCandidates = useMemo(() => {
     const q = deferredDisciplineUserQuery.trim().toLowerCase();
-    return staffRecords
+    return activeStaffRecords
       .filter(member => disciplineRankFilter === 'All' || member.role === disciplineRankFilter)
       .filter(member => {
         if (!q) return true;
@@ -2173,8 +2186,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         return haystack.includes(q);
       })
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [staffRecords, disciplineRankFilter, deferredDisciplineUserQuery]);
-  const disciplineTarget = staffRecords.find(member => member.id === disciplineTargetId) || disciplineCandidates[0] || null;
+  }, [activeStaffRecords, disciplineRankFilter, deferredDisciplineUserQuery]);
+  const disciplineTarget = activeStaffRecords.find(member => member.id === disciplineTargetId) || disciplineCandidates[0] || null;
   const auditActionOptions = useMemo(
     () => [...new Set([...KNOWN_AUDIT_ACTIONS, ...(auditLogs || []).map(log => String(log.action || '')).filter(Boolean)])].sort((a, b) => a.localeCompare(b)),
     [auditLogs]
@@ -2816,23 +2829,43 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       assigned_quiz_keys: Array.isArray(member.assignedQuizKeys) ? member.assignedQuizKeys : [],
       training_logs: Array.isArray(member.trainingLogs) ? member.trainingLogs : [],
       notes: member.notes || '',
+      is_removed: Boolean(member.isRemoved),
+      removed_at: member.removedAt || null,
+      removed_by: member.removedBy || null,
+      removal_reason: member.removalReason || null,
+      removal_notes: member.removalNotes || null,
       updated_by: authUser?.id || null,
     };
 
     await supabase.from('staff_members').upsert(payload);
   }
 
-  async function removeStaffMemberFromDb(staffId) {
+  async function removeStaffMemberFromDb(staffId, removal) {
     if (!dbReady || !supabase) {
       throw new Error('Database is not ready yet.');
     }
-    const { error, data } = await supabase.from('staff_members').delete().eq('id', staffId).select('id').maybeSingle();
+    const payload = {
+      is_removed: true,
+      status: 'Removed',
+      removed_at: new Date().toISOString(),
+      removed_by: profile?.username || authUser?.email?.split('@')[0] || 'Unknown',
+      removal_reason: removal?.reason || null,
+      removal_notes: removal?.notes || null,
+      updated_by: authUser?.id || null,
+    };
+    const { error, data } = await supabase
+      .from('staff_members')
+      .update(payload)
+      .eq('id', staffId)
+      .select('id')
+      .maybeSingle();
     if (error) {
       throw error;
     }
     if (!data?.id) {
-      throw new Error('Staff member could not be deleted.');
+      throw new Error('Staff member could not be removed.');
     }
+    return payload;
   }
 
   async function writeAudit(action, targetId, beforeValue, afterValue) {
@@ -3173,26 +3206,55 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     });
   }
 
-  async function removeSessionTargetStaff() {
-    if (!sessionTarget || !canDeleteStaff || staff.length <= 1 || deletingStaffId) return;
-    const target = sessionTarget;
-    const confirmed = window.confirm(`Remove ${target.name} from staff records? This cannot be undone.`);
-    if (!confirmed) return;
+  function openRemoveStaffModal(targetId) {
+    if (!targetId) return;
+    setRemoveStaffTargetId(targetId);
+    setRemoveStaffReason('');
+    setRemoveStaffNotes('');
+    setRemoveStaffOpen(true);
+  }
+
+  async function confirmRemoveStaff() {
+    const target = staffRecords.find(member => member.id === removeStaffTargetId);
+    if (!target || !canDeleteStaff || deletingStaffId) return;
+    const reason = removeStaffReason.trim();
+    const notes = removeStaffNotes.trim();
+    if (!reason) {
+      window.alert('Removal reason is required.');
+      return;
+    }
 
     setDeletingStaffId(target.id);
     try {
-      await removeStaffMemberFromDb(target.id);
-      const remaining = staff.filter(s => s.id !== target.id);
-      setStaff(remaining);
-      setSelectedId(remaining[0]?.id || null);
-      setSessionTargetId(remaining[0]?.id || null);
+      const removalPayload = await removeStaffMemberFromDb(target.id, { reason, notes });
+      const updatedTarget = {
+        ...target,
+        isRemoved: true,
+        status: 'Removed',
+        removedAt: removalPayload.removed_at,
+        removedBy: removalPayload.removed_by,
+        removalReason: reason,
+        removalNotes: notes,
+      };
+      const nextStaff = staff.map(member => (member.id === target.id ? updatedTarget : member));
+      setStaff(nextStaff);
+      const nextActive = nextStaff.filter(member => !member.isRemoved);
+      setSelectedId(nextActive[0]?.id || null);
+      setSessionTargetId(nextActive[0]?.id || null);
+      setDisciplineTargetId(nextActive[0]?.id || null);
+      setRemoveStaffOpen(false);
       setSessionActionsOpen(false);
-      await writeAudit('staff.delete', target.id, target, null);
+      await writeAudit('staff.delete', target.id, target, { reason, notes, removedAt: removalPayload.removed_at, removedBy: removalPayload.removed_by });
     } catch (error) {
       window.alert(`Delete failed: ${error.message}`);
     } finally {
       setDeletingStaffId(null);
     }
+  }
+
+  async function removeSessionTargetStaff() {
+    if (!sessionTarget || !canDeleteStaff || activeStaffRecords.length <= 1 || deletingStaffId) return;
+    openRemoveStaffModal(sessionTarget.id);
   }
 
   function toggleCheck(key, category) {
@@ -3290,23 +3352,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   }
 
   async function removeSelectedStaff() {
-    if (!selected || !canDeleteStaff || staff.length <= 1 || deletingStaffId) return;
-    const target = selected;
-    const confirmed = window.confirm(`Remove ${target.name} from staff records? This cannot be undone.`);
-    if (!confirmed) return;
-
-    setDeletingStaffId(target.id);
-    try {
-      await removeStaffMemberFromDb(target.id);
-      const remaining = staff.filter(s => s.id !== target.id);
-      setStaff(remaining);
-      setSelectedId(remaining[0]?.id || null);
-      await writeAudit('staff.delete', target.id, target, null);
-    } catch (error) {
-      window.alert(`Delete failed: ${error.message}`);
-    } finally {
-      setDeletingStaffId(null);
-    }
+    if (!selected || !canDeleteStaff || activeStaffRecords.length <= 1 || deletingStaffId) return;
+    openRemoveStaffModal(selected.id);
   }
 
   async function fileToDataUrl(file) {
@@ -6394,7 +6441,73 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               )}
             </div>
           </div>
-        )}        {assignQuizOpen && selected && (
+        )}
+        {removeStaffOpen && (() => {
+          const removeTarget = staffRecords.find(member => member.id === removeStaffTargetId);
+          return removeTarget ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+              <div className="w-full max-w-2xl rounded-[28px] border border-white/12 bg-[#09090d] shadow-[0_25px_90px_rgba(0,0,0,0.55)]">
+                <div className="border-b border-white/10 bg-gradient-to-r from-red-950/40 via-black to-orange-950/30 px-6 py-5">
+                  <div className="text-[11px] uppercase tracking-[0.28em] text-red-200/80">Staff Removal</div>
+                  <div className="mt-2 text-2xl font-semibold text-white">Remove {removeTarget.name} from staff records</div>
+                  <div className="mt-2 text-sm text-zinc-400">This stores the removal reason and notes instead of deleting the history blindly.</div>
+                </div>
+                <div className="space-y-4 px-6 py-6">
+                  <div>
+                    <div className="mb-2 text-xs uppercase tracking-[0.18em] text-zinc-500">Reason</div>
+                    <Input value={removeStaffReason} onChange={(e) => setRemoveStaffReason(e.target.value)} placeholder="Required reason for removal..." className="border-red-400/25 bg-black/35 text-white placeholder:text-zinc-500" />
+                  </div>
+                  <div>
+                    <div className="mb-2 text-xs uppercase tracking-[0.18em] text-zinc-500">Notes</div>
+                    <Textarea value={removeStaffNotes} onChange={(e) => setRemoveStaffNotes(e.target.value)} className="min-h-[150px] border-white/10 bg-black/30 text-white" placeholder="Write context, timeline, and any supporting notes..." />
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center justify-end gap-3 border-t border-white/10 px-6 py-4">
+                  <Button type="button" onClick={() => setRemoveStaffOpen(false)} className="rounded-2xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">Cancel</Button>
+                  <Button type="button" disabled={!removeStaffReason.trim() || deletingStaffId === removeTarget.id} onClick={confirmRemoveStaff} className="rounded-2xl border border-red-500/45 bg-red-600/15 text-red-100 hover:bg-red-600/22 disabled:opacity-50">{deletingStaffId === removeTarget.id ? 'Removing staff...' : 'Confirm removal'}</Button>
+                </div>
+              </div>
+            </div>
+          ) : null;
+        })()}
+        {removedStaffOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+            <div className="w-full max-w-5xl rounded-[28px] border border-white/12 bg-[#09090d] shadow-[0_25px_90px_rgba(0,0,0,0.55)]">
+              <div className="flex items-start justify-between gap-4 border-b border-white/10 bg-gradient-to-r from-black via-fuchsia-950/20 to-cyan-950/20 px-6 py-5">
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.28em] text-zinc-400">Removed Staff</div>
+                  <div className="mt-2 text-2xl font-semibold text-white">Removed staff members</div>
+                  <div className="mt-2 text-sm text-zinc-400">Logged removals stay here with their recorded reason and notes.</div>
+                </div>
+                <Button type="button" onClick={() => setRemovedStaffOpen(false)} className="rounded-2xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">Close</Button>
+              </div>
+              <div className="max-h-[70vh] space-y-4 overflow-y-auto px-6 py-6">
+                {!removedStaffRecords.length && (
+                  <div className="rounded-2xl border border-white/10 bg-black/25 p-4 text-sm text-zinc-400">No removed staff members logged yet.</div>
+                )}
+                {removedStaffRecords.map(member => (
+                  <div key={member.id} className="rounded-3xl border border-white/10 bg-black/25 p-5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="text-lg font-semibold text-white">{member.name}</div>
+                      <Badge className={roleColor(member.role) + ' px-2.5 text-[10px]'}>{rankLabel(member.role)}</Badge>
+                      <Badge className="border-red-500/35 bg-red-500/12 text-red-100">Removed</Badge>
+                    </div>
+                    <div className="mt-4 grid gap-3 md:grid-cols-3">
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Removed by</div><div className="mt-2 text-sm text-white">{member.removedBy || 'Unknown'}</div></div>
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Removed at</div><div className="mt-2 text-sm text-white">{member.removedAt ? new Date(member.removedAt).toLocaleString() : 'Unknown'}</div></div>
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Trainer</div><div className="mt-2 text-sm text-white">{member.trainer || 'Unassigned'}</div></div>
+                    </div>
+                    <div className="mt-4 grid gap-3 xl:grid-cols-2">
+                      <div className="rounded-2xl border border-red-500/25 bg-red-500/8 p-4"><div className="text-[11px] uppercase tracking-[0.18em] text-red-200">Removal reason</div><div className="mt-3 whitespace-pre-line text-sm leading-6 text-white">{member.removalReason || 'No reason recorded.'}</div></div>
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Removal notes</div><div className="mt-3 whitespace-pre-line text-sm leading-6 text-zinc-200">{member.removalNotes || 'No notes recorded.'}</div></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+        {assignQuizOpen && selected && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
             <div className="max-h-[88vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-white/15 bg-zinc-950 p-5">
               <div className="mb-4 flex items-center justify-between">

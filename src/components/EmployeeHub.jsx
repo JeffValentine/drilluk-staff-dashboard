@@ -40,8 +40,10 @@ export default function EmployeeHub({
   onDiscipline,
   onAssignQuiz,
   onRemoveStaff,
+  onShowRemovedStaff,
   onQuizStatusChange,
   canDeleteStaff,
+  canViewRemovedStaff,
   deletingStaff,
   readinessPercent,
   trainingSummary,
@@ -96,9 +98,14 @@ export default function EmployeeHub({
           )}
         </CardHeader>
         <CardContent className="flex min-h-0 flex-col space-y-3">
-          <Button disabled={!canEdit} onClick={openAddStaffModal} className="w-full rounded-2xl bg-fuchsia-600 hover:bg-fuchsia-500">
-            <Plus className="mr-2 h-4 w-4" /> Add staff
-          </Button>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Button disabled={!canEdit} onClick={openAddStaffModal} className="w-full rounded-2xl bg-fuchsia-600 hover:bg-fuchsia-500">
+              <Plus className="mr-2 h-4 w-4" /> Add staff
+            </Button>
+            <Button type="button" disabled={!canViewRemovedStaff} onClick={onShowRemovedStaff} className="w-full rounded-2xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10 disabled:opacity-50">
+              Show removed
+            </Button>
+          </div>
           <div className="min-h-[420px] max-h-[calc(100vh-320px)] space-y-3 overflow-y-scroll pr-1">
             {filtered.map(member => (
               <button
