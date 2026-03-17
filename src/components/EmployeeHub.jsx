@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Search, Plus, ClipboardList, GraduationCap, Gavel, ShieldAlert, ArrowUpRight, Trash2, Upload } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -154,9 +154,19 @@ export default function EmployeeHub({
                     <div className="flex h-full w-full items-center justify-center text-sm text-zinc-500">No card image</div>
                   )}
                 </div>
-                <Button type="button" disabled={!canEdit} onClick={onSelectProfileImage} className="mt-3 w-full rounded-2xl border border-fuchsia-400/35 bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white hover:from-fuchsia-500 hover:to-indigo-500 disabled:opacity-50">
+                <Button type="button" disabled={!canEdit} onClick={() => overviewProfileFileInputRef.current?.click()} className="mt-3 w-full rounded-2xl border border-fuchsia-400/35 bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white hover:from-fuchsia-500 hover:to-indigo-500 disabled:opacity-50">
                   <Upload className="mr-2 h-4 w-4" /> Set staff card image
                 </Button>
+                <input
+                  ref={overviewProfileFileInputRef}
+                  type="file"
+                  accept="image/png,image/webp,image/jpeg"
+                  onChange={(e) => {
+                    onSelectProfileImage?.(e.target.files?.[0] || null);
+                    e.target.value = '';
+                  }}
+                  className="hidden"
+                />
               </div>
               <div className="space-y-4">
                 <div className="rounded-3xl border border-white/10 bg-black/25 p-4">
