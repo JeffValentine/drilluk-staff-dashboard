@@ -1313,7 +1313,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [reviewDrafts, setReviewDrafts] = useState({});
   const [trainingLogDraft, setTrainingLogDraft] = useState({ bracket: 'General Policy', note: '' });
   const lastLocalStaffEditRef = useRef(0);
-  const removalColumnsAvailableRef = useRef(true);
+  const removalColumnsAvailableRef = useRef(false);
   const isOwnerSession = (authUser?.email || '').toLowerCase() === SITE_OWNER_EMAIL;
   const [rosterSyncOpen, setRosterSyncOpen] = useState(false);
   const [rosterSyncText, setRosterSyncText] = useState(formatRosterSeedForInput());
@@ -7299,3 +7299,4 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     </div>
   );
 }
+
