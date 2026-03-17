@@ -2427,8 +2427,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
             return {
               id: item.id,
               legacySourceId: item.legacy_source_id || null,
-              category: item.category || 'General Rules',
-              question: item.question || 'Question',
+              category: checkboxPayload?.bracket || sourceCheckbox?.title || item.category || 'General Rules',
+              question: sourceCheckbox?.question || item.question || sourceCheckbox?.title || 'Question',
               correctAnswer,
               wrongAnswers,
               sourceCheckbox,
@@ -7169,6 +7169,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   );
 }
  
+
 
 
 
