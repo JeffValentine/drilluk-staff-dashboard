@@ -1500,9 +1500,9 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       permissions: row.permissions || Object.fromEntries(dynamicPermissions.map(item => [item.title, false])),
       values: row.values || Object.fromEntries(dynamicCoreValues.map(item => [item.title, false])),
       disciplinary: row.disciplinary || { warnings: 0, actions: 0, logs: [] },
-      quizHistory: [],
+      quizHistory: Array.isArray(row.quiz_history) ? row.quiz_history : [],
       trainingLogs: Array.isArray(row.training_logs) ? row.training_logs : [],
-      assignedQuizKeys: [],
+      assignedQuizKeys: Array.isArray(row.assigned_quiz_keys) ? row.assigned_quiz_keys : [],
       notes: row.notes || '',
     }));
     const shouldPreserveLocalSelected = Date.now() - lastLocalStaffEditRef.current < 1400;
@@ -7168,66 +7168,3 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     </div>
   );
 }
- 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
