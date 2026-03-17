@@ -2122,15 +2122,24 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const staffRecords = useMemo(() => {
     return staff.map(member => {
       const assignedFromUnified = unifiedAssignedQuizKeysByStaff.get(member.id);
-      const historyFromUnified = unifiedQuizHistoryByStaff.get(member.id);
+      const historyFromUnified = unifiedQuizHistoryByStaff.get(member.id) || [];
+      const legacyHistory = Array.isArray(member.quizHistory) ? member.quizHistory : [];
+      const mergedHistory = [...historyFromUnified];
+      const seenAttemptIds = new Set(historyFromUnified.map(item => String(item?.id || '')));
+      legacyHistory.forEach(item => {
+        const key = String(item?.id || '');
+        if (key && seenAttemptIds.has(key)) return;
+        mergedHistory.push(item);
+      });
+      mergedHistory.sort((a, b) => new Date(b?.at || 0).getTime() - new Date(a?.at || 0).getTime());
       return {
         ...member,
         assignedQuizKeys: assignedFromUnified
-          ? Array.from(assignedFromUnified).sort((a, b) => a.localeCompare(b))
+          ? Array.from(new Set([...(member.assignedQuizKeys || []), ...Array.from(assignedFromUnified)])).sort((a, b) => a.localeCompare(b))
           : Array.isArray(member.assignedQuizKeys)
             ? [...member.assignedQuizKeys].sort((a, b) => a.localeCompare(b))
             : [],
-        quizHistory: historyFromUnified !== undefined ? historyFromUnified : (Array.isArray(member.quizHistory) ? member.quizHistory : []),
+        quizHistory: mergedHistory,
       };
     });
   }, [staff, unifiedAssignedQuizKeysByStaff, unifiedQuizHistoryByStaff]);
@@ -7307,4 +7316,5 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     </div>
   );
 }
+
 
