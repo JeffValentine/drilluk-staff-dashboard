@@ -1313,6 +1313,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [reviewDrafts, setReviewDrafts] = useState({});
   const [trainingLogDraft, setTrainingLogDraft] = useState({ bracket: 'General Policy', note: '' });
   const lastLocalStaffEditRef = useRef(0);
+  const removalColumnsAvailableRef = useRef(true);
   const isOwnerSession = (authUser?.email || '').toLowerCase() === SITE_OWNER_EMAIL;
   const [rosterSyncOpen, setRosterSyncOpen] = useState(false);
   const [rosterSyncText, setRosterSyncText] = useState(formatRosterSeedForInput());
@@ -2847,14 +2848,13 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       updated_by: authUser?.id || null,
     };
 
-    const { error } = await supabase.from('staff_members').upsert(payload);
+    const safePayload = removalColumnsAvailableRef.current ? payload : stripRemovalFields(payload);
+    const { error } = await supabase.from('staff_members').upsert(safePayload);
     if (!error) return;
-    if (!String(error.message || '').match(/is_removed|removed_at|removed_by|removal_reason|removal_notes/i)) {
-      throw error;
-    }
     const fallback = stripRemovalFields(payload);
     const { error: fallbackError } = await supabase.from('staff_members').upsert(fallback);
     if (fallbackError) throw fallbackError;
+    removalColumnsAvailableRef.current = false;
   }
 
   async function removeStaffMemberFromDb(staffId, removal) {
@@ -2877,7 +2877,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       .select('id')
       .maybeSingle();
     if (error) {
-      if (String(error.message || '').match(/is_removed|removed_at|removed_by|removal_reason|removal_notes/i)) {
+      if (String(error.message || '').match(/is_removed|removed_at|removed_by|removal_reason|removal_notes/i) || error.code === 'PGRST204') {
+        removalColumnsAvailableRef.current = false;
         throw new Error('Removal tracking columns are missing in Supabase. Run the latest SQL block first.');
       }
       throw error;
