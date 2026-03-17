@@ -2802,6 +2802,16 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     setReviewDrafts({});
   }, [selected?.id]);
 
+  function stripRemovalFields(payload) {
+    const next = { ...payload };
+    delete next.is_removed;
+    delete next.removed_at;
+    delete next.removed_by;
+    delete next.removal_reason;
+    delete next.removal_notes;
+    return next;
+  }
+
   async function saveStaffMember(member) {
     if (!dbReady || !supabase) return;
     lastLocalStaffEditRef.current = Date.now();
@@ -2837,7 +2847,14 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       updated_by: authUser?.id || null,
     };
 
-    await supabase.from('staff_members').upsert(payload);
+    const { error } = await supabase.from('staff_members').upsert(payload);
+    if (!error) return;
+    if (!String(error.message || '').match(/is_removed|removed_at|removed_by|removal_reason|removal_notes/i)) {
+      throw error;
+    }
+    const fallback = stripRemovalFields(payload);
+    const { error: fallbackError } = await supabase.from('staff_members').upsert(fallback);
+    if (fallbackError) throw fallbackError;
   }
 
   async function removeStaffMemberFromDb(staffId, removal) {
@@ -2860,6 +2877,9 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       .select('id')
       .maybeSingle();
     if (error) {
+      if (String(error.message || '').match(/is_removed|removed_at|removed_by|removal_reason|removal_notes/i)) {
+        throw new Error('Removal tracking columns are missing in Supabase. Run the latest SQL block first.');
+      }
       throw error;
     }
     if (!data?.id) {
