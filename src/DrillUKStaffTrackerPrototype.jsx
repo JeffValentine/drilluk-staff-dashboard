@@ -4221,13 +4221,13 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         <div className="pointer-events-none absolute bottom-6 left-6 hidden opacity-[0.15] md:block">
           <img src="/assets/logos/drilluk-logo.png" alt="" className="h-8 w-8 rounded-lg mix-blend-screen" />
         </div>
-        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
           <div>
             <div className="mb-2 flex flex-wrap items-center gap-3">
-              <div className="rounded-2xl border border-fuchsia-500/30 bg-fuchsia-500/10 p-2">
-                <Shield className="h-6 w-6 text-fuchsia-300" />
+              <div className="rounded-xl border border-fuchsia-500/30 bg-fuchsia-500/10 p-1.5">
+                <Shield className="h-5 w-5 text-fuchsia-300" />
               </div>
-              <img src="/assets/logos/drilluk-logo.png" alt="Drill UK logo" className="h-10 w-10 rounded-xl border border-white/10 bg-black/20 object-cover mix-blend-screen" />
+              <img src="/assets/logos/drilluk-logo.png" alt="Drill UK logo" className="h-8 w-8 rounded-lg border border-white/10 bg-black/20 object-cover mix-blend-screen" />
               <Badge className="border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-200 hover:bg-fuchsia-500/10">Drill UK Staff System</Badge>
               <Badge className="border-white/10 bg-white/10 px-2 text-[10px] text-zinc-200">
                 {accountRoleLabel(effectiveRole)}
@@ -4244,7 +4244,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 {profile?.username || authUser?.email?.split('@')[0] || 'Guest'}
               </Badge>
             </div>
-            <div className="mb-2 flex flex-wrap items-center gap-2">
+            <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
               {quickLinks.map(link => {
                 const LinkIcon = link.icon;
                 return (
@@ -4253,7 +4253,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                     href={link.href}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-black/25 text-zinc-200 transition hover:border-fuchsia-400/35 hover:bg-white/10 hover:text-white"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-black/25 text-zinc-200 transition hover:border-fuchsia-400/35 hover:bg-white/10 hover:text-white"
                     title={`Open ${link.label}`}
                   >
                     <LinkIcon className="h-4 w-4" />
@@ -4262,7 +4262,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               })}
             </div>
             {canUseViewAs && (
-              <div className="mb-2 flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-black/25 px-2 py-1.5 text-xs">
+              <div className="mb-1.5 flex flex-wrap items-center gap-1.5 rounded-xl border border-white/10 bg-black/25 px-2 py-1.5 text-[11px]">
                 <span className="text-zinc-400">View dashboard as</span>
                 <Select
                   value={viewAsRole || 'none'}
@@ -4318,12 +4318,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 )}
               </div>
             )}
-            <h1 className="font-display text-3xl font-bold tracking-tight md:text-4xl">Drill-UK Staff Dashboard</h1>
-            <p className="mt-2 max-w-3xl text-sm text-zinc-300 md:text-base">A modern interactive staff panel for promotions and progression by xJeffValentine, with cleaner workflows for training, permissions, and disciplinary tracking.</p>
+            <div className="text-base font-semibold tracking-tight text-white md:text-lg">Drill UK Staff Dashboard</div>
           </div>
-          <div className="flex items-start gap-3 md:w-[620px] md:justify-end">
-            <div className="space-y-2 md:w-[430px]">
-              <div className="grid grid-cols-2 gap-3">
+          <div className="flex items-start gap-2 md:w-[560px] md:justify-end">
+            <div className="space-y-1.5 md:w-[390px]">
+              <div className="grid grid-cols-2 gap-2">
                 {[
                   { label: 'Total Staff', value: totals.total, icon: Users },
                   { label: 'In Training', value: totals.inTraining, icon: GraduationCap },
@@ -4332,21 +4331,20 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 ].map((item, i) => (
                   <motion.div key={item.label} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
                     <Card className="border-white/10 bg-white/5 backdrop-blur-xl">
-                      <CardContent className="flex items-center justify-between p-3">
+                      <CardContent className="flex items-center justify-between px-3 py-2.5">
                         <div>
-                          <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-400">{item.label}</div>
-                          <div className="mt-0.5 text-xl font-bold">{item.value}</div>
+                          <div className="text-[9px] uppercase tracking-[0.16em] text-zinc-500">{item.label}</div>
+                          <div className="mt-0.5 text-lg font-bold">{item.value}</div>
                         </div>
-                        <item.icon className="h-4.5 w-4.5 text-fuchsia-300" />
+                        <item.icon className="h-4 w-4 text-fuchsia-300" />
                       </CardContent>
                     </Card>
                   </motion.div>
                 ))}
               </div>
               {canViewPresence && (
-                <div>
-                  <div className="mb-1 text-[10px] uppercase tracking-[0.16em] text-zinc-500">Head admin visibility only</div>
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
+                  <Badge className="border-white/10 bg-white/10 px-2 text-[10px] text-zinc-300">HA only</Badge>
                   <button
                     type="button"
                     onClick={() => setActiveUsersOpen(true)}
@@ -4363,11 +4361,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                     <span className="h-1.5 w-1.5 rounded-full bg-zinc-300" />
                     Offline {offlineUsers.length}
                   </button>
-                  </div>
                 </div>
               )}
             </div>
-            <div className="flex w-[84px] flex-col items-stretch gap-1.5">
+            <div className="flex w-[72px] flex-col items-stretch gap-1.5">
               <button
                 type="button"
                 onClick={() => setProfileOpen(true)}
@@ -4378,10 +4375,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                   <img
                     src={profile.avatar_url}
                     alt="Account logo"
-                    className="h-[74px] w-[74px] rounded-xl object-cover"
+                    className="h-[62px] w-[62px] rounded-xl object-cover"
                   />
                 ) : (
-                  <div className="flex h-[74px] w-[74px] items-center justify-center rounded-xl text-xl font-bold text-zinc-200">
+                  <div className="flex h-[62px] w-[62px] items-center justify-center rounded-xl text-lg font-bold text-zinc-200">
                     {(profile?.username?.[0] || authUser?.email?.[0] || 'G').toUpperCase()}
                   </div>
                 )}

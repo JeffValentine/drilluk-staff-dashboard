@@ -143,25 +143,27 @@ export default function ExperimentalStaffQuiz({
   return (
     <div className="space-y-4">
       {!started && (
-        <div className="grid gap-4 xl:grid-cols-[0.92fr,1.08fr]">
+        <div>
           <Card className="border-white/10 bg-white/5">
             <CardHeader>
               <CardTitle>{activeTitle}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className={`rounded-2xl border p-4 text-sm text-zinc-200 ${accentSoft}`}>
-                {activeSubtitle}
-              </div>
+              {activeSubtitle ? (
+                <div className={`rounded-2xl border px-4 py-3 text-sm text-zinc-200 ${accentSoft}`}>
+                  {activeSubtitle}
+                </div>
+              ) : null}
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
                   <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Question pool</div>
                   <div className="mt-2 text-2xl font-semibold text-white">{totalQuestions}</div>
-                  <div className="mt-1 text-xs text-zinc-400">Randomized every attempt</div>
+
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
                   <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Recommended pass</div>
                   <div className="mt-2 text-2xl font-semibold text-white">{activeRecommendedPass}%</div>
-                  <div className="mt-1 text-xs text-zinc-400">Configured for this quiz pack</div>
+
                 </div>
               </div>
               <div>
@@ -176,32 +178,6 @@ export default function ExperimentalStaffQuiz({
               <Button type="button" onClick={beginQuiz} className={`w-full rounded-2xl text-white ${accentButton}`}>
                 Start Quiz
               </Button>
-            </CardContent>
-          </Card>
-
-          <Card className="border-white/10 bg-white/5">
-            <CardHeader>
-              <CardTitle>Format</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4 text-sm text-zinc-300">
-              <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4">
-                <div className="flex flex-wrap gap-2">
-                  <Badge className="border-cyan-500/35 bg-cyan-500/12 text-cyan-200">Quiz Runner</Badge>
-                  <Badge className="border-white/10 bg-white/10 text-zinc-200">Same affirmation logic everywhere</Badge>
-                </div>
-                <p className="mt-3 leading-6 text-zinc-300">
-                  This uses the same confirmation and results flow for mandatory quizzes and knowledge packs so the dashboard feels consistent.
-                </p>
-              </div>
-              <div className="space-y-3 rounded-2xl border border-white/10 bg-black/25 p-4">
-                <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">What this version does</div>
-                <ul className="space-y-2 text-sm text-zinc-300">
-                  <li>Randomizes the question order every attempt.</li>
-                  <li>Shows immediate answer feedback.</li>
-                  <li>Keeps a missed-question breakdown at the end.</li>
-                  <li>Reuses the same polished structure across quiz types.</li>
-                </ul>
-              </div>
             </CardContent>
           </Card>
         </div>

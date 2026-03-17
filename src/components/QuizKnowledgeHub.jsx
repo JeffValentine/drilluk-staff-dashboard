@@ -43,30 +43,19 @@ export default function QuizKnowledgeHub({
           <CardTitle>Quizzes & Knowledge</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 xl:grid-cols-[1.15fr,0.85fr]">
-            <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge className="border-fuchsia-500/35 bg-fuchsia-500/12 text-fuchsia-200">Knowledge Packs</Badge>
-                <Badge className="border-white/10 bg-white/10 text-zinc-200">Rank-based, assigned, and managed quizzes</Badge>
+          <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-black/25 p-3">
+            <Badge className="border-fuchsia-500/35 bg-fuchsia-500/12 text-fuchsia-200">Knowledge Packs</Badge>
+            <Badge className="border-white/10 bg-white/10 text-zinc-200">Rank-based, assigned, and managed quizzes</Badge>
+            {canManageCheckboxes && (
+              <div className="ml-auto flex flex-wrap gap-2">
+                <Button onClick={() => onAddManagedQuestion?.(null)} className="rounded-2xl border border-emerald-400/35 bg-emerald-500/12 text-emerald-100 hover:bg-emerald-500/18">
+                  Create New Quiz
+                </Button>
+                <Button onClick={onOpenBuilder} className="rounded-2xl border border-amber-400/35 bg-amber-500/12 text-amber-100 hover:bg-amber-500/18">
+                  Open Quiz Builder
+                </Button>
               </div>
-              <p className="mt-3 text-sm leading-6 text-zinc-300">
-                Quiz packs are organized by rank and category. Admins can inspect and edit the entire question bank from a modal, while trainees only see their own active path in My Progress.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
-              <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Builder access</div>
-              <div className="mt-2 text-sm text-zinc-300">Bulk editing stays available through the builder, but direct quiz edits and new managed quiz creation now happen from this workspace.</div>
-              {canManageCheckboxes && (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Button onClick={() => onAddManagedQuestion?.(null)} className="rounded-2xl border border-emerald-400/35 bg-emerald-500/12 text-emerald-100 hover:bg-emerald-500/18">
-                    Create New Quiz
-                  </Button>
-                  <Button onClick={onOpenBuilder} className="rounded-2xl border border-amber-400/35 bg-amber-500/12 text-amber-100 hover:bg-amber-500/18">
-                    Open Quiz Builder
-                  </Button>
-                </div>
-              )}
-            </div>
+            )}
           </div>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {quizDefinitions.map(definition => (
