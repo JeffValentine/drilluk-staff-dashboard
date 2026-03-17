@@ -278,8 +278,8 @@ export default function EmployeeHub({
                       {attempt.items.map(item => (
                         <div key={attempt.id + '-' + item.id} className="rounded-lg border border-white/10 bg-black/25 p-2 text-xs">
                           <div className="font-medium text-zinc-100">{item.title}</div>
-                          <div className="mt-1 text-zinc-400">Selected: <span className="text-zinc-200">{item.selected ?? 'No answer'}</span></div>
-                          <div className="text-zinc-400">Correct: <span className="text-zinc-200">{item.correct ?? 'No answer set'}</span></div>
+                          <div className="mt-1 text-zinc-400">Selected: <span className={item.isCorrect ? 'text-emerald-300' : 'text-red-300'}>{item.selected ?? 'No answer'}</span></div>
+                          <div className="text-zinc-400">Correct: <span className={item.isCorrect ? 'text-emerald-300' : 'text-red-300'}>{item.correct ?? 'No answer set'}</span></div>
                         </div>
                       ))}
                     </div>
