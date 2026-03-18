@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowUpRight, ClipboardCheck, ShieldCheck } from "lucide-react";
 import DrillUKStaffTrackerPrototype from "./DrillUKStaffTrackerPrototype";
+import PublicInterviewFlow from "./components/PublicInterviewFlow";
 import { supabase, isSupabaseConfigured } from "./lib/supabase";
 
-function LoginScreen({ error, info, onSignIn, onSignUp }) {
+function LoginScreen({ error, info, onSignIn, onSignUp, onOpenInterview }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
@@ -28,71 +30,113 @@ function LoginScreen({ error, info, onSignIn, onSignUp }) {
 
   return (
     <div className="min-h-screen bg-[#07070b] text-white">
-      <div className="mx-auto flex min-h-screen w-full max-w-md items-center px-6">
-        <form onSubmit={submit} className="w-full rounded-2xl border border-white/10 bg-white/5 p-6">
-          <h1 className="font-display text-2xl font-bold">{mode === "signin" ? "Staff Login" : "Create Account"}</h1>
-          <p className="mt-2 text-sm text-zinc-400">
-            {mode === "signin"
-              ? "Sign in to access the protected Drill-UK dashboard."
-              : "Create an account. New users are pending approval by Head of Staff."}
-          </p>
-          {!isSupabaseConfigured && (
-            <div className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
-              Supabase is not configured. Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+      <div className="mx-auto flex min-h-screen w-full max-w-7xl items-center px-6 py-10">
+        <div className="grid w-full gap-6 xl:grid-cols-[1.04fr,0.96fr]">
+          <div className="rounded-[30px] border border-fuchsia-500/20 bg-[radial-gradient(circle_at_top,rgba(217,70,239,0.22),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-6 shadow-[0_30px_90px_rgba(0,0,0,0.45)]">
+            <div className="inline-flex items-center gap-2 rounded-full border border-fuchsia-400/25 bg-fuchsia-500/10 px-3 py-1 text-xs uppercase tracking-[0.22em] text-fuchsia-100">
+              <ShieldCheck className="h-3.5 w-3.5" /> Drill UK Staff
             </div>
-          )}
-          {error && (
-            <div className="mt-4 rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-200">{error}</div>
-          )}
-          {info && (
-            <div className="mt-4 rounded-xl border border-emerald-500/35 bg-emerald-500/10 p-3 text-xs text-emerald-200">{info}</div>
-          )}
-          <div className="mt-4 space-y-3">
-            {mode === "signup" && (
-              <input
-                className="h-10 w-full rounded-md border border-zinc-700 bg-transparent px-3 text-sm"
-                type="text"
-                placeholder="Username (optional)"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-              />
-            )}
-            <input
-              className="h-10 w-full rounded-md border border-zinc-700 bg-transparent px-3 text-sm"
-              type="email"
-              placeholder="Email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-            <input
-              className="h-10 w-full rounded-md border border-zinc-700 bg-transparent px-3 text-sm"
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-            <button
-              className="h-10 w-full rounded-md bg-fuchsia-600 text-sm font-medium text-white hover:bg-fuchsia-500 disabled:opacity-50"
-              type="submit"
-              disabled={!isSupabaseConfigured}
-            >
-              {mode === "signin" ? "Sign in" : "Create account"}
-            </button>
+            <h1 className="mt-5 font-display text-5xl font-bold leading-tight text-white">Staff Login and Public Interview Portal</h1>
+            <p className="mt-4 max-w-2xl text-sm leading-7 text-zinc-300">
+              Existing staff can sign in here. New applicants can complete the interview form and the two Trial Moderator starter quizzes before any dashboard account is created.
+            </p>
+            <div className="mt-6 grid gap-3 md:grid-cols-3">
+              <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Interview</div>
+                <div className="mt-2 text-sm font-semibold text-white">Standard application questions</div>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Quiz 1</div>
+                <div className="mt-2 text-sm font-semibold text-white">T-MOD Entry Quiz</div>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Quiz 2</div>
+                <div className="mt-2 text-sm font-semibold text-white">T-MOD Core Values Quiz</div>
+              </div>
+            </div>
             <button
               type="button"
-              onClick={() => {
-                setMode((m) => (m === "signin" ? "signup" : "signin"));
-                setTokenPromptOpen(false);
-                setSignupToken("");
-              }}
-              className="h-10 w-full rounded-md border border-white/15 bg-black/25 text-sm text-zinc-200 hover:bg-white/10"
+              onClick={onOpenInterview}
+              className="mt-6 flex w-full items-center justify-between rounded-[28px] border border-cyan-400/30 bg-[linear-gradient(135deg,rgba(14,116,144,0.26),rgba(217,70,239,0.18))] px-6 py-5 text-left shadow-[0_24px_70px_rgba(0,0,0,0.34)] transition hover:border-cyan-300/45 hover:bg-[linear-gradient(135deg,rgba(14,116,144,0.34),rgba(217,70,239,0.24))]"
             >
-              {mode === "signin" ? "Create account instead" : "Back to sign in"}
+              <div>
+                <div className="flex items-center gap-2 text-sm font-semibold text-cyan-100">
+                  <ClipboardCheck className="h-4 w-4" /> Start Staff Interview
+                </div>
+                <div className="mt-2 text-2xl font-semibold text-white">Apply for staff before login</div>
+                <div className="mt-2 max-w-xl text-sm leading-6 text-zinc-300">
+                  Complete the interview form, do the two required starter quizzes, and send the full application straight to Head Admin review.
+                </div>
+              </div>
+              <ArrowUpRight className="h-6 w-6 shrink-0 text-cyan-100" />
             </button>
           </div>
-        </form>
+
+          <form onSubmit={submit} className="w-full rounded-[30px] border border-white/10 bg-white/5 p-6 shadow-[0_30px_90px_rgba(0,0,0,0.4)]">
+            <h1 className="font-display text-2xl font-bold">{mode === "signin" ? "Staff Login" : "Create Account"}</h1>
+            <p className="mt-2 text-sm text-zinc-400">
+              {mode === "signin"
+                ? "Sign in to access the protected Drill-UK dashboard."
+                : "Create an account. New users are pending approval by Head of Staff."}
+            </p>
+            {!isSupabaseConfigured && (
+              <div className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
+                Supabase is not configured. Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+              </div>
+            )}
+            {error && (
+              <div className="mt-4 rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-200">{error}</div>
+            )}
+            {info && (
+              <div className="mt-4 rounded-xl border border-emerald-500/35 bg-emerald-500/10 p-3 text-xs text-emerald-200">{info}</div>
+            )}
+            <div className="mt-4 space-y-3">
+              {mode === "signup" && (
+                <input
+                  className="h-10 w-full rounded-md border border-zinc-700 bg-transparent px-3 text-sm"
+                  type="text"
+                  placeholder="Username (optional)"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                />
+              )}
+              <input
+                className="h-10 w-full rounded-md border border-zinc-700 bg-transparent px-3 text-sm"
+                type="email"
+                placeholder="Email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+              <input
+                className="h-10 w-full rounded-md border border-zinc-700 bg-transparent px-3 text-sm"
+                type="password"
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+              <button
+                className="h-10 w-full rounded-md bg-fuchsia-600 text-sm font-medium text-white hover:bg-fuchsia-500 disabled:opacity-50"
+                type="submit"
+                disabled={!isSupabaseConfigured}
+              >
+                {mode === "signin" ? "Sign in" : "Create account"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode((m) => (m === "signin" ? "signup" : "signin"));
+                  setTokenPromptOpen(false);
+                  setSignupToken("");
+                }}
+                className="h-10 w-full rounded-md border border-white/15 bg-black/25 text-sm text-zinc-200 hover:bg-white/10"
+              >
+                {mode === "signin" ? "Create account instead" : "Back to sign in"}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
       {tokenPromptOpen && mode === "signup" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
@@ -165,6 +209,8 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
+  const [interviewOpen, setInterviewOpen] = useState(false);
+  const [interviewSubmitting, setInterviewSubmitting] = useState(false);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
@@ -292,7 +338,7 @@ export default function App() {
       return;
     }
 
-    const { data, error: signUpError } = await supabase.auth.signUp({
+    const { error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -311,17 +357,94 @@ export default function App() {
     setInfo("Account created. After sign-in, your account will stay locked until Head of Staff approval.");
   }
 
+  const submitInterviewApplication = useCallback(async ({ form, entryResult, coreResult }) => {
+    setError("");
+    setInfo("");
+    if (!supabase) {
+      setError("Supabase is not configured.");
+      return;
+    }
+
+    setInterviewSubmitting(true);
+    const payload = {
+      full_name: String(form.fullName || "").trim(),
+      discord_name: String(form.discordName || "").trim(),
+      age: Number(form.age || 0),
+      country: String(form.country || "").trim(),
+      hours_per_week: Number(form.hoursPerWeek || 0),
+      prior_bans: String(form.priorBans || "").trim(),
+      staff_experience: String(form.staffExperience || "").trim(),
+      why_staff: String(form.whyStaff || "").trim(),
+      why_drill: String(form.whyDrill || "").trim(),
+      entry_quiz_result: {
+        title: entryResult?.attemptSnapshot?.title || "T-MOD Entry Quiz",
+        scorePercent: Number(entryResult?.scorePercent || 0),
+        correctAnswers: Number(entryResult?.correctAnswers || 0),
+        totalQuestions: Number(entryResult?.totalQuestions || 0),
+        recommendedPass: Number(entryResult?.recommendedPass || 80),
+        passed: Boolean(entryResult?.passed),
+        answers: entryResult?.answers || [],
+      },
+      core_quiz_result: {
+        title: coreResult?.attemptSnapshot?.title || "T-MOD Core Values Quiz",
+        scorePercent: Number(coreResult?.scorePercent || 0),
+        correctAnswers: Number(coreResult?.correctAnswers || 0),
+        totalQuestions: Number(coreResult?.totalQuestions || 0),
+        recommendedPass: Number(coreResult?.recommendedPass || 80),
+        passed: Boolean(coreResult?.passed),
+        answers: coreResult?.answers || [],
+      },
+    };
+
+    const { error: insertError } = await supabase.from("interview_applications").insert(payload);
+    setInterviewSubmitting(false);
+
+    if (insertError) {
+      setError(insertError.message || "Failed to submit interview application.");
+      return;
+    }
+
+    setInterviewOpen(false);
+    setInfo("Interview application submitted. Head Admin can now review your answers and quiz results.");
+  }, []);
+
   async function signOut() {
     if (!supabase) return;
     await supabase.auth.signOut();
   }
 
   if (loading) {
-    return <div className="min-h-screen bg-zinc-950 text-zinc-200 p-6">Loading...</div>;
+    return <div className="min-h-screen bg-zinc-950 p-6 text-zinc-200">Loading...</div>;
   }
 
   if (!session) {
-    return <LoginScreen error={error} info={info} onSignIn={signIn} onSignUp={signUp} />;
+    if (interviewOpen) {
+      return (
+        <PublicInterviewFlow
+          onBack={() => {
+            setInterviewOpen(false);
+            setError("");
+          }}
+          onSubmit={submitInterviewApplication}
+          loading={interviewSubmitting}
+          error={error}
+          info={info}
+        />
+      );
+    }
+    return (
+      <LoginScreen
+        error={error}
+        info={info}
+        onSignIn={signIn}
+        onSignUp={signUp}
+        onOpenInterview={() => {
+          setError("");
+          setInfo("");
+          setInterviewOpen(true);
+        }}
+      />
+    );
   }
 
   if (!profile) {
@@ -342,5 +465,3 @@ export default function App() {
     />
   );
 }
-
-

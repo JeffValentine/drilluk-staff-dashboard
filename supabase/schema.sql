@@ -864,3 +864,57 @@ $$;
 revoke all on function public.sync_legacy_training_data() from public;
 grant execute on function public.sync_legacy_training_data() to authenticated;
 
+
+create table if not exists public.interview_applications (
+  id uuid primary key default gen_random_uuid(),
+  full_name text not null,
+  discord_name text not null,
+  age int not null,
+  country text not null,
+  hours_per_week int not null,
+  prior_bans text not null default '',
+  staff_experience text not null default '',
+  why_staff text not null default '',
+  why_drill text not null default '',
+  entry_quiz_result jsonb not null default '{}'::jsonb,
+  core_quiz_result jsonb not null default '{}'::jsonb,
+  status text not null default 'pending' check (status in ('pending', 'reviewed', 'accepted', 'rejected')),
+  review_notes text not null default '',
+  reviewed_by uuid references auth.users(id),
+  reviewed_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+alter table public.interview_applications enable row level security;
+
+drop policy if exists "interview_applications_insert_public" on public.interview_applications;
+create policy "interview_applications_insert_public"
+on public.interview_applications for insert
+to anon, authenticated
+with check (
+  status = 'pending'
+  and reviewed_by is null
+  and reviewed_at is null
+);
+
+drop policy if exists "interview_applications_select_head_admin" on public.interview_applications;
+create policy "interview_applications_select_head_admin"
+on public.interview_applications for select
+to authenticated
+using (
+  public.current_user_role() = 'head_admin'
+  or public.current_user_has_god_key() = true
+);
+
+drop policy if exists "interview_applications_update_head_admin" on public.interview_applications;
+create policy "interview_applications_update_head_admin"
+on public.interview_applications for update
+to authenticated
+using (
+  public.current_user_role() = 'head_admin'
+  or public.current_user_has_god_key() = true
+)
+with check (
+  public.current_user_role() = 'head_admin'
+  or public.current_user_has_god_key() = true
+);

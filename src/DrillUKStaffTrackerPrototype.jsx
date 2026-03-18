@@ -15,6 +15,7 @@ import ExperimentalStaffQuiz from '@/components/ExperimentalStaffQuiz';
 import EmployeeHub from '@/components/EmployeeHub';
 import QuizKnowledgeHub from '@/components/QuizKnowledgeHub';
 import ManagementHub from '@/components/ManagementHub';
+import InterviewHub from '@/components/InterviewHub';
 import { EXPERIMENTAL_QUIZ_QUESTIONS } from '@/experimentalQuizData';
 
 const roles = ['T-MOD', 'MOD', 'S-MOD', 'ADMIN', 'S-ADMIN', 'HEAD-ADMIN'];
@@ -1212,6 +1213,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const canViewPresence = effectiveRole === 'head_admin';
   const canManageCheckboxes = canManageUsers || effectiveRole === 'admin';
   const canDeleteStaff = ['head_admin', 'admin'].includes(effectiveRole);
+  const canManageInterviews = effectiveRole === 'head_admin' || Boolean(profile?.god_key_enabled);
   const isStaffInTraining = effectiveRole === 'staff_in_training';
   const canAccessExperimentalQuiz = profile?.role === 'head_admin' || Boolean(profile?.experimental_quiz_enabled);
   const [activeMainTab, setActiveMainTab] = useState(isStaffInTraining ? 'myprogress' : 'employee');
@@ -1226,6 +1228,12 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [removeStaffReason, setRemoveStaffReason] = useState('');
   const [removeStaffNotes, setRemoveStaffNotes] = useState('');
   const [removedStaffOpen, setRemovedStaffOpen] = useState(false);
+  const [interviewApplications, setInterviewApplications] = useState([]);
+  const [interviewLoading, setInterviewLoading] = useState(false);
+  const [interviewError, setInterviewError] = useState('');
+  const [selectedInterviewId, setSelectedInterviewId] = useState(null);
+  const [interviewQuery, setInterviewQuery] = useState('');
+  const [interviewReviewNotes, setInterviewReviewNotes] = useState('');
 
   const [staff, setStaff] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -1579,6 +1587,57 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     } finally {
       setManagementLoading(false);
     }
+  }
+
+  async function refreshInterviewApplicationsFromDb() {
+    if (!dbReady || !supabase || !canManageInterviews) return;
+    setInterviewLoading(true);
+    setInterviewError('');
+    try {
+      const { data, error } = await supabase
+        .from('interview_applications')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        setInterviewApplications([]);
+        setInterviewError(error.message || 'Failed to load interview applications.');
+        return;
+      }
+
+      const next = (data || []).map(item => ({
+        ...item,
+        entry_quiz_result: item.entry_quiz_result || null,
+        core_quiz_result: item.core_quiz_result || null,
+      }));
+      setInterviewApplications(next);
+      setSelectedInterviewId(prev => (next.some(item => item.id === prev) ? prev : next[0]?.id ?? null));
+      setInterviewReviewNotes(current => {
+        const currentTarget = next.find(item => item.id === selectedInterviewId) || next[0] || null;
+        return currentTarget?.review_notes || current || '';
+      });
+    } finally {
+      setInterviewLoading(false);
+    }
+  }
+
+  async function updateInterviewApplicationStatus(application, status) {
+    if (!application?.id || !supabase || !canManageInterviews) return;
+    const payload = {
+      status,
+      review_notes: interviewReviewNotes || '',
+      reviewed_by: authUser?.id || null,
+      reviewed_at: new Date().toISOString(),
+    };
+    const { error } = await supabase
+      .from('interview_applications')
+      .update(payload)
+      .eq('id', application.id);
+    if (error) {
+      alert(error.message || 'Failed to update interview application.');
+      return;
+    }
+    await refreshInterviewApplicationsFromDb();
   }
 
   async function refreshAuditLogsFromDb() {
@@ -2288,11 +2347,15 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   useEffect(() => {
     const traineeTabs = ['myprogress', 'stafftools'];
-    const staffTabs = ['employee', 'quizknowledge', 'stafftools', 'management', 'tracker', 'session', 'progression', 'discipline', 'audit', 'ranks', 'checkboxes'];
+    const staffTabs = ['employee', 'quizknowledge', 'stafftools', 'management', 'tracker', 'session', 'progression', 'discipline', 'audit', 'ranks', 'checkboxes', ...(canManageInterviews ? ['interviews'] : [])];
     const allowed = isStaffInTraining ? traineeTabs : staffTabs;
     const fallback = isStaffInTraining ? 'myprogress' : 'employee';
     if (!allowed.includes(activeMainTab)) setActiveMainTab(fallback);
-  }, [isStaffInTraining, activeMainTab]);
+  }, [isStaffInTraining, activeMainTab, canManageInterviews]);
+
+  useEffect(() => {
+    if (activeMainTab === 'interviews') refreshInterviewApplicationsFromDb();
+  }, [activeMainTab]);
 
   useEffect(() => {
     if (!isStaffInTraining && activeMainTab === 'myprogress') {
@@ -4465,6 +4528,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 <TabsTrigger value="quizknowledge">Quizzes & Knowledge</TabsTrigger>
                 <TabsTrigger value="stafftools">Staff Tools</TabsTrigger>
                 <TabsTrigger value="management">Management</TabsTrigger>
+                {canManageInterviews && <TabsTrigger value="interviews">Interviews</TabsTrigger>}
               </>
             )}
           </TabsList>
@@ -4560,6 +4624,36 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               onToggleAssignment={toggleQuizAssignment}
               onQuizComplete={handleKnowledgeQuizComplete}
             />
+          </TabsContent>
+
+
+          <TabsContent value="interviews">
+            <div className="space-y-4">
+              <Card className="border-white/10 bg-white/5">
+                <CardHeader>
+                  <CardTitle>Interview Review</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-black/25 p-3">
+                    <Badge className="border-cyan-400/35 bg-cyan-500/12 text-cyan-100">Head Admin review only</Badge>
+                    <Badge className="border-white/10 bg-white/10 text-zinc-200">Public applications and both starter quiz attempts</Badge>
+                    {interviewLoading && <Badge className="border-amber-400/35 bg-amber-500/12 text-amber-100">Loading...</Badge>}
+                    {interviewError && <Badge className="border-red-400/35 bg-red-500/12 text-red-100">{interviewError}</Badge>}
+                  </div>
+                </CardContent>
+              </Card>
+              <InterviewHub
+                interviews={interviewApplications}
+                selectedInterviewId={selectedInterviewId}
+                setSelectedInterviewId={setSelectedInterviewId}
+                reviewNotes={interviewReviewNotes}
+                setReviewNotes={setInterviewReviewNotes}
+                interviewQuery={interviewQuery}
+                setInterviewQuery={setInterviewQuery}
+                onRefresh={refreshInterviewApplicationsFromDb}
+                onUpdateStatus={updateInterviewApplicationStatus}
+              />
+            </div>
           </TabsContent>
 
           <TabsContent value="myprogress">
