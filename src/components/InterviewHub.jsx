@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 
-const primaryCompactButton = 'relative overflow-hidden rounded-[20px] border px-4 py-3 text-left shadow-[0_16px_40px_rgba(0,0,0,0.26)] transition hover:-translate-y-[1px]';
+const compactPrimaryButton = 'h-10 rounded-[18px] border px-4 text-sm font-semibold shadow-[0_12px_28px_rgba(0,0,0,0.2)] transition hover:-translate-y-[1px]';
 const premiumActionBase = 'h-10 rounded-[18px] border px-3.5 text-sm font-semibold shadow-[0_12px_28px_rgba(0,0,0,0.2)] transition hover:-translate-y-[1px]';
 
 function statusBadgeClass(status) {
