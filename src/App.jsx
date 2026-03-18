@@ -1,8 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, ClipboardCheck, ShieldCheck } from "lucide-react";
 import DrillUKStaffTrackerPrototype from "./DrillUKStaffTrackerPrototype";
 import PublicInterviewFlow from "./components/PublicInterviewFlow";
 import { supabase, isSupabaseConfigured } from "./lib/supabase";
+
+function AppScaleShell({ children }) {
+  return <div style={{ zoom: '90%' }}>{children}</div>;
+}
 
 function LoginScreen({ error, info, onSignIn, onSignUp, onOpenInterview }) {
   const [email, setEmail] = useState("");
@@ -398,13 +402,13 @@ export default function App() {
   }
 
   if (loading) {
-    return <div className="min-h-screen bg-zinc-950 p-6 text-zinc-200">Loading...</div>;
+    return <AppScaleShell><div className="min-h-screen bg-zinc-950 p-6 text-zinc-200">Loading...</div></AppScaleShell>;
   }
 
   if (!session) {
     if (interviewOpen) {
       return (
-        <PublicInterviewFlow
+        <AppScaleShell><PublicInterviewFlow
           onBack={() => {
             setInterviewOpen(false);
             setError("");
@@ -413,11 +417,11 @@ export default function App() {
           loading={interviewSubmitting}
           error={error}
           info={info}
-        />
+        /></AppScaleShell>
       );
     }
     return (
-      <LoginScreen
+      <AppScaleShell><LoginScreen
         error={error}
         info={info}
         onSignIn={signIn}
@@ -427,25 +431,25 @@ export default function App() {
           setInfo("");
           setInterviewOpen(true);
         }}
-      />
+      /></AppScaleShell>
     );
   }
 
   if (!profile) {
-    return <div className="min-h-screen bg-zinc-950 p-6 text-zinc-200">Loading account...</div>;
+    return <AppScaleShell><div className="min-h-screen bg-zinc-950 p-6 text-zinc-200">Loading account...</div></AppScaleShell>;
   }
 
   if (!canAccessDashboard) {
-    return <PendingApprovalScreen profile={profile} onSignOut={signOut} />;
+    return <AppScaleShell><PendingApprovalScreen profile={profile} onSignOut={signOut} /></AppScaleShell>;
   }
 
   return (
-    <DrillUKStaffTrackerPrototype
+    <AppScaleShell><DrillUKStaffTrackerPrototype
       authUser={session.user}
       profile={profile}
       onSignOut={signOut}
       dbReady={isSupabaseConfigured}
       onProfileRefresh={loadProfile}
-    />
+    /></AppScaleShell>
   );
 }
