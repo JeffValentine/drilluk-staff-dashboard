@@ -918,3 +918,79 @@ with check (
   public.current_user_role() = 'head_admin'
   or public.current_user_has_god_key() = true
 );
+
+alter table public.interview_applications
+add column if not exists interview_scores jsonb not null default '[]'::jsonb;
+
+alter table public.interview_applications
+add column if not exists interview_total_score int not null default 0;
+
+alter table public.interview_applications
+add column if not exists interview_max_score int not null default 0;
+
+alter table public.interview_applications
+add column if not exists interview_started_by uuid references auth.users(id);
+
+alter table public.interview_applications
+add column if not exists interview_started_at timestamptz;
+
+alter table public.interview_applications
+add column if not exists interview_completed_at timestamptz;
+
+create table if not exists public.interview_question_bank (
+  id uuid primary key default gen_random_uuid(),
+  section text not null,
+  question text not null,
+  max_score int not null default 5,
+  sort_order int not null default 0,
+  good_answer_example text not null default '',
+  bad_answer_example text not null default '',
+  is_active boolean not null default true,
+  updated_by uuid references auth.users(id),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.interview_question_bank enable row level security;
+
+create or replace function public.is_developer_account()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, auth
+as $$
+  select exists (
+    select 1
+    from auth.users
+    where id = auth.uid()
+      and lower(coalesce(email, '')) = 'justappletje@gmail.com'
+  )
+$$;
+
+drop policy if exists "interview_question_bank_select_head_admin" on public.interview_question_bank;
+create policy "interview_question_bank_select_head_admin"
+on public.interview_question_bank for select
+to authenticated
+using (
+  public.current_user_role() = 'head_admin'
+  or public.current_user_has_god_key() = true
+);
+
+drop policy if exists "interview_question_bank_write_developer" on public.interview_question_bank;
+create policy "interview_question_bank_write_developer"
+on public.interview_question_bank for insert
+to authenticated
+with check (public.is_developer_account() = true);
+
+drop policy if exists "interview_question_bank_update_developer" on public.interview_question_bank;
+create policy "interview_question_bank_update_developer"
+on public.interview_question_bank for update
+to authenticated
+using (public.is_developer_account() = true)
+with check (public.is_developer_account() = true);
+
+drop policy if exists "interview_question_bank_delete_developer" on public.interview_question_bank;
+create policy "interview_question_bank_delete_developer"
+on public.interview_question_bank for delete
+to authenticated
+using (public.is_developer_account() = true);

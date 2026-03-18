@@ -38,20 +38,20 @@ function LoginScreen({ error, info, onSignIn, onSignUp, onOpenInterview }) {
             </div>
             <h1 className="mt-5 font-display text-5xl font-bold leading-tight text-white">Staff Login and Public Interview Portal</h1>
             <p className="mt-4 max-w-2xl text-sm leading-7 text-zinc-300">
-              Existing staff can sign in here. New applicants can complete the interview form and the two Trial Moderator starter quizzes before any dashboard account is created.
+              Existing staff can sign in here. New applicants can submit their details here first, then Head of Staff can run the live scored interview from inside the dashboard.
             </p>
             <div className="mt-6 grid gap-3 md:grid-cols-3">
               <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
                 <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Interview</div>
-                <div className="mt-2 text-sm font-semibold text-white">Standard application questions</div>
+                <div className="mt-2 text-sm font-semibold text-white">Application details</div>
               </div>
               <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
                 <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Quiz 1</div>
-                <div className="mt-2 text-sm font-semibold text-white">T-MOD Entry Quiz</div>
+                <div className="mt-2 text-sm font-semibold text-white">Head of Staff review</div>
               </div>
               <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
                 <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Quiz 2</div>
-                <div className="mt-2 text-sm font-semibold text-white">T-MOD Core Values Quiz</div>
+                <div className="mt-2 text-sm font-semibold text-white">Live scored interview</div>
               </div>
             </div>
             <button
@@ -65,7 +65,7 @@ function LoginScreen({ error, info, onSignIn, onSignUp, onOpenInterview }) {
                 </div>
                 <div className="mt-2 text-2xl font-semibold text-white">Apply for staff before login</div>
                 <div className="mt-2 max-w-xl text-sm leading-6 text-zinc-300">
-                  Complete the interview form, do the two required starter quizzes, and send the full application straight to Head Admin review.
+                  Submit your details first. Head of Staff can then open the applicant in the interview panel and run the full point-based interview live.
                 </div>
               </div>
               <ArrowUpRight className="h-6 w-6 shrink-0 text-cyan-100" />
@@ -376,24 +376,8 @@ export default function App() {
       staff_experience: String(form.staffExperience || "").trim(),
       why_staff: String(form.whyStaff || "").trim(),
       why_drill: String(form.whyDrill || "").trim(),
-      entry_quiz_result: {
-        title: entryResult?.attemptSnapshot?.title || "T-MOD Entry Quiz",
-        scorePercent: Number(entryResult?.scorePercent || 0),
-        correctAnswers: Number(entryResult?.correctAnswers || 0),
-        totalQuestions: Number(entryResult?.totalQuestions || 0),
-        recommendedPass: Number(entryResult?.recommendedPass || 80),
-        passed: Boolean(entryResult?.passed),
-        answers: entryResult?.answers || [],
-      },
-      core_quiz_result: {
-        title: coreResult?.attemptSnapshot?.title || "T-MOD Core Values Quiz",
-        scorePercent: Number(coreResult?.scorePercent || 0),
-        correctAnswers: Number(coreResult?.correctAnswers || 0),
-        totalQuestions: Number(coreResult?.totalQuestions || 0),
-        recommendedPass: Number(coreResult?.recommendedPass || 80),
-        passed: Boolean(coreResult?.passed),
-        answers: coreResult?.answers || [],
-      },
+      entry_quiz_result: {},
+      core_quiz_result: {},
     };
 
     const { error: insertError } = await supabase.from("interview_applications").insert(payload);
@@ -405,7 +389,7 @@ export default function App() {
     }
 
     setInterviewOpen(false);
-    setInfo("Interview application submitted. Head Admin can now review your answers and quiz results.");
+    setInfo("Interview application submitted. Head Admin can now review the applicant details and start the live scored interview.");
   }, []);
 
   async function signOut() {

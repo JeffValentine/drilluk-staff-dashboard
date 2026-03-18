@@ -16,6 +16,7 @@ import EmployeeHub from '@/components/EmployeeHub';
 import QuizKnowledgeHub from '@/components/QuizKnowledgeHub';
 import ManagementHub from '@/components/ManagementHub';
 import InterviewHub from '@/components/InterviewHub';
+import { DEFAULT_INTERVIEW_TEMPLATE, normalizeInterviewTemplate } from '@/interviewQuestionBank';
 import { EXPERIMENTAL_QUIZ_QUESTIONS } from '@/experimentalQuizData';
 
 const roles = ['T-MOD', 'MOD', 'S-MOD', 'ADMIN', 'S-ADMIN', 'HEAD-ADMIN'];
@@ -1229,6 +1230,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [removeStaffNotes, setRemoveStaffNotes] = useState('');
   const [removedStaffOpen, setRemovedStaffOpen] = useState(false);
   const [interviewApplications, setInterviewApplications] = useState([]);
+  const [interviewQuestionBank, setInterviewQuestionBank] = useState(normalizeInterviewTemplate(DEFAULT_INTERVIEW_TEMPLATE));
   const [interviewLoading, setInterviewLoading] = useState(false);
   const [interviewError, setInterviewError] = useState('');
   const [selectedInterviewId, setSelectedInterviewId] = useState(null);
@@ -1589,6 +1591,81 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     }
   }
 
+  async function refreshInterviewQuestionBankFromDb() {
+    if (!dbReady || !supabase || !canManageInterviews) return;
+    const { data, error } = await supabase
+      .from('interview_question_bank')
+      .select('*')
+      .order('sort_order', { ascending: true });
+
+    if (error) {
+      if (error.code !== 'PGRST116' && error.code !== '42P01') {
+        setInterviewError(error.message || 'Failed to load interview question bank.');
+      }
+      setInterviewQuestionBank(normalizeInterviewTemplate(DEFAULT_INTERVIEW_TEMPLATE));
+      return;
+    }
+
+    const normalized = normalizeInterviewTemplate(data);
+    setInterviewQuestionBank(normalized.length ? normalized : normalizeInterviewTemplate(DEFAULT_INTERVIEW_TEMPLATE));
+  }
+
+  async function saveInterviewScorecard(application, scorecard, totals) {
+    if (!application?.id || !supabase || !canManageInterviews) return;
+    const payload = {
+      interview_scores: scorecard,
+      interview_total_score: Number(totals?.total || 0),
+      interview_max_score: Number(totals?.max || 0),
+      interview_started_by: application.interview_started_by || authUser?.id || null,
+      interview_started_at: application.interview_started_at || new Date().toISOString(),
+      interview_completed_at: new Date().toISOString(),
+      review_notes: reviewNotesForInterview(application.id),
+    };
+    const { error } = await supabase.from('interview_applications').update(payload).eq('id', application.id);
+    if (error) {
+      alert(error.message || 'Failed to save interview scorecard.');
+      return;
+    }
+    await refreshInterviewApplicationsFromDb();
+  }
+
+  function reviewNotesForInterview(applicationId) {
+    if (selectedInterviewId === applicationId) return interviewReviewNotes || '';
+    const target = interviewApplications.find((item) => item.id === applicationId);
+    return target?.review_notes || '';
+  }
+
+  async function saveInterviewTemplateQuestion(question) {
+    if (!isOwnerSession || !supabase) return;
+    const payload = {
+      id: question.id || undefined,
+      section: question.section,
+      question: question.question,
+      max_score: Number(question.maxScore || 5),
+      sort_order: Number(question.sortOrder || 10),
+      good_answer_example: question.goodAnswerExample || '',
+      bad_answer_example: question.badAnswerExample || '',
+      is_active: true,
+      updated_by: authUser?.id || null,
+    };
+    const { error } = await supabase.from('interview_question_bank').upsert(payload);
+    if (error) {
+      alert(error.message || 'Failed to save interview template question.');
+      return;
+    }
+    await refreshInterviewQuestionBankFromDb();
+  }
+
+  async function deleteInterviewTemplateQuestion(question) {
+    if (!isOwnerSession || !supabase || !question?.id) return;
+    const { error } = await supabase.from('interview_question_bank').delete().eq('id', question.id);
+    if (error) {
+      alert(error.message || 'Failed to delete interview template question.');
+      return;
+    }
+    await refreshInterviewQuestionBankFromDb();
+  }
+
   async function refreshInterviewApplicationsFromDb() {
     if (!dbReady || !supabase || !canManageInterviews) return;
     setInterviewLoading(true);
@@ -1607,8 +1684,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
       const next = (data || []).map(item => ({
         ...item,
-        entry_quiz_result: item.entry_quiz_result || null,
-        core_quiz_result: item.core_quiz_result || null,
+        interview_scores: Array.isArray(item.interview_scores) ? item.interview_scores : [],
       }));
       setInterviewApplications(next);
       setSelectedInterviewId(prev => (next.some(item => item.id === prev) ? prev : next[0]?.id ?? null));
@@ -2354,7 +2430,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   }, [isStaffInTraining, activeMainTab, canManageInterviews]);
 
   useEffect(() => {
-    if (activeMainTab === 'interviews') refreshInterviewApplicationsFromDb();
+    if (activeMainTab === 'interviews') {
+      refreshInterviewQuestionBankFromDb();
+      refreshInterviewApplicationsFromDb();
+    }
   }, [activeMainTab]);
 
   useEffect(() => {
@@ -4636,7 +4715,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 <CardContent>
                   <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-black/25 p-3">
                     <Badge className="border-cyan-400/35 bg-cyan-500/12 text-cyan-100">Head Admin review only</Badge>
-                    <Badge className="border-white/10 bg-white/10 text-zinc-200">Public applications and both starter quiz attempts</Badge>
+                    <Badge className="border-white/10 bg-white/10 text-zinc-200">Public applications and live scored interviews</Badge>
                     {interviewLoading && <Badge className="border-amber-400/35 bg-amber-500/12 text-amber-100">Loading...</Badge>}
                     {interviewError && <Badge className="border-red-400/35 bg-red-500/12 text-red-100">{interviewError}</Badge>}
                   </div>
@@ -4650,8 +4729,13 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 setReviewNotes={setInterviewReviewNotes}
                 interviewQuery={interviewQuery}
                 setInterviewQuery={setInterviewQuery}
-                onRefresh={refreshInterviewApplicationsFromDb}
+                questionBank={interviewQuestionBank}
+                canEditTemplate={isOwnerSession}
+                onRefresh={() => { refreshInterviewQuestionBankFromDb(); refreshInterviewApplicationsFromDb(); }}
                 onUpdateStatus={updateInterviewApplicationStatus}
+                onSaveInterviewScorecard={saveInterviewScorecard}
+                onSaveTemplateQuestion={saveInterviewTemplateQuestion}
+                onDeleteTemplateQuestion={deleteInterviewTemplateQuestion}
               />
             </div>
           </TabsContent>
