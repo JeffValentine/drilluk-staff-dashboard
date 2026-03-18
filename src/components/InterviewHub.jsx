@@ -140,9 +140,13 @@ export default function InterviewHub({
           />
         </CardHeader>
         <CardContent className="space-y-3">
-          <Button onClick={onRefresh} className={`w-full ${premiumActionBase} border-cyan-400/35 bg-[linear-gradient(135deg,rgba(8,145,178,0.28),rgba(34,211,238,0.14))] text-cyan-50 hover:bg-[linear-gradient(135deg,rgba(8,145,178,0.36),rgba(34,211,238,0.2))]`}>
+          <button
+            type="button"
+            onClick={onRefresh}
+            className={`${premiumActionBase} w-full border-fuchsia-400/35 bg-[linear-gradient(135deg,rgba(5,10,20,0.96),rgba(8,145,178,0.16),rgba(88,28,135,0.18))] text-white hover:bg-[linear-gradient(135deg,rgba(10,16,28,0.98),rgba(8,145,178,0.22),rgba(88,28,135,0.24))]`}
+          >
             Refresh Applications
-          </Button>
+          </button>
           <div className="max-h-[calc(100vh-300px)] space-y-3 overflow-y-auto pr-1">
             {filtered.map((item) => (
               <button
