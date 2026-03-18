@@ -215,21 +215,15 @@ export default function InterviewHub({
                   placeholder="Head Admin notes for this applicant"
                   className="min-h-[120px] border-white/10 bg-black/30 text-white placeholder:text-zinc-500"
                 />
-                <div className="flex flex-wrap items-stretch gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => setInterviewOpen(true)}
-                    className={`${compactPrimaryButton} min-w-[220px] border-fuchsia-400/35 bg-[linear-gradient(135deg,rgba(8,145,178,0.24),rgba(217,70,239,0.18))] text-white hover:bg-[linear-gradient(135deg,rgba(8,145,178,0.32),rgba(217,70,239,0.24))]`}
-                  >
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-cyan-100/80">Interview</div>
-                    <div className="mt-1.5 text-sm font-semibold text-white">{selected.interview_started_at ? 'Resume Interview' : 'Start Interview'}</div>
-                    <div className="mt-1 text-xs leading-5 text-zinc-100/80">Open the live voice scoring sheet.</div>
-                  </button>
-                  <Button onClick={() => onUpdateStatus(selected, 'reviewed')} className={`${premiumActionBase} border-cyan-400/35 bg-[linear-gradient(135deg,rgba(8,145,178,0.28),rgba(34,211,238,0.14))] text-cyan-50 hover:bg-[linear-gradient(135deg,rgba(8,145,178,0.36),rgba(34,211,238,0.2))]`}>Mark Reviewed</Button>
-                  <Button onClick={() => onUpdateStatus(selected, 'accepted')} className={`${premiumActionBase} border-emerald-400/35 bg-[linear-gradient(135deg,rgba(5,150,105,0.3),rgba(16,185,129,0.16))] text-emerald-50 hover:bg-[linear-gradient(135deg,rgba(5,150,105,0.38),rgba(16,185,129,0.22))]`}>Accept</Button>
-                  <Button onClick={() => onUpdateStatus(selected, 'rejected')} className={`${premiumActionBase} border-red-400/35 bg-[linear-gradient(135deg,rgba(185,28,28,0.3),rgba(248,113,113,0.16))] text-red-50 hover:bg-[linear-gradient(135deg,rgba(185,28,28,0.38),rgba(248,113,113,0.24))]`}>Reject</Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={() => setInterviewOpen(true)} className={`${compactPrimaryButton} border-fuchsia-400/35 bg-[linear-gradient(135deg,rgba(8,145,178,0.2),rgba(217,70,239,0.16))] text-white hover:bg-[linear-gradient(135deg,rgba(8,145,178,0.28),rgba(217,70,239,0.22))] whitespace-nowrap`}>
+                    {selected.interview_started_at ? 'Resume Interview' : 'Start Interview'}
+                  </Button>
+                  <Button onClick={() => onUpdateStatus(selected, 'reviewed')} className={`${premiumActionBase} border-fuchsia-400/35 bg-[linear-gradient(135deg,rgba(8,145,178,0.2),rgba(217,70,239,0.16))] text-white hover:bg-[linear-gradient(135deg,rgba(8,145,178,0.28),rgba(217,70,239,0.22))]`}>Mark Reviewed</Button>
+                  <Button onClick={() => onUpdateStatus(selected, 'accepted')} className={`${premiumActionBase} border-fuchsia-400/35 bg-[linear-gradient(135deg,rgba(8,145,178,0.2),rgba(217,70,239,0.16))] text-white hover:bg-[linear-gradient(135deg,rgba(8,145,178,0.28),rgba(217,70,239,0.22))]`}>Accept</Button>
+                  <Button onClick={() => onUpdateStatus(selected, 'rejected')} className={`${premiumActionBase} border-fuchsia-400/35 bg-[linear-gradient(135deg,rgba(8,145,178,0.2),rgba(217,70,239,0.16))] text-white hover:bg-[linear-gradient(135deg,rgba(8,145,178,0.28),rgba(217,70,239,0.22))]`}>Reject</Button>
                   {canEditTemplate && (
-                    <Button onClick={() => openTemplateEditor()} className={`${premiumActionBase} border-amber-400/35 bg-[linear-gradient(135deg,rgba(217,119,6,0.3),rgba(251,191,36,0.16))] text-amber-50 hover:bg-[linear-gradient(135deg,rgba(217,119,6,0.38),rgba(251,191,36,0.24))]`}>Edit Interview Template</Button>
+                    <Button onClick={() => openTemplateEditor()} className={`${premiumActionBase} border-fuchsia-400/35 bg-[linear-gradient(135deg,rgba(8,145,178,0.2),rgba(217,70,239,0.16))] text-white hover:bg-[linear-gradient(135deg,rgba(8,145,178,0.28),rgba(217,70,239,0.22))]`}>Edit Interview Template</Button>
                   )}
                 </div>
               </CardContent>
