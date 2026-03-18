@@ -1,6 +1,5 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -366,8 +365,8 @@ export default function InterviewHub({
                     <div className="mt-2 text-sm font-semibold text-white">{item.question}</div>
                     <div className="mt-2 text-xs text-zinc-500">Max {item.maxScore} - order {item.sortOrder}</div>
                     <div className="mt-3 flex gap-2">
-                      <Button onClick={() => openTemplateEditor(item)} className={`${premiumActionBase} min-h-10 border-cyan-400/35 bg-[linear-gradient(135deg,rgba(8,145,178,0.28),rgba(34,211,238,0.14))] text-cyan-50 hover:bg-[linear-gradient(135deg,rgba(8,145,178,0.36),rgba(34,211,238,0.2))]`}>Edit</Button>
-                      <Button onClick={() => onDeleteTemplateQuestion(item)} className={`${premiumActionBase} min-h-10 border-red-400/35 bg-[linear-gradient(135deg,rgba(185,28,28,0.3),rgba(248,113,113,0.16))] text-red-50 hover:bg-[linear-gradient(135deg,rgba(185,28,28,0.38),rgba(248,113,113,0.24))]`}>Delete</Button>
+                      <button type="button" onClick={() => openTemplateEditor(item)} className={`${premiumActionBase} border-fuchsia-400/35 bg-[linear-gradient(135deg,rgba(5,10,20,0.96),rgba(8,145,178,0.16),rgba(88,28,135,0.18))] text-white hover:bg-[linear-gradient(135deg,rgba(10,16,28,0.98),rgba(8,145,178,0.22),rgba(88,28,135,0.24))]`}>Edit</button>
+                      <button type="button" onClick={() => onDeleteTemplateQuestion(item)} className={`${premiumActionBase} border-fuchsia-400/35 bg-[linear-gradient(135deg,rgba(5,10,20,0.96),rgba(8,145,178,0.16),rgba(88,28,135,0.18))] text-white hover:bg-[linear-gradient(135deg,rgba(10,16,28,0.98),rgba(8,145,178,0.22),rgba(88,28,135,0.24))]`}>Delete</button>
                     </div>
                   </div>
                 ))}
@@ -401,8 +400,8 @@ export default function InterviewHub({
                   <Textarea value={templateDraft.badAnswerExample} onChange={(event) => setTemplateDraft((prev) => ({ ...prev, badAnswerExample: event.target.value }))} className="min-h-[100px] border-white/10 bg-black/30 text-white" />
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
-                  <Button onClick={saveTemplate} className={`${premiumActionBase} border-emerald-400/35 bg-[linear-gradient(135deg,rgba(5,150,105,0.32),rgba(16,185,129,0.18))] text-emerald-50 hover:bg-[linear-gradient(135deg,rgba(5,150,105,0.4),rgba(16,185,129,0.24))]`}>Save Question</Button>
-                  <Button onClick={() => setTemplateDraft(emptyTemplateDraft())} className={`${premiumActionBase} border-white/15 bg-[linear-gradient(135deg,rgba(39,39,42,0.9),rgba(17,24,39,0.86))] text-zinc-50 hover:bg-[linear-gradient(135deg,rgba(63,63,70,0.92),rgba(31,41,55,0.9))]`}>New Blank</Button>
+                  <button type="button" onClick={saveTemplate} className={`${premiumActionBase} border-fuchsia-400/35 bg-[linear-gradient(135deg,rgba(5,10,20,0.96),rgba(8,145,178,0.16),rgba(88,28,135,0.18))] text-white hover:bg-[linear-gradient(135deg,rgba(10,16,28,0.98),rgba(8,145,178,0.22),rgba(88,28,135,0.24))]`}>Save Question</button>
+                  <button type="button" onClick={() => setTemplateDraft(emptyTemplateDraft())} className={`${premiumActionBase} border-fuchsia-400/35 bg-[linear-gradient(135deg,rgba(5,10,20,0.96),rgba(8,145,178,0.16),rgba(88,28,135,0.18))] text-white hover:bg-[linear-gradient(135deg,rgba(10,16,28,0.98),rgba(8,145,178,0.22),rgba(88,28,135,0.24))]`}>New Blank</button>
                 </div>
               </div>
             </div>
@@ -412,6 +411,7 @@ export default function InterviewHub({
     </div>
   );
 }
+
 
 
 
