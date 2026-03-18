@@ -5,6 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 
+const premiumButtonBase = 'relative overflow-hidden rounded-[26px] border px-5 py-4 text-left text-sm font-semibold shadow-[0_22px_70px_rgba(0,0,0,0.34)] transition hover:-translate-y-[1px]';
+const premiumActionBase = 'min-h-12 rounded-[22px] border px-4 text-sm font-semibold shadow-[0_16px_40px_rgba(0,0,0,0.24)] transition hover:-translate-y-[1px]';
+
 function statusBadgeClass(status) {
   if (status === 'accepted') return 'border-emerald-400/35 bg-emerald-500/12 text-emerald-100';
   if (status === 'rejected') return 'border-red-400/35 bg-red-500/12 text-red-100';
@@ -137,7 +140,7 @@ export default function InterviewHub({
           />
         </CardHeader>
         <CardContent className="space-y-3">
-          <Button onClick={onRefresh} className="w-full rounded-2xl border border-cyan-400/35 bg-cyan-500/12 text-cyan-100 hover:bg-cyan-500/18">
+          <Button onClick={onRefresh} className={`w-full ${premiumActionBase} border-cyan-400/35 bg-[linear-gradient(135deg,rgba(8,145,178,0.28),rgba(34,211,238,0.14))] text-cyan-50 hover:bg-[linear-gradient(135deg,rgba(8,145,178,0.36),rgba(34,211,238,0.2))]`}>
             Refresh Applications
           </Button>
           <div className="max-h-[calc(100vh-300px)] space-y-3 overflow-y-auto pr-1">
@@ -212,15 +215,21 @@ export default function InterviewHub({
                   placeholder="Head Admin notes for this applicant"
                   className="min-h-[120px] border-white/10 bg-black/30 text-white placeholder:text-zinc-500"
                 />
-                <div className="flex flex-wrap gap-2">
-                  <Button onClick={() => setInterviewOpen(true)} className="rounded-2xl border border-fuchsia-400/35 bg-fuchsia-500/12 text-fuchsia-100 hover:bg-fuchsia-500/18">
-                    {selected.interview_started_at ? 'Resume Interview' : 'Start Interview'}
-                  </Button>
-                  <Button onClick={() => onUpdateStatus(selected, 'reviewed')} className="rounded-2xl border border-cyan-400/35 bg-cyan-500/12 text-cyan-100 hover:bg-cyan-500/18">Mark Reviewed</Button>
-                  <Button onClick={() => onUpdateStatus(selected, 'accepted')} className="rounded-2xl border border-emerald-400/35 bg-emerald-500/12 text-emerald-100 hover:bg-emerald-500/18">Accept</Button>
-                  <Button onClick={() => onUpdateStatus(selected, 'rejected')} className="rounded-2xl border border-red-400/35 bg-red-500/12 text-red-100 hover:bg-red-500/18">Reject</Button>
+                <div className="grid gap-3 xl:grid-cols-[1.15fr,0.85fr,0.85fr,0.85fr,1fr]">
+                  <button
+                    type="button"
+                    onClick={() => setInterviewOpen(true)}
+                    className={`${premiumButtonBase} border-fuchsia-400/35 bg-[linear-gradient(135deg,rgba(8,145,178,0.26),rgba(217,70,239,0.2))] text-white hover:bg-[linear-gradient(135deg,rgba(8,145,178,0.34),rgba(217,70,239,0.28))]`}
+                  >
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-100/80">Interview</div>
+                    <div className="mt-2 text-lg font-semibold text-white">{selected.interview_started_at ? 'Resume Interview' : 'Start Interview'}</div>
+                    <div className="mt-2 text-sm leading-6 text-zinc-100/85">Open the live voice scoring sheet for this applicant.</div>
+                  </button>
+                  <Button onClick={() => onUpdateStatus(selected, 'reviewed')} className={`${premiumActionBase} border-cyan-400/35 bg-[linear-gradient(135deg,rgba(8,145,178,0.28),rgba(34,211,238,0.14))] text-cyan-50 hover:bg-[linear-gradient(135deg,rgba(8,145,178,0.36),rgba(34,211,238,0.2))]`}>Mark Reviewed</Button>
+                  <Button onClick={() => onUpdateStatus(selected, 'accepted')} className={`${premiumActionBase} border-emerald-400/35 bg-[linear-gradient(135deg,rgba(5,150,105,0.3),rgba(16,185,129,0.16))] text-emerald-50 hover:bg-[linear-gradient(135deg,rgba(5,150,105,0.38),rgba(16,185,129,0.22))]`}>Accept</Button>
+                  <Button onClick={() => onUpdateStatus(selected, 'rejected')} className={`${premiumActionBase} border-red-400/35 bg-[linear-gradient(135deg,rgba(185,28,28,0.3),rgba(248,113,113,0.16))] text-red-50 hover:bg-[linear-gradient(135deg,rgba(185,28,28,0.38),rgba(248,113,113,0.24))]`}>Reject</Button>
                   {canEditTemplate && (
-                    <Button onClick={() => openTemplateEditor()} className="rounded-2xl border border-amber-400/35 bg-amber-500/12 text-amber-100 hover:bg-amber-500/18">Edit Interview Template</Button>
+                    <Button onClick={() => openTemplateEditor()} className={`${premiumActionBase} border-amber-400/35 bg-[linear-gradient(135deg,rgba(217,119,6,0.3),rgba(251,191,36,0.16))] text-amber-50 hover:bg-[linear-gradient(135deg,rgba(217,119,6,0.38),rgba(251,191,36,0.24))]`}>Edit Interview Template</Button>
                   )}
                 </div>
               </CardContent>
@@ -290,9 +299,9 @@ export default function InterviewHub({
                       ))}
                     </div>
                   ))}
-                  <div className="flex flex-wrap gap-2">
-                    <Button onClick={saveInterview} className="rounded-2xl border border-emerald-400/35 bg-emerald-500/12 text-emerald-100 hover:bg-emerald-500/18">Save Interview Scorecard</Button>
-                    <Button onClick={() => setInterviewOpen(false)} className="rounded-2xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">Close Interview</Button>
+                  <div className="grid gap-3 md:grid-cols-[1fr,220px]">
+                    <Button onClick={saveInterview} className={`${premiumActionBase} border-emerald-400/35 bg-[linear-gradient(135deg,rgba(5,150,105,0.32),rgba(16,185,129,0.18))] text-emerald-50 hover:bg-[linear-gradient(135deg,rgba(5,150,105,0.4),rgba(16,185,129,0.24))]`}>Save Interview Scorecard</Button>
+                    <Button onClick={() => setInterviewOpen(false)} className={`${premiumActionBase} border-white/15 bg-[linear-gradient(135deg,rgba(39,39,42,0.9),rgba(17,24,39,0.86))] text-zinc-50 hover:bg-[linear-gradient(135deg,rgba(63,63,70,0.92),rgba(31,41,55,0.9))]`}>Close Interview</Button>
                   </div>
                 </CardContent>
               </Card>
@@ -319,8 +328,8 @@ export default function InterviewHub({
                     <div className="mt-2 text-sm font-semibold text-white">{item.question}</div>
                     <div className="mt-2 text-xs text-zinc-500">Max {item.maxScore} - order {item.sortOrder}</div>
                     <div className="mt-3 flex gap-2">
-                      <Button onClick={() => openTemplateEditor(item)} className="rounded-2xl border border-cyan-400/35 bg-cyan-500/12 text-cyan-100 hover:bg-cyan-500/18">Edit</Button>
-                      <Button onClick={() => onDeleteTemplateQuestion(item)} className="rounded-2xl border border-red-400/35 bg-red-500/12 text-red-100 hover:bg-red-500/18">Delete</Button>
+                      <Button onClick={() => openTemplateEditor(item)} className={`${premiumActionBase} min-h-10 border-cyan-400/35 bg-[linear-gradient(135deg,rgba(8,145,178,0.28),rgba(34,211,238,0.14))] text-cyan-50 hover:bg-[linear-gradient(135deg,rgba(8,145,178,0.36),rgba(34,211,238,0.2))]`}>Edit</Button>
+                      <Button onClick={() => onDeleteTemplateQuestion(item)} className={`${premiumActionBase} min-h-10 border-red-400/35 bg-[linear-gradient(135deg,rgba(185,28,28,0.3),rgba(248,113,113,0.16))] text-red-50 hover:bg-[linear-gradient(135deg,rgba(185,28,28,0.38),rgba(248,113,113,0.24))]`}>Delete</Button>
                     </div>
                   </div>
                 ))}
@@ -353,9 +362,9 @@ export default function InterviewHub({
                   <div className="mb-2 text-[11px] uppercase tracking-[0.18em] text-zinc-500">Bad answer example</div>
                   <Textarea value={templateDraft.badAnswerExample} onChange={(event) => setTemplateDraft((prev) => ({ ...prev, badAnswerExample: event.target.value }))} className="min-h-[100px] border-white/10 bg-black/30 text-white" />
                 </div>
-                <div className="flex gap-2">
-                  <Button onClick={saveTemplate} className="rounded-2xl border border-emerald-400/35 bg-emerald-500/12 text-emerald-100 hover:bg-emerald-500/18">Save Question</Button>
-                  <Button onClick={() => setTemplateDraft(emptyTemplateDraft())} className="rounded-2xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">New Blank</Button>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Button onClick={saveTemplate} className={`${premiumActionBase} border-emerald-400/35 bg-[linear-gradient(135deg,rgba(5,150,105,0.32),rgba(16,185,129,0.18))] text-emerald-50 hover:bg-[linear-gradient(135deg,rgba(5,150,105,0.4),rgba(16,185,129,0.24))]`}>Save Question</Button>
+                  <Button onClick={() => setTemplateDraft(emptyTemplateDraft())} className={`${premiumActionBase} border-white/15 bg-[linear-gradient(135deg,rgba(39,39,42,0.9),rgba(17,24,39,0.86))] text-zinc-50 hover:bg-[linear-gradient(135deg,rgba(63,63,70,0.92),rgba(31,41,55,0.9))]`}>New Blank</Button>
                 </div>
               </div>
             </div>
