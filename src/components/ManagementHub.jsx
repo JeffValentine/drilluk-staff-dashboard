@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -59,13 +59,13 @@ export default function ManagementHub({
           <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
             <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Management tools</div>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <Button onClick={onOpenAudit} className="rounded-2xl border border-cyan-400/35 bg-cyan-500/12 text-cyan-100 hover:bg-cyan-500/18">
+              <Button onClick={onOpenAudit} className="rounded-2xl border-fuchsia-400/35 bg-[linear-gradient(135deg,rgba(5,10,20,0.96),rgba(8,145,178,0.16),rgba(88,28,135,0.18))] text-white hover:bg-[linear-gradient(135deg,rgba(10,16,28,0.98),rgba(8,145,178,0.22),rgba(88,28,135,0.24))]">
                 Open Audit Log
               </Button>
-              <Button onClick={onOpenRanks} className="rounded-2xl border border-amber-400/35 bg-amber-500/12 text-amber-100 hover:bg-amber-500/18">
+              <Button onClick={onOpenRanks} className="rounded-2xl border-fuchsia-400/35 bg-[linear-gradient(135deg,rgba(5,10,20,0.96),rgba(8,145,178,0.16),rgba(88,28,135,0.18))] text-white hover:bg-[linear-gradient(135deg,rgba(10,16,28,0.98),rgba(8,145,178,0.22),rgba(88,28,135,0.24))]">
                 Open Rank Display
               </Button>
-              <Button onClick={onOpenQuizBuilder} className="rounded-2xl border border-fuchsia-400/35 bg-fuchsia-500/12 text-fuchsia-100 hover:bg-fuchsia-500/18 md:col-span-2">
+              <Button onClick={onOpenQuizBuilder} className="rounded-2xl border-fuchsia-400/35 bg-[linear-gradient(135deg,rgba(5,10,20,0.96),rgba(8,145,178,0.16),rgba(88,28,135,0.18))] text-white hover:bg-[linear-gradient(135deg,rgba(10,16,28,0.98),rgba(8,145,178,0.22),rgba(88,28,135,0.24))] md:col-span-2">
                 Open Quiz Builder
               </Button>
             </div>
@@ -78,3 +78,4 @@ export default function ManagementHub({
     </Card>
   );
 }
+
