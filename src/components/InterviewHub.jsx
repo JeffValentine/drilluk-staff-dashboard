@@ -219,7 +219,7 @@ export default function InterviewHub({
                   <button
                     type="button"
                     onClick={() => setInterviewOpen(true)}
-                    className={`${primaryCompactButton} min-w-[220px] border-fuchsia-400/35 bg-[linear-gradient(135deg,rgba(8,145,178,0.24),rgba(217,70,239,0.18))] text-white hover:bg-[linear-gradient(135deg,rgba(8,145,178,0.32),rgba(217,70,239,0.24))]`}
+                    className={`${compactPrimaryButton} min-w-[220px] border-fuchsia-400/35 bg-[linear-gradient(135deg,rgba(8,145,178,0.24),rgba(217,70,239,0.18))] text-white hover:bg-[linear-gradient(135deg,rgba(8,145,178,0.32),rgba(217,70,239,0.24))]`}
                   >
                     <div className="text-[10px] uppercase tracking-[0.18em] text-cyan-100/80">Interview</div>
                     <div className="mt-1.5 text-sm font-semibold text-white">{selected.interview_started_at ? 'Resume Interview' : 'Start Interview'}</div>
@@ -374,3 +374,4 @@ export default function InterviewHub({
     </div>
   );
 }
+
