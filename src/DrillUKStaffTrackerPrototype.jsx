@@ -1341,6 +1341,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [reviewDrafts, setReviewDrafts] = useState({});
   const [trainingLogDraft, setTrainingLogDraft] = useState({ bracket: 'General Policy', note: '' });
   const lastLocalStaffEditRef = useRef(0);
+  const staffSaveQueueRef = useRef(new Map());
   const removalColumnsAvailableRef = useRef(false);
   const isOwnerSession = (authUser?.email || '').toLowerCase() === SITE_OWNER_EMAIL;
   const [rosterSyncOpen, setRosterSyncOpen] = useState(false);
@@ -3032,46 +3033,61 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   async function saveStaffMember(member) {
     if (!dbReady || !supabase) return;
-    lastLocalStaffEditRef.current = Date.now();
-    holdRealtimeSync(2600);
+    const memberId = member?.id;
+    if (!memberId) return;
 
-    const payload = {
-      id: member.id,
-      name: member.name,
-      role: member.role,
-      trainer: member.trainer,
-      trainee_user_id: member.traineeUserId || null,
-      profile_image: member.profileImage || null,
-      status: member.status,
-      strong_sides: member.strongSides || '',
-      attention_points: member.attentionPoints || '',
-      signed_off: Boolean(member.signedOff),
-      staff_since: member.staffSince || 'N/A',
-      role_since: member.modSince || 'N/A',
-      promotion: member.promotion || null,
-      checks: member.checks || {},
-      values: member.values || {},
-      permissions: member.permissions || {},
-      disciplinary: member.disciplinary || { warnings: 0, actions: 0, logs: [] },
-      quiz_history: Array.isArray(member.quizHistory) ? member.quizHistory : [],
-      assigned_quiz_keys: Array.isArray(member.assignedQuizKeys) ? member.assignedQuizKeys : [],
-      training_logs: Array.isArray(member.trainingLogs) ? member.trainingLogs : [],
-      notes: member.notes || '',
-      is_removed: Boolean(member.isRemoved),
-      removed_at: member.removedAt || null,
-      removed_by: member.removedBy || null,
-      removal_reason: member.removalReason || null,
-      removal_notes: member.removalNotes || null,
-      updated_by: authUser?.id || null,
-    };
+    const previous = staffSaveQueueRef.current.get(memberId) || Promise.resolve();
+    const next = previous.catch(() => {}).then(async () => {
+      lastLocalStaffEditRef.current = Date.now();
+      holdRealtimeSync(2600);
 
-    const safePayload = removalColumnsAvailableRef.current ? payload : stripRemovalFields(payload);
-    const { error } = await supabase.from('staff_members').upsert(safePayload);
-    if (!error) return;
-    const fallback = stripRemovalFields(payload);
-    const { error: fallbackError } = await supabase.from('staff_members').upsert(fallback);
-    if (fallbackError) throw fallbackError;
-    removalColumnsAvailableRef.current = false;
+      const payload = {
+        id: member.id,
+        name: member.name,
+        role: member.role,
+        trainer: member.trainer,
+        trainee_user_id: member.traineeUserId || null,
+        profile_image: member.profileImage || null,
+        status: member.status,
+        strong_sides: member.strongSides || '',
+        attention_points: member.attentionPoints || '',
+        signed_off: Boolean(member.signedOff),
+        staff_since: member.staffSince || 'N/A',
+        role_since: member.modSince || 'N/A',
+        promotion: member.promotion || null,
+        checks: member.checks || {},
+        values: member.values || {},
+        permissions: member.permissions || {},
+        disciplinary: member.disciplinary || { warnings: 0, actions: 0, logs: [] },
+        quiz_history: Array.isArray(member.quizHistory) ? member.quizHistory : [],
+        assigned_quiz_keys: Array.isArray(member.assignedQuizKeys) ? member.assignedQuizKeys : [],
+        training_logs: Array.isArray(member.trainingLogs) ? member.trainingLogs : [],
+        notes: member.notes || '',
+        is_removed: Boolean(member.isRemoved),
+        removed_at: member.removedAt || null,
+        removed_by: member.removedBy || null,
+        removal_reason: member.removalReason || null,
+        removal_notes: member.removalNotes || null,
+        updated_by: authUser?.id || null,
+      };
+
+      const safePayload = removalColumnsAvailableRef.current ? payload : stripRemovalFields(payload);
+      const { error } = await supabase.from('staff_members').upsert(safePayload);
+      if (!error) return;
+      const fallback = stripRemovalFields(payload);
+      const { error: fallbackError } = await supabase.from('staff_members').upsert(fallback);
+      if (fallbackError) throw fallbackError;
+      removalColumnsAvailableRef.current = false;
+    });
+
+    staffSaveQueueRef.current.set(memberId, next);
+    try {
+      await next;
+    } finally {
+      if (staffSaveQueueRef.current.get(memberId) === next) {
+        staffSaveQueueRef.current.delete(memberId);
+      }
+    }
   }
 
   async function removeStaffMemberFromDb(staffId, removal) {
@@ -3118,15 +3134,54 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     });
   }
 
-  async function resolveUnifiedQuizRow(quizKey) {
+  async function resolveUnifiedQuizRow(quizKey, quizDefinition = null) {
     if (!dbReady || !supabase || !quizKey) return null;
     const { data, error } = await supabase
       .from('quizzes')
       .select('id, quiz_key')
       .eq('quiz_key', quizKey)
       .maybeSingle();
-    if (error) return null;
-    return data || null;
+    if (data?.id) return data;
+    if (error || !quizDefinition) return null;
+
+    const quizCategory = quizDefinition.kind === 'mandatory'
+      ? 'mandatory'
+      : quizDefinition.badge === 'Entry Quiz'
+        ? 'entry'
+        : quizDefinition.badge === 'Core Values Quiz'
+          ? 'core_values'
+          : quizDefinition.badge === 'Staff Menu Quiz'
+            ? 'staff_menu'
+            : 'custom';
+    const quizKind = quizDefinition.kind === 'mandatory'
+      ? 'mandatory'
+      : quizDefinition.kind === 'pack'
+        ? 'rank_pack'
+        : quizDefinition.sourceType === 'managed'
+          ? 'managed'
+          : 'custom';
+    const rankScope = quizDefinition.rankKey ? [quizDefinition.rankKey] : [];
+    const { data: createdRow, error: createError } = await supabase
+      .from('quizzes')
+      .upsert({
+        quiz_key: quizKey,
+        title: quizDefinition.title || quizKey,
+        description: quizDefinition.description || '',
+        quiz_kind: quizKind,
+        quiz_category: quizCategory,
+        rank_scope: rankScope,
+        pass_score: Number(quizDefinition.recommendedPass || 80),
+        source_type: quizDefinition.sourceType === 'checkbox'
+          ? 'legacy_checkbox'
+          : quizDefinition.sourceType === 'managed'
+            ? 'legacy_managed'
+            : 'native',
+        updated_by: authUser?.id || null,
+      })
+      .select('id, quiz_key')
+      .single();
+    if (createError) return null;
+    return createdRow || null;
   }
 
   async function syncManagedQuestionToUnifiedModel(item) {
@@ -3185,7 +3240,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   async function syncQuizAttemptToUnifiedModel(staffMember, quizDefinition, attempt) {
     if (!dbReady || !supabase || !staffMember?.id || !quizDefinition?.key || !attempt?.id) return;
-    const quizRow = await resolveUnifiedQuizRow(quizDefinition.key);
+    const quizRow = await resolveUnifiedQuizRow(quizDefinition.key, quizDefinition);
     if (!quizRow?.id) return;
 
     const { data: attemptRow, error: attemptError } = await supabase
