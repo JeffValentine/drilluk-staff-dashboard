@@ -728,6 +728,22 @@ function todayIsoDate() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function startOfCurrentWeek(date = new Date()) {
+  const value = new Date(date);
+  const day = value.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  value.setHours(0, 0, 0, 0);
+  value.setDate(value.getDate() + diff);
+  return value;
+}
+
+function isOnOrAfterDate(iso, cutoff) {
+  if (!iso) return false;
+  const value = new Date(iso);
+  if (Number.isNaN(value.getTime())) return false;
+  return value.getTime() >= cutoff.getTime();
+}
+
 function formatLastSeen(iso) {
   if (!iso) return 'Unknown';
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -1319,6 +1335,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const ownProfileFileInputRef = useRef(null);
   const [activeUsersOpen, setActiveUsersOpen] = useState(false);
   const [offlineUsersOpen, setOfflineUsersOpen] = useState(false);
+  const [weeklyStaffOpen, setWeeklyStaffOpen] = useState(false);
+  const [weeklyQuizOpen, setWeeklyQuizOpen] = useState(false);
   const [activeUsers, setActiveUsers] = useState([]);
   const [reviewDrafts, setReviewDrafts] = useState({});
   const [trainingLogDraft, setTrainingLogDraft] = useState({ bracket: 'General Policy', note: '' });
@@ -2923,6 +2941,54 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     signedOff: staffRecords.filter(s => s.signedOff).length,
   };
 
+  const currentWeekStart = useMemo(() => startOfCurrentWeek(), []);
+
+  const weeklyStaffJoiners = useMemo(
+    () => activeStaffRecords
+      .filter(member => isOnOrAfterDate(member.staffSince, currentWeekStart))
+      .sort((a, b) => new Date(b.staffSince || 0).getTime() - new Date(a.staffSince || 0).getTime()),
+    [activeStaffRecords, currentWeekStart]
+  );
+
+  const weeklyStaffLeavers = useMemo(
+    () => removedStaffRecords
+      .filter(member => isOnOrAfterDate(member.removedAt, currentWeekStart))
+      .sort((a, b) => new Date(b.removedAt || 0).getTime() - new Date(a.removedAt || 0).getTime()),
+    [removedStaffRecords, currentWeekStart]
+  );
+
+  const allCompletedQuizAttempts = useMemo(
+    () => staffRecords
+      .flatMap(member => (Array.isArray(member.quizHistory) ? member.quizHistory : []).map(attempt => ({
+        ...attempt,
+        staffId: member.id,
+        staffName: member.name,
+        staffRole: member.role,
+      })))
+      .filter(attempt => attempt?.at)
+      .sort((a, b) => new Date(b.at || 0).getTime() - new Date(a.at || 0).getTime()),
+    [staffRecords]
+  );
+
+  const weeklyCompletedQuizAttempts = useMemo(
+    () => allCompletedQuizAttempts.filter(attempt => isOnOrAfterDate(attempt.at, currentWeekStart)),
+    [allCompletedQuizAttempts, currentWeekStart]
+  );
+
+  const manualCompletedQuizAttempts = useMemo(
+    () => allCompletedQuizAttempts.filter(attempt => /staff team overview/i.test(String(attempt.reviewNote || ''))),
+    [allCompletedQuizAttempts]
+  );
+
+  const headerSummaryCards = [
+    { label: 'Total Staff', value: totals.total, icon: Users },
+    { label: 'In Training', value: totals.inTraining, icon: GraduationCap },
+    { label: 'Promo Ready', value: totals.promotionReady, icon: ArrowUpRight },
+    { label: 'Signed Off', value: totals.signedOff, icon: CheckCircle2 },
+    { label: 'New Staff This Week', value: weeklyStaffJoiners.length, icon: Plus, onClick: () => setWeeklyStaffOpen(true) },
+    { label: 'Quizzes This Week', value: weeklyCompletedQuizAttempts.length, icon: ClipboardList, onClick: () => setWeeklyQuizOpen(true) },
+  ];
+
   const selectedKnowledgeQuiz = useMemo(
     () => displayedKnowledgeQuizDefinitions.find(item => item.key === selectedKnowledgeQuizKey) || displayedKnowledgeQuizDefinitions[0] || null,
     [displayedKnowledgeQuizDefinitions, selectedKnowledgeQuizKey]
@@ -4502,23 +4568,32 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           </div>
           <div className="flex items-start gap-2 md:w-[560px] md:justify-end">
             <div className="space-y-1.5 md:w-[390px]">
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { label: 'Total Staff', value: totals.total, icon: Users },
-                  { label: 'In Training', value: totals.inTraining, icon: GraduationCap },
-                  { label: 'Promo Ready', value: totals.promotionReady, icon: ArrowUpRight },
-                  { label: 'Signed Off', value: totals.signedOff, icon: CheckCircle2 },
-                ].map((item, i) => (
+              <div className="grid grid-cols-3 gap-2">
+                {headerSummaryCards.map((item, i) => (
                   <motion.div key={item.label} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
-                    <Card className="border-white/10 bg-white/5 backdrop-blur-xl">
-                      <CardContent className="flex items-center justify-between px-3 py-2.5">
-                        <div>
-                          <div className="text-[9px] uppercase tracking-[0.16em] text-zinc-500">{item.label}</div>
-                          <div className="mt-0.5 text-lg font-bold">{item.value}</div>
-                        </div>
-                        <item.icon className="h-4 w-4 text-fuchsia-300" />
-                      </CardContent>
-                    </Card>
+                    {item.onClick ? (
+                      <button type="button" onClick={item.onClick} className="block w-full text-left">
+                        <Card className="border-white/10 bg-white/5 backdrop-blur-xl transition hover:border-fuchsia-400/25 hover:bg-white/8">
+                          <CardContent className="flex items-center justify-between px-3 py-2.5">
+                            <div>
+                              <div className="text-[9px] uppercase tracking-[0.16em] text-zinc-500">{item.label}</div>
+                              <div className="mt-0.5 text-lg font-bold">{item.value}</div>
+                            </div>
+                            <item.icon className="h-4 w-4 text-fuchsia-300" />
+                          </CardContent>
+                        </Card>
+                      </button>
+                    ) : (
+                      <Card className="border-white/10 bg-white/5 backdrop-blur-xl">
+                        <CardContent className="flex items-center justify-between px-3 py-2.5">
+                          <div>
+                            <div className="text-[9px] uppercase tracking-[0.16em] text-zinc-500">{item.label}</div>
+                            <div className="mt-0.5 text-lg font-bold">{item.value}</div>
+                          </div>
+                          <item.icon className="h-4 w-4 text-fuchsia-300" />
+                        </CardContent>
+                      </Card>
+                    )}
                   </motion.div>
                 ))}
               </div>
@@ -7406,6 +7481,106 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           </div>
         )}
 
+        {weeklyStaffOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+            <div className="flex max-h-[86vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-fuchsia-500/30 bg-zinc-950">
+              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-zinc-950/95 px-5 py-4 backdrop-blur">
+                <div>
+                  <div className="text-lg font-semibold text-white">Staff Movement This Week</div>
+                  <div className="text-[11px] text-zinc-500">Joined and removed staff profiles for the current week.</div>
+                </div>
+                <button type="button" onClick={() => setWeeklyStaffOpen(false)} className="rounded-lg border border-white/10 bg-black/30 px-3 py-1 text-sm text-zinc-300 hover:bg-white/10 hover:text-white">Close</button>
+              </div>
+              <div className="space-y-4 overflow-y-auto px-5 py-4">
+                <div className="grid gap-3 md:grid-cols-4">
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Joined this week</div><div className="mt-2 text-2xl font-semibold text-white">{weeklyStaffJoiners.length}</div></div>
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Left this week</div><div className="mt-2 text-2xl font-semibold text-white">{weeklyStaffLeavers.length}</div></div>
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Current staff</div><div className="mt-2 text-2xl font-semibold text-white">{activeStaffRecords.length}</div></div>
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Removed total</div><div className="mt-2 text-2xl font-semibold text-white">{removedStaffRecords.length}</div></div>
+                </div>
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/8 p-4">
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200">Joined This Week</div>
+                    <div className="mt-3 space-y-3">
+                      {!weeklyStaffJoiners.length && <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">No new staff profiles this week.</div>}
+                      {weeklyStaffJoiners.map(member => (
+                        <div key={['join', member.id].join('-')} className="rounded-xl border border-white/10 bg-black/20 p-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <div className="text-sm font-semibold text-white">{member.name}</div>
+                              <div className="text-xs text-zinc-400">{member.role} ? {member.trainer || 'Unassigned'}</div>
+                            </div>
+                            <Badge className="border-emerald-500/35 bg-emerald-500/12 text-emerald-100">{member.staffSince}</Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-red-500/20 bg-red-500/8 p-4">
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-red-200">Left This Week</div>
+                    <div className="mt-3 space-y-3">
+                      {!weeklyStaffLeavers.length && <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">No staff removals this week.</div>}
+                      {weeklyStaffLeavers.map(member => (
+                        <div key={['leave', member.id].join('-')} className="rounded-xl border border-white/10 bg-black/20 p-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <div className="text-sm font-semibold text-white">{member.name}</div>
+                              <div className="text-xs text-zinc-400">{member.role} ? {member.removalReason || 'No reason logged'}</div>
+                            </div>
+                            <Badge className="border-red-500/35 bg-red-500/12 text-red-100">{member.removedAt ? new Date(member.removedAt).toLocaleDateString() : 'Unknown'}</Badge>
+                          </div>
+                          {member.removalNotes && <div className="mt-2 text-sm text-zinc-300">{member.removalNotes}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {weeklyQuizOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+            <div className="flex max-h-[86vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-cyan-500/30 bg-zinc-950">
+              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-zinc-950/95 px-5 py-4 backdrop-blur">
+                <div>
+                  <div className="text-lg font-semibold text-white">Quiz Completions</div>
+                  <div className="text-[11px] text-zinc-500">Weekly completions and all-time completion history, including manual 100% sign-offs.</div>
+                </div>
+                <button type="button" onClick={() => setWeeklyQuizOpen(false)} className="rounded-lg border border-white/10 bg-black/30 px-3 py-1 text-sm text-zinc-300 hover:bg-white/10 hover:text-white">Close</button>
+              </div>
+              <div className="space-y-4 overflow-y-auto px-5 py-4">
+                <div className="grid gap-3 md:grid-cols-4">
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Completed this week</div><div className="mt-2 text-2xl font-semibold text-white">{weeklyCompletedQuizAttempts.length}</div></div>
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Completed ever</div><div className="mt-2 text-2xl font-semibold text-white">{allCompletedQuizAttempts.length}</div></div>
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Manual 100% total</div><div className="mt-2 text-2xl font-semibold text-white">{manualCompletedQuizAttempts.length}</div></div>
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Passed attempts</div><div className="mt-2 text-2xl font-semibold text-white">{allCompletedQuizAttempts.filter(attempt => attempt.passed).length}</div></div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200">Latest completions</div>
+                  <div className="mt-3 space-y-3">
+                    {!allCompletedQuizAttempts.length && <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-400">No quiz completions logged yet.</div>}
+                    {allCompletedQuizAttempts.map(attempt => (
+                      <div key={[attempt.staffId, attempt.id].join('-')} className="rounded-xl border border-white/10 bg-black/20 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-semibold text-white">{attempt.title || attempt.quizKey || 'Quiz attempt'}</div>
+                            <div className="text-xs text-zinc-400">{attempt.staffName} ? {attempt.staffRole}</div>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge className="border-white/10 bg-white/10 text-zinc-200">{attempt.at ? new Date(attempt.at).toLocaleString() : 'Unknown time'}</Badge>
+                            <Badge className={attempt.passed ? 'border-emerald-500/35 bg-emerald-500/12 text-emerald-100' : 'border-amber-500/35 bg-amber-500/12 text-amber-100'}>{Number(attempt.score || 0)}%</Badge>
+                            {String(attempt.reviewNote || '').match(/staff team overview/i) && <Badge className="border-fuchsia-500/35 bg-fuchsia-500/12 text-fuchsia-100">Manual 100%</Badge>}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         {canViewPresence && activeUsersOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
             <div className="flex max-h-[82vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-emerald-500/30 bg-zinc-950">
