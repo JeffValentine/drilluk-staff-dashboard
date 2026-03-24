@@ -86,13 +86,14 @@ export default function QuizKnowledgeHub({
 
       {selectedQuiz && (
         <ExperimentalStaffQuiz
+          key={selectedQuiz.key}
           defaultName={defaultName}
           title={selectedQuiz.title}
           subtitle={selectedQuiz.description}
           questions={selectedQuiz.questions}
           recommendedPass={selectedQuiz.passScore || 80}
           accent={selectedQuiz.kind === 'mandatory' ? 'amber' : 'fuchsia'}
-          onComplete={onQuizComplete}
+          onComplete={(result) => onQuizComplete?.(selectedQuiz, result)}
         />
       )}
 

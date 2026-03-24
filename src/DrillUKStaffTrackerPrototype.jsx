@@ -3318,15 +3318,15 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     writeAudit('staff.quiz_assignment', selected.id, null, { quizKey: quizDefinition.key, assigned: assigning });
   }
 
-  function handleKnowledgeQuizComplete(result) {
-    if (!selected || !selectedKnowledgeQuiz) return;
+  function handleKnowledgeQuizComplete(quizDefinition, result) {
+    if (!selected || !quizDefinition) return;
     const answeredItems = Array.isArray(result?.answers) ? result.answers : [];
     const attempt = {
-      id: `${Date.now()}-${selectedKnowledgeQuiz.key}`,
+      id: `${Date.now()}-${quizDefinition.key}`,
       at: new Date().toISOString(),
-      quizKey: selectedKnowledgeQuiz.key,
-      title: selectedKnowledgeQuiz.title,
-      category: selectedKnowledgeQuiz.badge,
+      quizKey: quizDefinition.key,
+      title: quizDefinition.title,
+      category: quizDefinition.badge,
       score: Number(result?.scorePercent || 0),
       passed: Boolean(result?.passed),
       reviewStatus: 'pending',
@@ -3334,7 +3334,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       reviewedBy: null,
       reviewedAt: null,
       items: answeredItems.map((item, index) => ({
-        id: `${selectedKnowledgeQuiz.key}-${index + 1}`,
+        id: `${quizDefinition.key}-${index + 1}`,
         title: item.question,
         selected: item.selectedAnswer ?? (item.selectedIndex === null || item.selectedIndex === undefined ? null : item.selectedIndex),
         correct: item.correctAnswer,
@@ -3345,11 +3345,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     const quizHistory = [attempt, ...(selected.quizHistory || [])].slice(0, 200);
     const patch = { quizHistory };
 
-    if (attempt.passed && selectedKnowledgeQuiz.kind === 'pack') {
-      const sourceTitles = (selectedKnowledgeQuiz.sourceItems || []).map(item => item.sourceCheckbox?.title).filter(Boolean);
-      if (selectedKnowledgeQuiz.key.endsWith('|role')) {
+    if (attempt.passed && quizDefinition.kind === 'pack') {
+      const sourceTitles = (quizDefinition.sourceItems || []).map(item => item.sourceCheckbox?.title).filter(Boolean);
+      if (quizDefinition.key.endsWith('|role')) {
         patch.checks = { ...selected.checks, ...Object.fromEntries(sourceTitles.map(title => [title, true])) };
-      } else if (selectedKnowledgeQuiz.key.endsWith('|core')) {
+      } else if (quizDefinition.key.endsWith('|core')) {
         patch.values = { ...selected.values, ...Object.fromEntries(sourceTitles.map(title => [title, true])) };
       } else {
         patch.permissions = { ...selected.permissions, ...Object.fromEntries(sourceTitles.map(title => [title, true])) };
@@ -3357,8 +3357,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     }
 
     updateSelected(patch);
-    void syncQuizAttemptToUnifiedModel(selected, selectedKnowledgeQuiz, attempt);
-    writeAudit('quiz.submit', selected.id, null, { quizKey: selectedKnowledgeQuiz.key, score: attempt.score, passed: attempt.passed });
+    void syncQuizAttemptToUnifiedModel(selected, quizDefinition, attempt);
+    writeAudit('quiz.submit', selected.id, null, { quizKey: quizDefinition.key, score: attempt.score, passed: attempt.passed });
   }
   async function setSelectedQuizManualState(quizDefinition, status) {
     if (!selected || !canEdit || !quizDefinition) return;
