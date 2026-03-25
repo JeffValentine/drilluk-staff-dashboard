@@ -29,6 +29,46 @@ function normalizeScenes(scenes = [], title = 'Video Quiz') {
   }));
 }
 
+function toEmbeddableVideoUrl(rawUrl) {
+  const value = String(rawUrl || '').trim();
+  if (!value) return '';
+
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+
+    if (host === 'youtu.be') {
+      const id = url.pathname.replace(/^\//, '').split('/')[0];
+      return id ? `https://www.youtube.com/embed/${id}` : value;
+    }
+
+    if (host.includes('youtube.com')) {
+      if (url.pathname.startsWith('/embed/')) return value;
+      if (url.pathname === '/watch') {
+        const id = url.searchParams.get('v');
+        return id ? `https://www.youtube.com/embed/${id}` : value;
+      }
+      if (url.pathname.startsWith('/shorts/')) {
+        const id = url.pathname.split('/')[2];
+        return id ? `https://www.youtube.com/embed/${id}` : value;
+      }
+      if (url.pathname.startsWith('/live/')) {
+        const id = url.pathname.split('/')[2];
+        return id ? `https://www.youtube.com/embed/${id}` : value;
+      }
+    }
+
+    if (host.includes('vimeo.com')) {
+      const id = url.pathname.replace(/^\//, '').split('/')[0];
+      return id ? `https://player.vimeo.com/video/${id}` : value;
+    }
+  } catch {
+    return value;
+  }
+
+  return value;
+}
+
 export default function VideoQuizRunner({
   defaultName = '',
   title,
@@ -113,72 +153,76 @@ export default function VideoQuizRunner({
       </Card>
 
       <div className="space-y-4">
-        {normalizedScenes.map((scene, sceneIndex) => (
-          <div key={scene.id} className="grid gap-4 xl:grid-cols-[1fr,0.92fr]">
-            <Card className="border-white/10 bg-white/5">
-              <CardHeader>
-                <CardTitle>{scene.title || `Scene ${sceneIndex + 1}`}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {scene.videoUrl ? (
-                  <div className="overflow-hidden rounded-3xl border border-white/10 bg-black/40">
-                    <iframe
-                      src={scene.videoUrl}
-                      title={scene.title || title}
-                      className="aspect-video w-full"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                      allowFullScreen
-                    />
-                  </div>
-                ) : (
-                  <div className="rounded-2xl border border-white/10 bg-black/25 p-4 text-sm text-zinc-400">
-                    No video URL configured yet.
-                  </div>
-                )}
-                {scene.videoUrl && (
-                  <a href={scene.videoUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-sm text-cyan-200 hover:text-cyan-100">
-                    Open video in a new tab
-                  </a>
-                )}
-                {!!scene.watchPoints.length && (
-                  <div className="rounded-2xl border border-amber-500/20 bg-amber-500/8 p-4">
-                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-200">Things to watch for</div>
-                    <div className="mt-3 space-y-2">
-                      {scene.watchPoints.map((point, index) => (
-                        <div key={`${scene.id}-watch-${index}`} className="flex items-start gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-200">
-                          <Badge className="border-amber-400/35 bg-amber-500/12 text-amber-100">{index + 1}</Badge>
-                          <span>{point}</span>
-                        </div>
-                      ))}
+        {normalizedScenes.map((scene, sceneIndex) => {
+          const embeddedVideoUrl = toEmbeddableVideoUrl(scene.videoUrl);
+          return (
+            <div key={scene.id} className="grid gap-4 xl:grid-cols-[1fr,0.92fr]">
+              <Card className="border-white/10 bg-white/5">
+                <CardHeader>
+                  <CardTitle>{scene.title || `Scene ${sceneIndex + 1}`}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {embeddedVideoUrl ? (
+                    <div className="overflow-hidden rounded-3xl border border-white/10 bg-black/40">
+                      <iframe
+                        src={embeddedVideoUrl}
+                        title={scene.title || title}
+                        className="aspect-video w-full"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        referrerPolicy="strict-origin-when-cross-origin"
+                        allowFullScreen
+                      />
                     </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                  ) : (
+                    <div className="rounded-2xl border border-white/10 bg-black/25 p-4 text-sm text-zinc-400">
+                      No video URL configured yet.
+                    </div>
+                  )}
+                  {scene.videoUrl && (
+                    <a href={scene.videoUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-sm text-cyan-200 hover:text-cyan-100">
+                      Open video in a new tab
+                    </a>
+                  )}
+                  {!!scene.watchPoints.length && (
+                    <div className="rounded-2xl border border-amber-500/20 bg-amber-500/8 p-4">
+                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-200">Things to watch for</div>
+                      <div className="mt-3 space-y-2">
+                        {scene.watchPoints.map((point, index) => (
+                          <div key={`${scene.id}-watch-${index}`} className="flex items-start gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-200">
+                            <Badge className="border-amber-400/35 bg-amber-500/12 text-amber-100">{index + 1}</Badge>
+                            <span>{point}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
-            <Card className="border-white/10 bg-white/5">
-              <CardHeader>
-                <CardTitle>Scene Notes</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {scene.notePrompts.map((prompt, promptIndex) => (
-                  <div key={`${scene.id}-prompt-${promptIndex}`}>
-                    <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-white">
-                      <Badge className="border-fuchsia-400/35 bg-fuchsia-500/12 text-fuchsia-100">Prompt {promptIndex + 1}</Badge>
-                      <span>{prompt}</span>
+              <Card className="border-white/10 bg-white/5">
+                <CardHeader>
+                  <CardTitle>Scene Notes</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {scene.notePrompts.map((prompt, promptIndex) => (
+                    <div key={`${scene.id}-prompt-${promptIndex}`}>
+                      <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-white">
+                        <Badge className="border-fuchsia-400/35 bg-fuchsia-500/12 text-fuchsia-100">Prompt {promptIndex + 1}</Badge>
+                        <span>{prompt}</span>
+                      </div>
+                      <Textarea
+                        value={notesByScene?.[sceneIndex]?.[promptIndex] || ''}
+                        onChange={(event) => updateNote(sceneIndex, promptIndex, event.target.value)}
+                        className="min-h-[120px] border-white/10 bg-black/30 text-white"
+                        placeholder="Write what happened, what rule breaks you identified, and what staff should watch out for."
+                      />
                     </div>
-                    <Textarea
-                      value={notesByScene?.[sceneIndex]?.[promptIndex] || ''}
-                      onChange={(event) => updateNote(sceneIndex, promptIndex, event.target.value)}
-                      className="min-h-[120px] border-white/10 bg-black/30 text-white"
-                      placeholder="Write what happened, what rule breaks you identified, and what staff should watch out for."
-                    />
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          </div>
-        ))}
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
+          );
+        })}
 
         {submitted && (
           <div className="rounded-2xl border border-emerald-400/35 bg-emerald-500/10 p-4 text-sm text-emerald-100">
