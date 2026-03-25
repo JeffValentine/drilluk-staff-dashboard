@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,6 +25,7 @@ export default function QuizKnowledgeHub({
   onQuizComplete = null,
 }) {
   const [questionBankOpen, setQuestionBankOpen] = useState(false);
+  const [browseTab, setBrowseTab] = useState('standard');
 
   const modalActionClass = 'rounded-2xl border px-4 py-2 text-sm font-medium shadow-[0_12px_32px_rgba(0,0,0,0.24)]';
   const cardBadgeClass = 'rounded-full border px-2.5 py-1 text-[10px] font-semibold tracking-[0.16em] uppercase';
@@ -34,6 +36,10 @@ export default function QuizKnowledgeHub({
   useEffect(() => {
     if (!canManageCheckboxes) setQuestionBankOpen(false);
   }, [canManageCheckboxes]);
+
+  useEffect(() => {
+    if (browseTab === 'video' && !videoQuizzes.length) setBrowseTab('standard');
+  }, [browseTab, videoQuizzes.length]);
 
   function handleSelectQuiz(definition) {
     setSelectedQuizKey(definition.key);
@@ -80,7 +86,7 @@ export default function QuizKnowledgeHub({
                 <Button onClick={() => onAddManagedQuestion?.(null)} className="rounded-2xl border border-emerald-400/35 bg-emerald-500/12 text-emerald-100 hover:bg-emerald-500/18">
                   Create New Quiz
                 </Button>
-                <Button onClick={() => onAddVideoQuiz?.()} className="rounded-2xl border border-red-400/35 bg-red-500/12 text-red-100 hover:bg-red-500/18">
+                <Button onClick={() => { setBrowseTab('video'); onAddVideoQuiz?.(); }} className="rounded-2xl border border-red-400/35 bg-red-500/12 text-red-100 hover:bg-red-500/18">
                   Create Video Quiz
                 </Button>
                 <Button onClick={onOpenBuilder} className="rounded-2xl border border-amber-400/35 bg-amber-500/12 text-amber-100 hover:bg-amber-500/18">
@@ -90,21 +96,38 @@ export default function QuizKnowledgeHub({
             )}
           </div>
 
-          <div>
-            <div className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Standard Quizzes</div>
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {standardQuizzes.map(renderQuizCard)}
-            </div>
-          </div>
+          <Tabs value={browseTab} onValueChange={setBrowseTab} className="space-y-4">
+            <TabsList className="grid w-full max-w-[420px] grid-cols-2 rounded-2xl border border-white/10 bg-black/25 p-1">
+              <TabsTrigger value="standard" className="rounded-xl data-[state=active]:bg-white/12 data-[state=active]:text-white">Standard Quizzes</TabsTrigger>
+              <TabsTrigger value="video" className="rounded-xl data-[state=active]:bg-red-500/18 data-[state=active]:text-red-50">Video Quizzes</TabsTrigger>
+            </TabsList>
 
-          {!!videoQuizzes.length && (
-            <div>
-              <div className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Video Quizzes</div>
+            <TabsContent value="standard" className="mt-0">
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {videoQuizzes.map(renderQuizCard)}
+                {standardQuizzes.map(renderQuizCard)}
               </div>
-            </div>
-          )}
+            </TabsContent>
+
+            <TabsContent value="video" className="mt-0 space-y-3">
+              {!!videoQuizzes.length ? (
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {videoQuizzes.map(renderQuizCard)}
+                </div>
+              ) : (
+                <div className="rounded-3xl border border-red-500/20 bg-[linear-gradient(135deg,rgba(10,10,15,0.96),rgba(127,29,29,0.12),rgba(136,19,55,0.14))] p-5">
+                  <div className="text-sm font-semibold text-white">No video quizzes yet</div>
+                  <div className="mt-2 text-sm text-zinc-400">Create a video-based review where staff watch a clip, note rule breaks, and submit written observations.</div>
+                  {canManageCheckboxes && (
+                    <div className="mt-4">
+                      <Button onClick={() => onAddVideoQuiz?.()} className="rounded-2xl border border-red-400/35 bg-red-500/12 text-red-100 hover:bg-red-500/18">
+                        Create First Video Quiz
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 
