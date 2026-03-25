@@ -2811,7 +2811,32 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
       fallbackPackDefinitions.push(...Array.from(fallbackGrouped.values()).filter(definition => definition.questions.length));
 
-      return [...normalizedUnified, ...fallbackPackDefinitions]
+      const normalizedVideoDefinitions = videoQuizzes
+        .filter(item => item.isActive !== false)
+        .map(item => {
+          const definition = {
+            key: item.quizKey,
+            title: item.title,
+            description: item.description || 'Watch the training clips and submit your notes for review.',
+            badge: 'Video Quiz',
+            kind: 'video',
+            rankLabel: item.rankKey ? rankLabel(item.rankKey) : null,
+            rankKey: item.rankKey || '',
+            passScore: 100,
+            sourceType: 'video',
+            scenes: item.scenes || [],
+            sourceItems: [],
+            questions: [],
+          };
+          const sortMeta = getKnowledgeQuizSortMeta(definition);
+          return {
+            ...definition,
+            sortLabel: definition.rankKey ? rankLabel(definition.rankKey) + ' Video Quiz' : 'Video quiz',
+            sortWeight: sortMeta,
+          };
+        });
+
+      return [...normalizedUnified, ...fallbackPackDefinitions, ...normalizedVideoDefinitions]
         .sort((a, b) => {
           if (a.sortWeight?.group !== undefined && b.sortWeight?.group !== undefined && a.sortWeight.group !== b.sortWeight.group) return a.sortWeight.group - b.sortWeight.group;
           const aMeta = a.sortWeight || getKnowledgeQuizSortMeta(a);
