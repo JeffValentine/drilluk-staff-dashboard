@@ -1048,3 +1048,6 @@ using (
   public.current_user_role() in ('admin', 'head_admin')
   or public.current_user_has_god_key() = true
 );
+
+alter table public.video_quizzes
+add column if not exists scenes jsonb not null default '[]'::jsonb;

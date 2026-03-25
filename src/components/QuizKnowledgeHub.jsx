@@ -37,9 +37,20 @@ export default function QuizKnowledgeHub({
     if (!canManageCheckboxes) setQuestionBankOpen(false);
   }, [canManageCheckboxes]);
 
+  useEffect(() => {
+    if (selectedQuiz?.kind === 'video') setBrowseTab('video');
+  }, [selectedQuiz?.kind]);
+
   function handleSelectQuiz(definition) {
     setSelectedQuizKey(definition.key);
+    setBrowseTab(definition.kind === 'video' ? 'video' : 'standard');
     if (canManageCheckboxes) setQuestionBankOpen(true);
+  }
+
+  function getVideoSummary(definition) {
+    const scenes = Array.isArray(definition.scenes) ? definition.scenes : [];
+    const promptCount = scenes.reduce((total, scene) => total + (Array.isArray(scene.notePrompts) ? scene.notePrompts.length : 0), 0);
+    return `${scenes.length} clips / ${promptCount} prompts`;
   }
 
   function renderQuizCard(definition) {
@@ -60,7 +71,7 @@ export default function QuizKnowledgeHub({
         <div className="mt-3 text-sm font-semibold text-white">{definition.title}</div>
         <div className="mt-1 text-xs text-zinc-400">{definition.description}</div>
         <div className="mt-3 flex items-center justify-between gap-2 text-[11px] uppercase tracking-[0.18em] text-zinc-500">
-          <span>{definition.kind === 'video' ? `${definition.notePrompts?.length || 0} prompts` : `${definition.questions.length} questions`}</span>
+          <span>{definition.kind === 'video' ? getVideoSummary(definition) : `${definition.questions.length} questions`}</span>
           {definition.sortLabel && <span>{definition.sortLabel}</span>}
         </div>
       </button>
@@ -76,7 +87,7 @@ export default function QuizKnowledgeHub({
         <CardContent className="space-y-5">
           <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-black/25 p-3">
             <Badge className="border-fuchsia-500/35 bg-fuchsia-500/12 text-fuchsia-200">Knowledge Packs</Badge>
-            <Badge className="border-white/10 bg-white/10 text-zinc-200">Rank-based, assigned, managed, and video quizzes</Badge>
+            <Badge className="border-white/10 bg-white/10 text-zinc-200">Standard quizzes, assignments, and scenario-based video reviews</Badge>
             {canManageCheckboxes && (
               <div className="ml-auto flex flex-wrap gap-2">
                 <Button onClick={() => onAddManagedQuestion?.(null)} className="rounded-2xl border border-emerald-400/35 bg-emerald-500/12 text-emerald-100 hover:bg-emerald-500/18">
@@ -112,7 +123,7 @@ export default function QuizKnowledgeHub({
               ) : (
                 <div className="rounded-3xl border border-red-500/20 bg-[linear-gradient(135deg,rgba(10,10,15,0.96),rgba(127,29,29,0.12),rgba(136,19,55,0.14))] p-5">
                   <div className="text-sm font-semibold text-white">No video quizzes yet</div>
-                  <div className="mt-2 text-sm text-zinc-400">Create a video-based review where staff watch a clip, note rule breaks, and submit written observations.</div>
+                  <div className="mt-2 text-sm text-zinc-400">Create a scenario-based review where staff watch one or more clips and submit written observations for each scene.</div>
                   {canManageCheckboxes && (
                     <div className="mt-4">
                       <Button onClick={() => onAddVideoQuiz?.()} className="rounded-2xl border border-red-400/35 bg-red-500/12 text-red-100 hover:bg-red-500/18">
@@ -146,9 +157,7 @@ export default function QuizKnowledgeHub({
           defaultName={defaultName}
           title={selectedQuiz.title}
           subtitle={selectedQuiz.description}
-          videoUrl={selectedQuiz.videoUrl}
-          watchPoints={selectedQuiz.watchPoints}
-          notePrompts={selectedQuiz.notePrompts}
+          scenes={selectedQuiz.scenes || []}
           onComplete={(result) => onQuizComplete?.(selectedQuiz, result)}
         />
       )}
@@ -209,7 +218,7 @@ export default function QuizKnowledgeHub({
 
       {selectedQuiz && canManageCheckboxes && questionBankOpen && selectedQuiz.kind === 'video' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="max-h-[88vh] w-full max-w-4xl overflow-y-auto rounded-[30px] border border-white/15 bg-[linear-gradient(180deg,rgba(24,24,27,0.98),rgba(10,10,15,0.98))] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.5)]">
+          <div className="max-h-[88vh] w-full max-w-5xl overflow-y-auto rounded-[30px] border border-white/15 bg-[linear-gradient(180deg,rgba(24,24,27,0.98),rgba(10,10,15,0.98))] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.5)]">
             <div className="mb-5 flex items-center justify-between gap-3 border-b border-white/10 pb-4">
               <div>
                 <div className="text-lg font-semibold text-white">{selectedQuiz.title} Video Setup</div>
@@ -227,29 +236,36 @@ export default function QuizKnowledgeHub({
                 Edit Video Quiz
               </Button>
             </div>
-            <div className="grid gap-4 xl:grid-cols-[1fr,0.92fr]">
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Video URL</div>
-                <div className="mt-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-200 break-all">{selectedQuiz.videoUrl || 'No video URL configured.'}</div>
-              </div>
-              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/8 p-4">
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-200">Things To Watch For</div>
-                <div className="mt-3 space-y-2">
-                  {(selectedQuiz.watchPoints || []).map((point, index) => (
-                    <div key={`${selectedQuiz.key}-watch-${index}`} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-200">{point}</div>
-                  ))}
-                  {!selectedQuiz.watchPoints?.length && <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-400">No watch points configured.</div>}
+            <div className="space-y-4">
+              {(selectedQuiz.scenes || []).map((scene, index) => (
+                <div key={scene.id || `${selectedQuiz.key}-scene-${index}`} className="rounded-3xl border border-white/10 bg-black/20 p-4">
+                  <div className="flex items-center gap-2">
+                    <Badge className={`${cardBadgeClass} border-red-400/45 bg-red-500/18 text-red-50`}>Clip {index + 1}</Badge>
+                    <div className="text-base font-semibold text-white">{scene.title || `Scene ${index + 1}`}</div>
+                  </div>
+                  <div className="mt-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-200 break-all">{scene.videoUrl || 'No video URL configured.'}</div>
+                  <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-200">Things To Watch For</div>
+                      <div className="mt-2 space-y-2">
+                        {(scene.watchPoints || []).map((point, pointIndex) => (
+                          <div key={`${scene.id}-watch-${pointIndex}`} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-200">{point}</div>
+                        ))}
+                        {!scene.watchPoints?.length && <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-400">No watch points configured.</div>}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-red-200">Response Prompts</div>
+                      <div className="mt-2 space-y-2">
+                        {(scene.notePrompts || []).map((prompt, promptIndex) => (
+                          <div key={`${scene.id}-prompt-${promptIndex}`} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-200">{prompt}</div>
+                        ))}
+                        {!scene.notePrompts?.length && <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-400">No prompts configured.</div>}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div className="xl:col-span-2 rounded-2xl border border-red-500/20 bg-red-500/8 p-4">
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-red-200">Response Prompts</div>
-                <div className="mt-3 space-y-2">
-                  {(selectedQuiz.notePrompts || []).map((prompt, index) => (
-                    <div key={`${selectedQuiz.key}-prompt-${index}`} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-200">{prompt}</div>
-                  ))}
-                  {!selectedQuiz.notePrompts?.length && <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-400">No prompts configured.</div>}
-                </div>
-              </div>
+              ))}
             </div>
           </div>
         </div>

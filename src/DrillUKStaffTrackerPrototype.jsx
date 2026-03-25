@@ -1867,6 +1867,48 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     return error?.code === 'PGRST205' || error?.code === '42P01' || /video_quizzes/i.test(message) && /(not found|does not exist|Could not find the table|relation)/i.test(message);
   }
 
+  function buildVideoQuizSceneDraft(index = 0) {
+    return {
+      id: 'scene-' + Date.now() + '-' + index,
+      title: 'Scene ' + (index + 1),
+      videoUrl: '',
+      watchPointsText: '',
+      notePromptsText: 'List the rule breaks you identified.\nList the staff warning signs in the clip.',
+    };
+  }
+
+  function normalizeVideoQuizScene(scene, index = 0) {
+    return {
+      id: scene?.id || 'scene-' + (index + 1),
+      title: String(scene?.title || 'Scene ' + (index + 1)).trim(),
+      videoUrl: String(scene?.videoUrl || '').trim(),
+      watchPoints: Array.isArray(scene?.watchPoints) ? scene.watchPoints.map(value => String(value || '').trim()).filter(Boolean) : [],
+      notePrompts: Array.isArray(scene?.notePrompts) ? scene.notePrompts.map(value => String(value || '').trim()).filter(Boolean) : [],
+    };
+  }
+
+  function normalizeVideoQuizRecord(row) {
+    const rawScenes = Array.isArray(row?.scenes) && row.scenes.length
+      ? row.scenes
+      : [{
+          id: row?.id ? row.id + '-scene-1' : 'scene-1',
+          title: row?.title || 'Scene 1',
+          videoUrl: row?.video_url || '',
+          watchPoints: Array.isArray(row?.watch_points) ? row.watch_points : [],
+          notePrompts: Array.isArray(row?.note_prompts) ? row.note_prompts : [],
+        }];
+    const scenes = rawScenes.map((scene, index) => normalizeVideoQuizScene(scene, index)).filter(scene => scene.videoUrl || scene.watchPoints.length || scene.notePrompts.length || scene.title);
+    return {
+      id: row.id,
+      quizKey: row.quiz_key,
+      title: row.title,
+      description: row.description || '',
+      rankKey: row.rank_key || '',
+      scenes,
+      isActive: row.is_active !== false,
+    };
+  }
+
   async function refreshVideoQuizzesFromDb() {
     if (!dbReady || !supabase) return;
     const { data, error } = await supabase
@@ -1882,17 +1924,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       return;
     }
     setVideoQuizTableAvailable(true);
-    setVideoQuizzes((data || []).map(row => ({
-      id: row.id,
-      quizKey: row.quiz_key,
-      title: row.title,
-      description: row.description || '',
-      rankKey: row.rank_key || '',
-      videoUrl: row.video_url || '',
-      watchPoints: Array.isArray(row.watch_points) ? row.watch_points.map(value => String(value || '').trim()).filter(Boolean) : [],
-      notePrompts: Array.isArray(row.note_prompts) ? row.note_prompts.map(value => String(value || '').trim()).filter(Boolean) : [],
-      isActive: row.is_active !== false,
-    })));
+    setVideoQuizzes((data || []).map(normalizeVideoQuizRecord));
   }
 
   async function refreshUnifiedQuizModelFromDb() {
@@ -2874,16 +2906,14 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         definitions.push({
           key: item.quizKey,
           title: item.title,
-          description: item.description || 'Watch the training clip and submit your notes for review.',
+          description: item.description || 'Watch the training clips and submit your notes for review.',
           badge: 'Video Quiz',
           kind: 'video',
           rankLabel: item.rankKey ? rankLabel(item.rankKey) : null,
           rankKey: item.rankKey || '',
           passScore: 100,
           sourceType: 'video',
-          videoUrl: item.videoUrl || '',
-          watchPoints: item.watchPoints || [],
-          notePrompts: item.notePrompts || [],
+          scenes: item.scenes || [],
           sourceItems: [],
           questions: [],
         });
@@ -4420,25 +4450,30 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   }
 
   function openVideoQuizEditor(definition = null) {
+    const draftScenes = Array.isArray(definition?.scenes) && definition.scenes.length
+      ? definition.scenes.map((scene, index) => ({
+          id: scene.id || 'scene-' + (index + 1),
+          title: scene.title || 'Scene ' + (index + 1),
+          videoUrl: scene.videoUrl || '',
+          watchPointsText: (scene.watchPoints || []).join('\n'),
+          notePromptsText: (scene.notePrompts || []).join('\n'),
+        }))
+      : [buildVideoQuizSceneDraft(0)];
     setVideoQuizDraft(definition ? {
       id: definition.id || null,
       quizKey: definition.quizKey || definition.key,
       title: definition.title || 'New Video Quiz',
-      description: definition.description || 'Watch the clip and submit staff-facing notes.',
+      description: definition.description || 'Watch the clips and submit staff-facing notes.',
       rankKey: definition.rankKey || '',
-      videoUrl: definition.videoUrl || '',
-      watchPointsText: (definition.watchPoints || []).join('\n'),
-      notePromptsText: (definition.notePrompts || []).join('\n'),
+      scenes: draftScenes,
       isActive: definition.isActive !== false,
     } : {
       id: null,
-      quizKey: `video-${Date.now()}`,
+      quizKey: 'video-' + Date.now(),
       title: 'New Video Quiz',
-      description: 'Watch the clip and submit staff-facing notes.',
+      description: 'Watch the clips and submit staff-facing notes.',
       rankKey: '',
-      videoUrl: '',
-      watchPointsText: '',
-      notePromptsText: 'List the rule breaks you identified.\nList the staff warning signs in the clip.',
+      scenes: [buildVideoQuizSceneDraft(0)],
       isActive: true,
     });
     setVideoQuizEditorOpen(true);
@@ -4449,22 +4484,68 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     setVideoQuizDraft(null);
   }
 
+  function patchVideoQuizScene(index, patch) {
+    setVideoQuizDraft(prev => ({
+      ...prev,
+      scenes: (prev?.scenes || []).map((scene, sceneIndex) => sceneIndex === index ? { ...scene, ...patch } : scene),
+    }));
+  }
+
+  function addVideoQuizScene() {
+    setVideoQuizDraft(prev => ({
+      ...prev,
+      scenes: [...(prev?.scenes || []), buildVideoQuizSceneDraft((prev?.scenes || []).length)],
+    }));
+  }
+
+  function removeVideoQuizScene(index) {
+    setVideoQuizDraft(prev => {
+      const nextScenes = (prev?.scenes || []).filter((_, sceneIndex) => sceneIndex !== index);
+      return {
+        ...prev,
+        scenes: nextScenes.length ? nextScenes : [buildVideoQuizSceneDraft(0)],
+      };
+    });
+  }
+
   async function saveVideoQuizDraft() {
     if (!videoQuizDraft || !dbReady || !supabase || !canManageCheckboxes) return;
+    const quizKey = String(videoQuizDraft.quizKey || '').trim().toLowerCase().replace(/[^a-z0-9-|]/g, '-');
+    const scenes = (videoQuizDraft.scenes || []).map((scene, index) => ({
+      id: scene.id || 'scene-' + (index + 1),
+      title: String(scene.title || 'Scene ' + (index + 1)).trim(),
+      videoUrl: String(scene.videoUrl || '').trim(),
+      watchPoints: String(scene.watchPointsText || '').split('\n').map(value => value.trim()).filter(Boolean),
+      notePrompts: String(scene.notePromptsText || '').split('\n').map(value => value.trim()).filter(Boolean),
+    })).filter(scene => scene.videoUrl || scene.watchPoints.length || scene.notePrompts.length || scene.title);
+    if (!quizKey) {
+      alert('Video quiz key is required.');
+      return;
+    }
+    if (!String(videoQuizDraft.title || '').trim()) {
+      alert('Video quiz title is required.');
+      return;
+    }
+    if (!scenes.length) {
+      alert('Add at least one video scene before saving.');
+      return;
+    }
+    const firstScene = scenes[0] || { videoUrl: '', watchPoints: [], notePrompts: [] };
     const payload = {
       id: videoQuizDraft.id || undefined,
-      quiz_key: String(videoQuizDraft.quizKey || '').trim().toLowerCase().replace(/[^a-z0-9-|]/g, '-'),
+      quiz_key: quizKey,
       title: String(videoQuizDraft.title || '').trim(),
       description: String(videoQuizDraft.description || '').trim(),
       rank_key: videoQuizDraft.rankKey || null,
-      video_url: String(videoQuizDraft.videoUrl || '').trim(),
-      watch_points: String(videoQuizDraft.watchPointsText || '').split('\n').map(value => value.trim()).filter(Boolean),
-      note_prompts: String(videoQuizDraft.notePromptsText || '').split('\n').map(value => value.trim()).filter(Boolean),
+      scenes,
+      video_url: firstScene.videoUrl || '',
+      watch_points: firstScene.watchPoints || [],
+      note_prompts: firstScene.notePrompts || [],
       is_active: videoQuizDraft.isActive !== false,
       updated_by: authUser?.id || null,
       updated_at: new Date().toISOString(),
     };
-    const { data, error } = await supabase.from('video_quizzes').upsert(payload).select().single();
+    const { error } = await supabase.from('video_quizzes').upsert(payload, { onConflict: 'quiz_key' });
     if (error) {
       if (isMissingVideoQuizzesTableError(error)) {
         setVideoQuizTableAvailable(false);
@@ -4476,22 +4557,23 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     }
     setVideoQuizTableAvailable(true);
     setVideoQuizzes(prev => {
-      const next = prev.filter(item => item.id !== data.id);
-      next.unshift({
-        id: data.id,
-        quizKey: data.quiz_key,
-        title: data.title,
-        description: data.description || '',
-        rankKey: data.rank_key || '',
-        videoUrl: data.video_url || '',
-        watchPoints: Array.isArray(data.watch_points) ? data.watch_points.map(value => String(value || '').trim()).filter(Boolean) : [],
-        notePrompts: Array.isArray(data.note_prompts) ? data.note_prompts.map(value => String(value || '').trim()).filter(Boolean) : [],
-        isActive: data.is_active !== false,
+      const nextItem = normalizeVideoQuizRecord({
+        id: videoQuizDraft.id || 'local-' + quizKey,
+        quiz_key: quizKey,
+        title: payload.title,
+        description: payload.description,
+        rank_key: payload.rank_key,
+        scenes: payload.scenes,
+        video_url: payload.video_url,
+        watch_points: payload.watch_points,
+        note_prompts: payload.note_prompts,
+        is_active: payload.is_active,
       });
-      return next;
+      return [nextItem, ...prev.filter(item => item.quizKey !== quizKey)];
     });
     await refreshVideoQuizzesFromDb();
-    await writeAudit('video_quizzes.save', payload.quiz_key, null, payload);
+    setSelectedKnowledgeQuizKey(quizKey);
+    await writeAudit('video_quizzes.save', quizKey, null, payload);
     closeVideoQuizEditor();
   }
 
@@ -4507,7 +4589,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       alert(error.message || 'Video quiz could not be deleted.');
       return;
     }
-    setVideoQuizzes(prev => prev.filter(item => item.id !== videoQuizDraft.id));
+    setVideoQuizTableAvailable(true);
+    setVideoQuizzes(prev => prev.filter(item => item.id !== videoQuizDraft.id && item.quizKey !== videoQuizDraft.quizKey));
     await refreshVideoQuizzesFromDb();
     await writeAudit('video_quizzes.delete', videoQuizDraft.id, null, null);
     closeVideoQuizEditor();
@@ -7174,9 +7257,12 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
         {videoQuizEditorOpen && videoQuizDraft && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-            <div className="max-h-[88vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-white/15 bg-zinc-950 p-5">
+            <div className="max-h-[88vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-white/15 bg-zinc-950 p-5">
               <div className="mb-4 flex items-center justify-between">
-                <div className="text-lg font-semibold text-white">{videoQuizDraft.id ? 'Edit Video Quiz' : 'Create Video Quiz'}</div>
+                <div>
+                  <div className="text-lg font-semibold text-white">{videoQuizDraft.id ? 'Edit Video Quiz' : 'Create Video Quiz'}</div>
+                  <div className="mt-1 text-sm text-zinc-400">Build one scenario quiz with multiple clips, watchouts, and answer prompts.</div>
+                </div>
                 <button type="button" onClick={closeVideoQuizEditor} className="text-sm text-zinc-400 hover:text-white">Close</button>
               </div>
               <div className="grid gap-4 md:grid-cols-2">
@@ -7186,7 +7272,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                     value={videoQuizDraft.title || ''}
                     onChange={(e) => setVideoQuizDraft(prev => ({ ...prev, title: e.target.value }))}
                     className="border-white/10 bg-black/30 text-white"
-                    placeholder="Clip review title"
+                    placeholder="Scenario review title"
                   />
                 </div>
                 <div>
@@ -7204,7 +7290,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                     value={videoQuizDraft.description || ''}
                     onChange={(e) => setVideoQuizDraft(prev => ({ ...prev, description: e.target.value }))}
                     className="min-h-[80px] border-white/10 bg-black/30 text-white"
-                    placeholder="What should staff watch for in this clip?"
+                    placeholder="What should staff watch for across the whole scenario?"
                   />
                 </div>
                 <div>
@@ -7214,38 +7300,73 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                     <SelectContent>
                       <SelectItem value="none">No rank badge</SelectItem>
                       {roles.map(role => (
-                        <SelectItem key={`video-rank-${role}`} value={role}>{rankLabel(role)}</SelectItem>
+                        <SelectItem key={'video-rank-' + role} value={role}>{rankLabel(role)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
-                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Video URL</div>
-                  <Input
-                    value={videoQuizDraft.videoUrl || ''}
-                    onChange={(e) => setVideoQuizDraft(prev => ({ ...prev, videoUrl: e.target.value }))}
-                    className="border-white/10 bg-black/30 text-white"
-                    placeholder="https://www.youtube.com/watch?v=..."
-                  />
+                <div className="flex items-end">
+                  <Button onClick={addVideoQuizScene} className="rounded-2xl border border-red-400/40 bg-gradient-to-r from-red-700 to-rose-600 text-white hover:from-red-600 hover:to-rose-500">
+                    Add Clip
+                  </Button>
                 </div>
-                <div>
-                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Things to watch for</div>
-                  <Textarea
-                    value={videoQuizDraft.watchPointsText || ''}
-                    onChange={(e) => setVideoQuizDraft(prev => ({ ...prev, watchPointsText: e.target.value }))}
-                    className="min-h-[140px] border-white/10 bg-black/30 text-white"
-                    placeholder="One watch point per line"
-                  />
-                </div>
-                <div>
-                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Note prompts</div>
-                  <Textarea
-                    value={videoQuizDraft.notePromptsText || ''}
-                    onChange={(e) => setVideoQuizDraft(prev => ({ ...prev, notePromptsText: e.target.value }))}
-                    className="min-h-[140px] border-white/10 bg-black/30 text-white"
-                    placeholder="One response prompt per line"
-                  />
-                </div>
+              </div>
+              <div className="mt-5 space-y-4">
+                {(videoQuizDraft.scenes || []).map((scene, index) => (
+                  <div key={scene.id || 'draft-scene-' + index} className="rounded-3xl border border-white/10 bg-black/20 p-4">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <Badge className="border-red-400/35 bg-red-500/12 text-red-100">Clip {index + 1}</Badge>
+                        <div className="text-sm font-semibold text-white">{scene.title || ('Scene ' + (index + 1))}</div>
+                      </div>
+                      <Button
+                        onClick={() => removeVideoQuizScene(index)}
+                        className="rounded-2xl border border-white/15 bg-black/25 text-zinc-100 hover:bg-white/10"
+                        disabled={(videoQuizDraft.scenes || []).length <= 1}
+                      >
+                        Remove Clip
+                      </Button>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div>
+                        <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Clip title</div>
+                        <Input
+                          value={scene.title || ''}
+                          onChange={(e) => patchVideoQuizScene(index, { title: e.target.value })}
+                          className="border-white/10 bg-black/30 text-white"
+                          placeholder="Traffic stop escalation"
+                        />
+                      </div>
+                      <div>
+                        <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Video URL</div>
+                        <Input
+                          value={scene.videoUrl || ''}
+                          onChange={(e) => patchVideoQuizScene(index, { videoUrl: e.target.value })}
+                          className="border-white/10 bg-black/30 text-white"
+                          placeholder="https://www.youtube.com/watch?v=..."
+                        />
+                      </div>
+                      <div>
+                        <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Things to watch for</div>
+                        <Textarea
+                          value={scene.watchPointsText || ''}
+                          onChange={(e) => patchVideoQuizScene(index, { watchPointsText: e.target.value })}
+                          className="min-h-[140px] border-white/10 bg-black/30 text-white"
+                          placeholder="One watch point per line"
+                        />
+                      </div>
+                      <div>
+                        <div className="mb-2 text-xs uppercase tracking-[0.2em] text-zinc-500">Answer prompts</div>
+                        <Textarea
+                          value={scene.notePromptsText || ''}
+                          onChange={(e) => patchVideoQuizScene(index, { notePromptsText: e.target.value })}
+                          className="min-h-[140px] border-white/10 bg-black/30 text-white"
+                          placeholder="One response prompt per line"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
               <div className="mt-5 flex justify-between gap-2">
                 <Button
