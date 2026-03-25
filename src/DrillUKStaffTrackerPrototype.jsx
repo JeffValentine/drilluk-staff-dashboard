@@ -16,6 +16,7 @@ import EmployeeHub from '@/components/EmployeeHub';
 import QuizKnowledgeHub from '@/components/QuizKnowledgeHub';
 import ManagementHub from '@/components/ManagementHub';
 import InterviewHub from '@/components/InterviewHub';
+import StaffEssentialsHub from '@/components/StaffEssentialsHub';
 import { DEFAULT_INTERVIEW_TEMPLATE, normalizeInterviewTemplate } from '@/interviewQuestionBank';
 import { EXPERIMENTAL_QUIZ_QUESTIONS } from '@/experimentalQuizData';
 
@@ -1231,6 +1232,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const canManageCheckboxes = canManageUsers || effectiveRole === 'admin';
   const canDeleteStaff = ['head_admin', 'admin'].includes(effectiveRole);
   const canManageInterviews = effectiveRole === 'head_admin' || Boolean(profile?.god_key_enabled);
+  const canManageEssentials = effectiveRole === 'head_admin' || Boolean(profile?.god_key_enabled);
   const isStaffInTraining = effectiveRole === 'staff_in_training';
   const canAccessExperimentalQuiz = profile?.role === 'head_admin' || Boolean(profile?.experimental_quiz_enabled);
   const [activeMainTab, setActiveMainTab] = useState(isStaffInTraining ? 'myprogress' : 'employee');
@@ -1317,6 +1319,9 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [videoQuizEditorOpen, setVideoQuizEditorOpen] = useState(false);
   const [videoQuizDraft, setVideoQuizDraft] = useState(null);
   const [videoQuizTableAvailable, setVideoQuizTableAvailable] = useState(true);
+  const [staffEssentials, setStaffEssentials] = useState([]);
+  const [selectedEssentialSlug, setSelectedEssentialSlug] = useState('');
+  const [staffEssentialsTableAvailable, setStaffEssentialsTableAvailable] = useState(true);
   const [unifiedQuizzes, setUnifiedQuizzes] = useState([]);
   const [unifiedQuizQuestions, setUnifiedQuizQuestions] = useState([]);
   const [unifiedQuizAssignments, setUnifiedQuizAssignments] = useState([]);
@@ -1867,6 +1872,55 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     return error?.code === 'PGRST205' || error?.code === '42P01' || /video_quizzes/i.test(message) && /(not found|does not exist|Could not find the table|relation)/i.test(message);
   }
 
+  function isMissingStaffEssentialsTableError(error) {
+    const message = String(error?.message || error?.details || '');
+    return error?.code === 'PGRST205' || error?.code === '42P01' || /staff_essentials/i.test(message) && /(not found|does not exist|Could not find the table|relation)/i.test(message);
+  }
+
+  function buildStaffEssentialModule(index = 0) {
+    return {
+      id: 'module-' + Date.now() + '-' + index,
+      type: 'chapter',
+      title: 'Module ' + (index + 1),
+      body: '',
+      videoUrl: '',
+      resourceLabel: '',
+      resourceUrl: '',
+      checklist: [],
+    };
+  }
+
+  function normalizeStaffEssentialModule(module, index = 0) {
+    return {
+      id: module?.id || 'module-' + (index + 1),
+      type: String(module?.type || 'chapter').trim() || 'chapter',
+      title: String(module?.title || 'Module ' + (index + 1)).trim(),
+      body: String(module?.body || '').trim(),
+      videoUrl: String(module?.videoUrl || '').trim(),
+      resourceLabel: String(module?.resourceLabel || '').trim(),
+      resourceUrl: String(module?.resourceUrl || '').trim(),
+      checklist: Array.isArray(module?.checklist) ? module.checklist.map(value => String(value || '').trim()).filter(Boolean) : [],
+    };
+  }
+
+  function normalizeStaffEssentialRecord(row) {
+    return {
+      id: row.id,
+      slug: row.slug,
+      section: row.section || 'General',
+      title: row.title || 'Untitled essential',
+      summary: row.summary || '',
+      coverVideoUrl: row.cover_video_url || '',
+      tags: Array.isArray(row.tags) ? row.tags.map(value => String(value || '').trim()).filter(Boolean) : [],
+      modules: Array.isArray(row.modules) && row.modules.length
+        ? row.modules.map((module, index) => normalizeStaffEssentialModule(module, index))
+        : [buildStaffEssentialModule(0)],
+      sortOrder: Number(row.sort_order || 0),
+      isActive: row.is_active !== false,
+      updatedAt: row.updated_at || null,
+    };
+  }
+
   function buildVideoQuizSceneDraft(index = 0) {
     return {
       id: 'scene-' + Date.now() + '-' + index,
@@ -1925,6 +1979,28 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     }
     setVideoQuizTableAvailable(true);
     setVideoQuizzes((data || []).map(normalizeVideoQuizRecord));
+  }
+
+  async function refreshStaffEssentialsFromDb() {
+    if (!dbReady || !supabase) return;
+    const { data, error } = await supabase
+      .from('staff_essentials')
+      .select('*')
+      .order('section', { ascending: true })
+      .order('sort_order', { ascending: true })
+      .order('updated_at', { ascending: false });
+
+    if (error) {
+      if (isMissingStaffEssentialsTableError(error)) {
+        setStaffEssentialsTableAvailable(false);
+        setStaffEssentials([]);
+        return;
+      }
+      return;
+    }
+
+    setStaffEssentialsTableAvailable(true);
+    setStaffEssentials((data || []).map(normalizeStaffEssentialRecord));
   }
 
   async function refreshUnifiedQuizModelFromDb() {
@@ -2134,6 +2210,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   useEffect(() => {
     if (!dbReady || !supabase) return;
     refreshVideoQuizzesFromDb();
+  }, [dbReady, authUser?.id]);
+
+  useEffect(() => {
+    if (!dbReady || !supabase) return;
+    refreshStaffEssentialsFromDb();
   }, [dbReady, authUser?.id]);
 
   useEffect(() => {
@@ -2515,8 +2596,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   }, [sessionTargetId]);
 
   useEffect(() => {
-    const traineeTabs = ['myprogress', 'stafftools'];
-    const staffTabs = ['employee', 'quizknowledge', 'stafftools', 'management', 'tracker', 'session', 'progression', 'discipline', 'audit', 'ranks', 'checkboxes', ...(canManageInterviews ? ['interviews'] : [])];
+    const traineeTabs = ['myprogress', 'essentials', 'stafftools'];
+    const staffTabs = ['employee', 'quizknowledge', 'essentials', 'stafftools', 'management', 'tracker', 'session', 'progression', 'discipline', 'audit', 'ranks', 'checkboxes', ...(canManageInterviews ? ['interviews'] : [])];
     const allowed = isStaffInTraining ? traineeTabs : staffTabs;
     const fallback = isStaffInTraining ? 'myprogress' : 'employee';
     if (!allowed.includes(activeMainTab)) setActiveMainTab(fallback);
@@ -3036,6 +3117,16 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     }));
   }, [isStaffInTraining, knowledgeQuizDefinitions, selected]);
 
+  const displayedStaffEssentials = useMemo(() => (
+    (canManageEssentials ? staffEssentials : staffEssentials.filter(item => item.isActive !== false))
+      .slice()
+      .sort((a, b) => {
+        if (a.section !== b.section) return String(a.section).localeCompare(String(b.section));
+        if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+        return String(a.title).localeCompare(String(b.title));
+      })
+  ), [staffEssentials, canManageEssentials]);
+
   const selectedStaffQuizDefinitions = useMemo(() => {
     if (!selected) return [];
     return knowledgeQuizDefinitions
@@ -3136,6 +3227,12 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     if (displayedKnowledgeQuizDefinitions.some(item => item.key === selectedKnowledgeQuizKey)) return;
     setSelectedKnowledgeQuizKey(displayedKnowledgeQuizDefinitions[0]?.key || 'mandatory-general');
   }, [displayedKnowledgeQuizDefinitions, selectedKnowledgeQuizKey]);
+
+  useEffect(() => {
+    if (displayedStaffEssentials.some(item => item.slug === selectedEssentialSlug)) return;
+    setSelectedEssentialSlug(displayedStaffEssentials[0]?.slug || '');
+  }, [displayedStaffEssentials, selectedEssentialSlug]);
+
   const filteredManagementUsers = useMemo(() => {
     const needle = managementQuery.trim().toLowerCase();
     return (managementUsers || [])
@@ -4651,6 +4748,88 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     void refreshVideoQuizzesFromDb();
   }
 
+  async function saveStaffEssential(draft) {
+    if (!draft || !dbReady || !supabase || !canManageEssentials) return false;
+    const slug = String(draft.slug || draft.title || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+    if (!slug) {
+      alert('Staff essential slug is required.');
+      return false;
+    }
+    if (!String(draft.title || '').trim()) {
+      alert('Staff essential title is required.');
+      return false;
+    }
+
+    const modules = (draft.modules || []).map((module, index) => ({
+      id: module.id || 'module-' + (index + 1),
+      type: String(module.type || 'chapter').trim() || 'chapter',
+      title: String(module.title || 'Module ' + (index + 1)).trim(),
+      body: String(module.body || '').trim(),
+      videoUrl: String(module.videoUrl || '').trim(),
+      resourceLabel: String(module.resourceLabel || '').trim(),
+      resourceUrl: String(module.resourceUrl || '').trim(),
+      checklist: String(module.checklistText || '').split(/\r?\n/).map(value => value.trim()).filter(Boolean),
+    })).filter(module => module.title || module.body || module.videoUrl || module.resourceLabel || module.resourceUrl || module.checklist.length);
+
+    if (!modules.length) {
+      alert('Add at least one module before saving Staff Essentials.');
+      return false;
+    }
+
+    const payload = {
+      id: draft.id || undefined,
+      slug,
+      section: String(draft.section || 'General').trim() || 'General',
+      title: String(draft.title || '').trim(),
+      summary: String(draft.summary || '').trim(),
+      cover_video_url: String(draft.coverVideoUrl || '').trim(),
+      tags: String(draft.tagsText || '').split(/[\n,]/).map(value => value.trim()).filter(Boolean),
+      modules,
+      sort_order: Number(draft.sortOrder || 0),
+      is_active: draft.isActive !== false,
+      updated_by: authUser?.id || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase.from('staff_essentials').upsert(payload, { onConflict: 'slug' });
+    if (error) {
+      if (isMissingStaffEssentialsTableError(error)) {
+        setStaffEssentialsTableAvailable(false);
+        alert('Staff Essentials is not enabled in Supabase yet. Run the latest SQL block first.');
+        return false;
+      }
+      alert(error.message || 'Staff essential could not be saved.');
+      return false;
+    }
+
+    setStaffEssentialsTableAvailable(true);
+    setStaffEssentials(prev => [normalizeStaffEssentialRecord(payload), ...prev.filter(item => item.slug !== slug)]);
+    setSelectedEssentialSlug(slug);
+    await writeAudit('staff_essentials.save', slug, null, payload);
+    void refreshStaffEssentialsFromDb();
+    return slug;
+  }
+
+  async function deleteStaffEssential(item) {
+    if (!item || !dbReady || !supabase || !canManageEssentials) return false;
+    const { error } = await supabase.from('staff_essentials').delete().eq('slug', item.slug);
+    if (error) {
+      if (isMissingStaffEssentialsTableError(error)) {
+        setStaffEssentialsTableAvailable(false);
+        alert('Staff Essentials is not enabled in Supabase yet. Run the latest SQL block first.');
+        return false;
+      }
+      alert(error.message || 'Staff essential could not be deleted.');
+      return false;
+    }
+
+    setStaffEssentialsTableAvailable(true);
+    setStaffEssentials(prev => prev.filter(entry => entry.slug !== item.slug));
+    await writeAudit('staff_essentials.delete', item.slug, item, null);
+    void refreshStaffEssentialsFromDb();
+    return true;
+  }
+
   async function saveCheckboxItem(item) {
     if (!canManageCheckboxes || !dbReady || !supabase) return;
     holdRealtimeSync(2600);
@@ -5040,12 +5219,14 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
             {isStaffInTraining ? (
               <>
                 <TabsTrigger value="myprogress">My Progress</TabsTrigger>
+                <TabsTrigger value="essentials">Staff Essentials</TabsTrigger>
                 <TabsTrigger value="stafftools">Staff Tools</TabsTrigger>
               </>
             ) : (
               <>
                 <TabsTrigger value="employee">Staff Team Overview</TabsTrigger>
                 <TabsTrigger value="quizknowledge">Quizzes & Knowledge</TabsTrigger>
+                <TabsTrigger value="essentials">Staff Essentials</TabsTrigger>
                 <TabsTrigger value="stafftools">Staff Tools</TabsTrigger>
                 <TabsTrigger value="management">Management</TabsTrigger>
                 {canManageInterviews && <TabsTrigger value="interviews">Interviews</TabsTrigger>}
@@ -5149,6 +5330,19 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
             />
           </TabsContent>
 
+
+          <TabsContent value="essentials">
+            <StaffEssentialsHub
+              essentials={displayedStaffEssentials}
+              selectedEssentialSlug={selectedEssentialSlug}
+              setSelectedEssentialSlug={setSelectedEssentialSlug}
+              canManageEssentials={canManageEssentials}
+              tableAvailable={staffEssentialsTableAvailable}
+              onRefresh={refreshStaffEssentialsFromDb}
+              onSaveEssential={saveStaffEssential}
+              onDeleteEssential={deleteStaffEssential}
+            />
+          </TabsContent>
 
           <TabsContent value="interviews">
             <div className="space-y-4">

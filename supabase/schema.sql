@@ -1051,3 +1051,57 @@ using (
 
 alter table public.video_quizzes
 add column if not exists scenes jsonb not null default '[]'::jsonb;
+
+create table if not exists public.staff_essentials (
+  id uuid primary key default gen_random_uuid(),
+  slug text unique not null,
+  section text not null default 'General',
+  title text not null,
+  summary text not null default '',
+  cover_video_url text not null default '',
+  tags jsonb not null default '[]'::jsonb,
+  modules jsonb not null default '[]'::jsonb,
+  sort_order int not null default 0,
+  is_active boolean not null default true,
+  updated_by uuid references auth.users(id),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.staff_essentials enable row level security;
+
+drop policy if exists "staff_essentials_read_authenticated" on public.staff_essentials;
+create policy "staff_essentials_read_authenticated"
+on public.staff_essentials for select
+to authenticated
+using (auth.uid() is not null);
+
+drop policy if exists "staff_essentials_write_head_admin" on public.staff_essentials;
+create policy "staff_essentials_write_head_admin"
+on public.staff_essentials for insert
+to authenticated
+with check (
+  public.current_user_role() = 'head_admin'
+  or public.current_user_has_god_key() = true
+);
+
+drop policy if exists "staff_essentials_update_head_admin" on public.staff_essentials;
+create policy "staff_essentials_update_head_admin"
+on public.staff_essentials for update
+to authenticated
+using (
+  public.current_user_role() = 'head_admin'
+  or public.current_user_has_god_key() = true
+)
+with check (
+  public.current_user_role() = 'head_admin'
+  or public.current_user_has_god_key() = true
+);
+
+drop policy if exists "staff_essentials_delete_head_admin" on public.staff_essentials;
+create policy "staff_essentials_delete_head_admin"
+on public.staff_essentials for delete
+to authenticated
+using (
+  public.current_user_role() = 'head_admin'
+  or public.current_user_has_god_key() = true
+);
