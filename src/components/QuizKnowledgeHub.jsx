@@ -37,10 +37,6 @@ export default function QuizKnowledgeHub({
     if (!canManageCheckboxes) setQuestionBankOpen(false);
   }, [canManageCheckboxes]);
 
-  useEffect(() => {
-    if (browseTab === 'video' && !videoQuizzes.length) setBrowseTab('standard');
-  }, [browseTab, videoQuizzes.length]);
-
   function handleSelectQuiz(definition) {
     setSelectedQuizKey(definition.key);
     if (canManageCheckboxes) setQuestionBankOpen(true);
