@@ -994,3 +994,57 @@ create policy "interview_question_bank_delete_developer"
 on public.interview_question_bank for delete
 to authenticated
 using (public.is_developer_account() = true);
+
+
+create table if not exists public.video_quizzes (
+  id uuid primary key default gen_random_uuid(),
+  quiz_key text unique not null,
+  title text not null,
+  description text not null default '',
+  rank_key text,
+  video_url text not null default '',
+  watch_points jsonb not null default '[]'::jsonb,
+  note_prompts jsonb not null default '[]'::jsonb,
+  is_active boolean not null default true,
+  updated_by uuid references auth.users(id),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.video_quizzes enable row level security;
+
+drop policy if exists "video_quizzes_read_authenticated" on public.video_quizzes;
+create policy "video_quizzes_read_authenticated"
+on public.video_quizzes for select
+to authenticated
+using (auth.uid() is not null);
+
+drop policy if exists "video_quizzes_write_admin_head" on public.video_quizzes;
+create policy "video_quizzes_write_admin_head"
+on public.video_quizzes for insert
+to authenticated
+with check (
+  public.current_user_role() in ('admin', 'head_admin')
+  or public.current_user_has_god_key() = true
+);
+
+drop policy if exists "video_quizzes_update_admin_head" on public.video_quizzes;
+create policy "video_quizzes_update_admin_head"
+on public.video_quizzes for update
+to authenticated
+using (
+  public.current_user_role() in ('admin', 'head_admin')
+  or public.current_user_has_god_key() = true
+)
+with check (
+  public.current_user_role() in ('admin', 'head_admin')
+  or public.current_user_has_god_key() = true
+);
+
+drop policy if exists "video_quizzes_delete_admin_head" on public.video_quizzes;
+create policy "video_quizzes_delete_admin_head"
+on public.video_quizzes for delete
+to authenticated
+using (
+  public.current_user_role() in ('admin', 'head_admin')
+  or public.current_user_has_god_key() = true
+);

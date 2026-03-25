@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import ExperimentalStaffQuiz from '@/components/ExperimentalStaffQuiz';
+import VideoQuizRunner from '@/components/VideoQuizRunner';
 
 export default function QuizKnowledgeHub({
   quizDefinitions,
@@ -13,6 +14,8 @@ export default function QuizKnowledgeHub({
   onOpenBuilder,
   onEditQuizQuestion,
   onAddManagedQuestion,
+  onAddVideoQuiz,
+  onEditVideoQuiz,
   defaultName,
   rankBadgeClass,
   selectedStaff = null,
@@ -25,15 +28,41 @@ export default function QuizKnowledgeHub({
   const modalActionClass = 'rounded-2xl border px-4 py-2 text-sm font-medium shadow-[0_12px_32px_rgba(0,0,0,0.24)]';
   const cardBadgeClass = 'rounded-full border px-2.5 py-1 text-[10px] font-semibold tracking-[0.16em] uppercase';
 
+  const standardQuizzes = useMemo(() => quizDefinitions.filter(definition => definition.kind !== 'video'), [quizDefinitions]);
+  const videoQuizzes = useMemo(() => quizDefinitions.filter(definition => definition.kind === 'video'), [quizDefinitions]);
+
   useEffect(() => {
-    if (!canManageCheckboxes) {
-      setQuestionBankOpen(false);
-    }
+    if (!canManageCheckboxes) setQuestionBankOpen(false);
   }, [canManageCheckboxes]);
 
   function handleSelectQuiz(definition) {
     setSelectedQuizKey(definition.key);
     if (canManageCheckboxes) setQuestionBankOpen(true);
+  }
+
+  function renderQuizCard(definition) {
+    return (
+      <button
+        key={definition.key}
+        type="button"
+        onClick={() => handleSelectQuiz(definition)}
+        className={`rounded-2xl border p-4 text-left transition ${selectedQuizKey === definition.key ? 'border-fuchsia-500/45 bg-fuchsia-500/12' : 'border-white/10 bg-black/25 hover:bg-white/5'}`}
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge className={`${cardBadgeClass} ${definition.kind === 'mandatory' ? 'border-amber-400/45 bg-amber-500/18 text-amber-50' : definition.kind === 'video' ? 'border-red-400/45 bg-red-500/18 text-red-50' : 'border-cyan-400/45 bg-cyan-500/18 text-cyan-50'}`}>
+            {definition.badge}
+          </Badge>
+          {definition.rankLabel && <Badge className={`${cardBadgeClass} ${rankBadgeClass?.(definition.rankKey) || 'border-white/10 bg-white/10 text-zinc-200'}`}>{definition.rankLabel}</Badge>}
+          {definition.progressLabel && <Badge className={`${cardBadgeClass} border-emerald-400/45 bg-emerald-500/18 text-emerald-50`}>{definition.progressLabel}</Badge>}
+        </div>
+        <div className="mt-3 text-sm font-semibold text-white">{definition.title}</div>
+        <div className="mt-1 text-xs text-zinc-400">{definition.description}</div>
+        <div className="mt-3 flex items-center justify-between gap-2 text-[11px] uppercase tracking-[0.18em] text-zinc-500">
+          <span>{definition.kind === 'video' ? `${definition.notePrompts?.length || 0} prompts` : `${definition.questions.length} questions`}</span>
+          {definition.sortLabel && <span>{definition.sortLabel}</span>}
+        </div>
+      </button>
+    );
   }
 
   return (
@@ -42,14 +71,17 @@ export default function QuizKnowledgeHub({
         <CardHeader>
           <CardTitle>Quizzes & Knowledge</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-5">
           <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-black/25 p-3">
             <Badge className="border-fuchsia-500/35 bg-fuchsia-500/12 text-fuchsia-200">Knowledge Packs</Badge>
-            <Badge className="border-white/10 bg-white/10 text-zinc-200">Rank-based, assigned, and managed quizzes</Badge>
+            <Badge className="border-white/10 bg-white/10 text-zinc-200">Rank-based, assigned, managed, and video quizzes</Badge>
             {canManageCheckboxes && (
               <div className="ml-auto flex flex-wrap gap-2">
                 <Button onClick={() => onAddManagedQuestion?.(null)} className="rounded-2xl border border-emerald-400/35 bg-emerald-500/12 text-emerald-100 hover:bg-emerald-500/18">
                   Create New Quiz
+                </Button>
+                <Button onClick={() => onAddVideoQuiz?.()} className="rounded-2xl border border-red-400/35 bg-red-500/12 text-red-100 hover:bg-red-500/18">
+                  Create Video Quiz
                 </Button>
                 <Button onClick={onOpenBuilder} className="rounded-2xl border border-amber-400/35 bg-amber-500/12 text-amber-100 hover:bg-amber-500/18">
                   Open Quiz Builder
@@ -57,34 +89,26 @@ export default function QuizKnowledgeHub({
               </div>
             )}
           </div>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {quizDefinitions.map(definition => (
-              <button
-                key={definition.key}
-                type="button"
-                onClick={() => handleSelectQuiz(definition)}
-                className={`rounded-2xl border p-4 text-left transition ${selectedQuizKey === definition.key ? 'border-fuchsia-500/45 bg-fuchsia-500/12' : 'border-white/10 bg-black/25 hover:bg-white/5'}`}
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge className={`${cardBadgeClass} ${definition.kind === 'mandatory' ? 'border-amber-400/45 bg-amber-500/18 text-amber-50' : 'border-cyan-400/45 bg-cyan-500/18 text-cyan-50'}`}>
-                    {definition.badge}
-                  </Badge>
-                  {definition.rankLabel && <Badge className={`${cardBadgeClass} ${rankBadgeClass?.(definition.rankKey) || 'border-white/10 bg-white/10 text-zinc-200'}`}>{definition.rankLabel}</Badge>}
-                  {definition.progressLabel && <Badge className={`${cardBadgeClass} border-emerald-400/45 bg-emerald-500/18 text-emerald-50`}>{definition.progressLabel}</Badge>}
-                </div>
-                <div className="mt-3 text-sm font-semibold text-white">{definition.title}</div>
-                <div className="mt-1 text-xs text-zinc-400">{definition.description}</div>
-                <div className="mt-3 flex items-center justify-between gap-2 text-[11px] uppercase tracking-[0.18em] text-zinc-500">
-                  <span>{definition.questions.length} questions</span>
-                  {definition.sortLabel && <span>{definition.sortLabel}</span>}
-                </div>
-              </button>
-            ))}
+
+          <div>
+            <div className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Standard Quizzes</div>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {standardQuizzes.map(renderQuizCard)}
+            </div>
           </div>
+
+          {!!videoQuizzes.length && (
+            <div>
+              <div className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Video Quizzes</div>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {videoQuizzes.map(renderQuizCard)}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {selectedQuiz && (
+      {selectedQuiz && selectedQuiz.kind !== 'video' && (
         <ExperimentalStaffQuiz
           key={selectedQuiz.key}
           defaultName={defaultName}
@@ -97,7 +121,20 @@ export default function QuizKnowledgeHub({
         />
       )}
 
-      {selectedQuiz && canManageCheckboxes && questionBankOpen && (
+      {selectedQuiz && selectedQuiz.kind === 'video' && (
+        <VideoQuizRunner
+          key={selectedQuiz.key}
+          defaultName={defaultName}
+          title={selectedQuiz.title}
+          subtitle={selectedQuiz.description}
+          videoUrl={selectedQuiz.videoUrl}
+          watchPoints={selectedQuiz.watchPoints}
+          notePrompts={selectedQuiz.notePrompts}
+          onComplete={(result) => onQuizComplete?.(selectedQuiz, result)}
+        />
+      )}
+
+      {selectedQuiz && canManageCheckboxes && questionBankOpen && selectedQuiz.kind !== 'video' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="max-h-[88vh] w-full max-w-5xl overflow-y-auto rounded-[30px] border border-white/15 bg-[linear-gradient(180deg,rgba(24,24,27,0.98),rgba(10,10,15,0.98))] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.5)]">
             <div className="mb-5 flex items-center justify-between gap-3 border-b border-white/10 pb-4">
@@ -109,10 +146,7 @@ export default function QuizKnowledgeHub({
             </div>
             <div className="mb-4 flex flex-wrap gap-2">
               {selectedStaff && typeof onToggleAssignment === 'function' && (
-                <Button
-                  onClick={() => onToggleAssignment(selectedQuiz)}
-                  className={`${modalActionClass} ${isAssignedToSelected ? 'border-emerald-400/45 bg-emerald-500/18 text-emerald-50 hover:bg-emerald-500/24' : 'border-cyan-400/45 bg-cyan-500/18 text-cyan-50 hover:bg-cyan-500/24'}` }
-                >
+                <Button onClick={() => onToggleAssignment(selectedQuiz)} className={`${modalActionClass} ${isAssignedToSelected ? 'border-emerald-400/45 bg-emerald-500/18 text-emerald-50 hover:bg-emerald-500/24' : 'border-cyan-400/45 bg-cyan-500/18 text-cyan-50 hover:bg-cyan-500/24'}`}>
                   {isAssignedToSelected ? `Unassign from ${selectedStaff.name}` : `Assign to ${selectedStaff.name}`}
                 </Button>
               )}
@@ -148,11 +182,55 @@ export default function QuizKnowledgeHub({
                   </div>
                 </div>
               ))}
-              {!selectedQuiz.sourceItems?.length && (
-                <div className="rounded-xl border border-white/10 bg-black/25 p-4 text-sm text-zinc-400">
-                  No questions are available for this quiz yet.
-                </div>
+              {!selectedQuiz.sourceItems?.length && <div className="rounded-xl border border-white/10 bg-black/25 p-4 text-sm text-zinc-400">No questions are available for this quiz yet.</div>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedQuiz && canManageCheckboxes && questionBankOpen && selectedQuiz.kind === 'video' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="max-h-[88vh] w-full max-w-4xl overflow-y-auto rounded-[30px] border border-white/15 bg-[linear-gradient(180deg,rgba(24,24,27,0.98),rgba(10,10,15,0.98))] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.5)]">
+            <div className="mb-5 flex items-center justify-between gap-3 border-b border-white/10 pb-4">
+              <div>
+                <div className="text-lg font-semibold text-white">{selectedQuiz.title} Video Setup</div>
+                <div className="mt-1 text-sm text-zinc-400">{selectedQuiz.description}</div>
+              </div>
+              <button type="button" onClick={() => setQuestionBankOpen(false)} className="rounded-2xl border border-white/10 bg-black/25 px-3 py-1.5 text-sm text-zinc-300 transition hover:border-white/20 hover:bg-white/10 hover:text-white">Close</button>
+            </div>
+            <div className="mb-4 flex flex-wrap gap-2">
+              {selectedStaff && typeof onToggleAssignment === 'function' && (
+                <Button onClick={() => onToggleAssignment(selectedQuiz)} className={`${modalActionClass} ${isAssignedToSelected ? 'border-emerald-400/45 bg-emerald-500/18 text-emerald-50 hover:bg-emerald-500/24' : 'border-cyan-400/45 bg-cyan-500/18 text-cyan-50 hover:bg-cyan-500/24'}`}>
+                  {isAssignedToSelected ? `Unassign from ${selectedStaff.name}` : `Assign to ${selectedStaff.name}`}
+                </Button>
               )}
+              <Button onClick={() => onEditVideoQuiz?.(selectedQuiz)} className={`${modalActionClass} border-red-400/45 bg-red-500/18 text-red-50 hover:bg-red-500/24`}>
+                Edit Video Quiz
+              </Button>
+            </div>
+            <div className="grid gap-4 xl:grid-cols-[1fr,0.92fr]">
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Video URL</div>
+                <div className="mt-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-200 break-all">{selectedQuiz.videoUrl || 'No video URL configured.'}</div>
+              </div>
+              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/8 p-4">
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-200">Things To Watch For</div>
+                <div className="mt-3 space-y-2">
+                  {(selectedQuiz.watchPoints || []).map((point, index) => (
+                    <div key={`${selectedQuiz.key}-watch-${index}`} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-200">{point}</div>
+                  ))}
+                  {!selectedQuiz.watchPoints?.length && <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-400">No watch points configured.</div>}
+                </div>
+              </div>
+              <div className="xl:col-span-2 rounded-2xl border border-red-500/20 bg-red-500/8 p-4">
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-red-200">Response Prompts</div>
+                <div className="mt-3 space-y-2">
+                  {(selectedQuiz.notePrompts || []).map((prompt, index) => (
+                    <div key={`${selectedQuiz.key}-prompt-${index}`} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-200">{prompt}</div>
+                  ))}
+                  {!selectedQuiz.notePrompts?.length && <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-400">No prompts configured.</div>}
+                </div>
+              </div>
             </div>
           </div>
         </div>
