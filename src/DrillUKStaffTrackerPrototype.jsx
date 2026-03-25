@@ -1316,6 +1316,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [videoQuizzes, setVideoQuizzes] = useState([]);
   const [videoQuizEditorOpen, setVideoQuizEditorOpen] = useState(false);
   const [videoQuizDraft, setVideoQuizDraft] = useState(null);
+  const [videoQuizTableAvailable, setVideoQuizTableAvailable] = useState(true);
   const [unifiedQuizzes, setUnifiedQuizzes] = useState([]);
   const [unifiedQuizQuestions, setUnifiedQuizQuestions] = useState([]);
   const [unifiedQuizAssignments, setUnifiedQuizAssignments] = useState([]);
@@ -1861,25 +1862,37 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     setManagedQuizLoading(false);
   }
 
+  function isMissingVideoQuizzesTableError(error) {
+    const message = String(error?.message || error?.details || '');
+    return error?.code === 'PGRST205' || error?.code === '42P01' || /video_quizzes/i.test(message) && /(not found|does not exist|Could not find the table|relation)/i.test(message);
+  }
+
   async function refreshVideoQuizzesFromDb() {
-    if (!dbReady || !supabase) return;
+    if (!dbReady || !supabase || !videoQuizTableAvailable) return;
     const { data, error } = await supabase
       .from('video_quizzes')
       .select('*')
       .order('updated_at', { ascending: false });
-    if (!error) {
-      setVideoQuizzes((data || []).map(row => ({
-        id: row.id,
-        quizKey: row.quiz_key,
-        title: row.title,
-        description: row.description || '',
-        rankKey: row.rank_key || '',
-        videoUrl: row.video_url || '',
-        watchPoints: Array.isArray(row.watch_points) ? row.watch_points.map(value => String(value || '').trim()).filter(Boolean) : [],
-        notePrompts: Array.isArray(row.note_prompts) ? row.note_prompts.map(value => String(value || '').trim()).filter(Boolean) : [],
-        isActive: row.is_active !== false,
-      })));
+    if (error) {
+      if (isMissingVideoQuizzesTableError(error)) {
+        setVideoQuizTableAvailable(false);
+        setVideoQuizzes([]);
+        return;
+      }
+      return;
     }
+    setVideoQuizTableAvailable(true);
+    setVideoQuizzes((data || []).map(row => ({
+      id: row.id,
+      quizKey: row.quiz_key,
+      title: row.title,
+      description: row.description || '',
+      rankKey: row.rank_key || '',
+      videoUrl: row.video_url || '',
+      watchPoints: Array.isArray(row.watch_points) ? row.watch_points.map(value => String(value || '').trim()).filter(Boolean) : [],
+      notePrompts: Array.isArray(row.note_prompts) ? row.note_prompts.map(value => String(value || '').trim()).filter(Boolean) : [],
+      isActive: row.is_active !== false,
+    })));
   }
 
   async function refreshUnifiedQuizModelFromDb() {
@@ -4438,6 +4451,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   async function saveVideoQuizDraft() {
     if (!videoQuizDraft || !dbReady || !supabase || !canManageCheckboxes) return;
+    if (!videoQuizTableAvailable) {
+      alert('Video quizzes are not enabled in Supabase yet. Run the latest SQL block first.');
+      return;
+    }
     const payload = {
       id: videoQuizDraft.id || undefined,
       quiz_key: String(videoQuizDraft.quizKey || '').trim().toLowerCase().replace(/[^a-z0-9-|]/g, '-'),
@@ -4452,7 +4469,16 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       updated_at: new Date().toISOString(),
     };
     const { data, error } = await supabase.from('video_quizzes').upsert(payload).select().single();
-    if (error) throw error;
+    if (error) {
+      if (isMissingVideoQuizzesTableError(error)) {
+        setVideoQuizTableAvailable(false);
+        alert('Video quizzes are not enabled in Supabase yet. Run the latest SQL block first.');
+        return;
+      }
+      alert(error.message || 'Video quiz could not be saved.');
+      return;
+    }
+    setVideoQuizTableAvailable(true);
     setVideoQuizzes(prev => {
       const next = prev.filter(item => item.id !== data.id);
       next.unshift({
@@ -4474,7 +4500,20 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   async function deleteVideoQuizDraft() {
     if (!videoQuizDraft?.id || !dbReady || !supabase || !canManageCheckboxes) return;
-    await supabase.from('video_quizzes').delete().eq('id', videoQuizDraft.id);
+    if (!videoQuizTableAvailable) {
+      alert('Video quizzes are not enabled in Supabase yet. Run the latest SQL block first.');
+      return;
+    }
+    const { error } = await supabase.from('video_quizzes').delete().eq('id', videoQuizDraft.id);
+    if (error) {
+      if (isMissingVideoQuizzesTableError(error)) {
+        setVideoQuizTableAvailable(false);
+        alert('Video quizzes are not enabled in Supabase yet. Run the latest SQL block first.');
+        return;
+      }
+      alert(error.message || 'Video quiz could not be deleted.');
+      return;
+    }
     setVideoQuizzes(prev => prev.filter(item => item.id !== videoQuizDraft.id));
     await writeAudit('video_quizzes.delete', videoQuizDraft.id, null, null);
     closeVideoQuizEditor();
