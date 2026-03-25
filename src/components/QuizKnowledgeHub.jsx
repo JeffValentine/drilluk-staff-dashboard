@@ -17,6 +17,7 @@ export default function QuizKnowledgeHub({
   onAddManagedQuestion,
   onAddVideoQuiz,
   onEditVideoQuiz,
+  onDeleteVideoQuiz,
   defaultName,
   rankBadgeClass,
   selectedStaff = null,
@@ -234,6 +235,9 @@ export default function QuizKnowledgeHub({
               )}
               <Button onClick={() => onEditVideoQuiz?.(selectedQuiz)} className={`${modalActionClass} border-red-400/45 bg-red-500/18 text-red-50 hover:bg-red-500/24`}>
                 Edit Video Quiz
+              </Button>
+              <Button onClick={() => onDeleteVideoQuiz?.(selectedQuiz)} className={`${modalActionClass} border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10`}>
+                Delete Video Quiz
               </Button>
             </div>
             <div className="space-y-4">

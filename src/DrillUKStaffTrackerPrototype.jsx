@@ -4621,6 +4621,34 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     void refreshVideoQuizzesFromDb();
   }
 
+
+  async function deleteVideoQuizDefinition(definition) {
+    if (!definition || !canManageCheckboxes) return;
+    const confirmed = window.confirm(`Delete video quiz "${definition.title}"?`);
+    if (!confirmed) return;
+    setVideoQuizDraft({ id: definition.id, quizKey: definition.quizKey || definition.key });
+    if (!dbReady || !supabase) return;
+    const targetId = definition.id || null;
+    const targetKey = definition.quizKey || definition.key;
+    if (targetId) {
+      const { error } = await supabase.from('video_quizzes').delete().eq('id', targetId);
+      if (error) {
+        alert(error.message || 'Video quiz could not be deleted.');
+        return;
+      }
+    } else if (targetKey) {
+      const { error } = await supabase.from('video_quizzes').delete().eq('quiz_key', targetKey);
+      if (error) {
+        alert(error.message || 'Video quiz could not be deleted.');
+        return;
+      }
+    }
+    setVideoQuizzes(prev => prev.filter(item => item.id !== targetId && item.quizKey !== targetKey));
+    if (selectedKnowledgeQuizKey === targetKey) setSelectedKnowledgeQuizKey('mandatory-general');
+    await writeAudit('video_quizzes.delete', targetId || targetKey, null, null);
+    void refreshVideoQuizzesFromDb();
+  }
+
   async function saveCheckboxItem(item) {
     if (!canManageCheckboxes || !dbReady || !supabase) return;
     holdRealtimeSync(2600);
@@ -5109,6 +5137,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               onAddManagedQuestion={addManagedQuizQuestion}
               onAddVideoQuiz={openVideoQuizEditor}
               onEditVideoQuiz={openVideoQuizEditor}
+              onDeleteVideoQuiz={deleteVideoQuizDefinition}
               defaultName={profile?.username || authUser?.email?.split('@')[0] || ''}
               rankBadgeClass={roleColor}
               selectedStaff={!isStaffInTraining ? selected : null}
@@ -5204,6 +5233,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                   onOpenBuilder={() => setActiveMainTab('quizknowledge')}
                   onAddVideoQuiz={openVideoQuizEditor}
                   onEditVideoQuiz={openVideoQuizEditor}
+                  onDeleteVideoQuiz={deleteVideoQuizDefinition}
                   defaultName={profile?.username || authUser?.email?.split('@')[0] || ''}
                   rankBadgeClass={roleColor}
                   onQuizComplete={handleKnowledgeQuizComplete}
