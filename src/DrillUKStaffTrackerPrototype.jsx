@@ -1868,7 +1868,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   }
 
   async function refreshVideoQuizzesFromDb() {
-    if (!dbReady || !supabase || !videoQuizTableAvailable) return;
+    if (!dbReady || !supabase) return;
     const { data, error } = await supabase
       .from('video_quizzes')
       .select('*')
@@ -4451,10 +4451,6 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   async function saveVideoQuizDraft() {
     if (!videoQuizDraft || !dbReady || !supabase || !canManageCheckboxes) return;
-    if (!videoQuizTableAvailable) {
-      alert('Video quizzes are not enabled in Supabase yet. Run the latest SQL block first.');
-      return;
-    }
     const payload = {
       id: videoQuizDraft.id || undefined,
       quiz_key: String(videoQuizDraft.quizKey || '').trim().toLowerCase().replace(/[^a-z0-9-|]/g, '-'),
@@ -4494,16 +4490,13 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       });
       return next;
     });
+    await refreshVideoQuizzesFromDb();
     await writeAudit('video_quizzes.save', payload.quiz_key, null, payload);
     closeVideoQuizEditor();
   }
 
   async function deleteVideoQuizDraft() {
     if (!videoQuizDraft?.id || !dbReady || !supabase || !canManageCheckboxes) return;
-    if (!videoQuizTableAvailable) {
-      alert('Video quizzes are not enabled in Supabase yet. Run the latest SQL block first.');
-      return;
-    }
     const { error } = await supabase.from('video_quizzes').delete().eq('id', videoQuizDraft.id);
     if (error) {
       if (isMissingVideoQuizzesTableError(error)) {
@@ -4515,6 +4508,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       return;
     }
     setVideoQuizzes(prev => prev.filter(item => item.id !== videoQuizDraft.id));
+    await refreshVideoQuizzesFromDb();
     await writeAudit('video_quizzes.delete', videoQuizDraft.id, null, null);
     closeVideoQuizEditor();
   }
