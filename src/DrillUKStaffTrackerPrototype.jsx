@@ -4571,10 +4571,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       });
       return [nextItem, ...prev.filter(item => item.quizKey !== quizKey)];
     });
-    await refreshVideoQuizzesFromDb();
     setSelectedKnowledgeQuizKey(quizKey);
     await writeAudit('video_quizzes.save', quizKey, null, payload);
     closeVideoQuizEditor();
+    void refreshVideoQuizzesFromDb();
   }
 
   async function deleteVideoQuizDraft() {
@@ -4591,9 +4591,9 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     }
     setVideoQuizTableAvailable(true);
     setVideoQuizzes(prev => prev.filter(item => item.id !== videoQuizDraft.id && item.quizKey !== videoQuizDraft.quizKey));
-    await refreshVideoQuizzesFromDb();
     await writeAudit('video_quizzes.delete', videoQuizDraft.id, null, null);
     closeVideoQuizEditor();
+    void refreshVideoQuizzesFromDb();
   }
 
   async function saveCheckboxItem(item) {
