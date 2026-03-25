@@ -2815,6 +2815,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         .filter(item => item.isActive !== false)
         .map(item => {
           const definition = {
+            id: item.id,
             key: item.quizKey,
             title: item.title,
             description: item.description || 'Watch the training clips and submit your notes for review.',
@@ -2929,6 +2930,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       .filter(item => item.isActive !== false)
       .forEach(item => {
         definitions.push({
+          id: item.id,
           key: item.quizKey,
           title: item.title,
           description: item.description || 'Watch the training clips and submit your notes for review.',
