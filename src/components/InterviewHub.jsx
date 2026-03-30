@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -43,20 +43,31 @@ export default function InterviewHub({
   onDeleteTemplateQuestion,
 }) {
   const [interviewOpen, setInterviewOpen] = useState(false);
+  const [statusView, setStatusView] = useState('pending');
   const [scoreDrafts, setScoreDrafts] = useState({});
   const [templateEditorOpen, setTemplateEditorOpen] = useState(false);
   const [templateDraft, setTemplateDraft] = useState(emptyTemplateDraft());
 
   const filtered = useMemo(() => {
     const q = interviewQuery.trim().toLowerCase();
-    if (!q) return interviews;
     return interviews.filter((item) => {
+      const status = String(item.status || 'pending');
+      if (statusView === 'pending' && !['pending', 'reviewed'].includes(status)) return false;
+      if (statusView === 'accepted' && status !== 'accepted') return false;
+      if (statusView === 'rejected' && status !== 'rejected') return false;
+      if (!q) return true;
       const haystack = [item.full_name, item.discord_name, item.country, item.status].filter(Boolean).join(' ').toLowerCase();
       return haystack.includes(q);
     });
-  }, [interviews, interviewQuery]);
+  }, [interviews, interviewQuery, statusView]);
 
-  const selected = filtered.find((item) => item.id === selectedInterviewId) || interviews.find((item) => item.id === selectedInterviewId) || filtered[0] || interviews[0] || null;
+  const statusCounts = useMemo(() => ({
+    pending: interviews.filter((item) => ['pending', 'reviewed'].includes(String(item.status || 'pending'))).length,
+    accepted: interviews.filter((item) => String(item.status || '') === 'accepted').length,
+    rejected: interviews.filter((item) => String(item.status || '') === 'rejected').length,
+  }), [interviews]);
+
+  const selected = filtered.find((item) => item.id === selectedInterviewId) || filtered[0] || null;
   const activeQuestions = useMemo(() => [...(questionBank || [])].filter((item) => item.isActive !== false), [questionBank]);
   const groupedQuestions = useMemo(() => {
     const groups = new Map();
@@ -68,6 +79,10 @@ export default function InterviewHub({
   }, [activeQuestions]);
 
   useEffect(() => {
+    if (!selected && filtered[0]?.id) {
+      setSelectedInterviewId(filtered[0].id);
+      return;
+    }
     if (!selected) return;
     setReviewNotes(selected.review_notes || '');
     const drafts = {};
@@ -79,7 +94,7 @@ export default function InterviewHub({
       };
     });
     setScoreDrafts(drafts);
-  }, [selected?.id]);
+  }, [selected?.id, filtered, setSelectedInterviewId]);
 
   const totals = useMemo(() => {
     return groupedQuestions.map((group) => {
@@ -131,12 +146,40 @@ export default function InterviewHub({
             <span>Interview Applicants</span>
             <Badge className="border-white/10 bg-white/10 text-zinc-200">{filtered.length} shown</Badge>
           </CardTitle>
-          <Input
-            value={interviewQuery}
-            onChange={(event) => setInterviewQuery(event.target.value)}
-            placeholder="Search applicants..."
-            className="border-white/10 bg-black/30 text-white placeholder:text-zinc-500"
-          />
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setStatusView('pending')}
+                className={`${premiumActionBase} ${statusView === 'pending' ? 'border-fuchsia-400/35 bg-[linear-gradient(135deg,rgba(5,10,20,0.96),rgba(8,145,178,0.16),rgba(88,28,135,0.18))] text-white' : 'border-white/15 bg-[linear-gradient(135deg,rgba(20,20,24,0.94),rgba(17,24,39,0.86))] text-zinc-100'} min-w-[120px] justify-between px-4`}
+              >
+                <span>Pending</span>
+                <span className="ml-2 text-xs text-zinc-300">{statusCounts.pending}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusView('accepted')}
+                className={`${premiumActionBase} ${statusView === 'accepted' ? 'border-emerald-400/35 bg-[linear-gradient(135deg,rgba(6,30,24,0.96),rgba(5,150,105,0.18),rgba(6,95,70,0.22))] text-white' : 'border-white/15 bg-[linear-gradient(135deg,rgba(20,20,24,0.94),rgba(17,24,39,0.86))] text-zinc-100'} min-w-[120px] justify-between px-4`}
+              >
+                <span>Accepted</span>
+                <span className="ml-2 text-xs text-zinc-300">{statusCounts.accepted}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusView('rejected')}
+                className={`${premiumActionBase} ${statusView === 'rejected' ? 'border-red-400/35 bg-[linear-gradient(135deg,rgba(40,12,18,0.96),rgba(190,24,93,0.18),rgba(127,29,29,0.22))] text-white' : 'border-white/15 bg-[linear-gradient(135deg,rgba(20,20,24,0.94),rgba(17,24,39,0.86))] text-zinc-100'} min-w-[120px] justify-between px-4`}
+              >
+                <span>Rejected</span>
+                <span className="ml-2 text-xs text-zinc-300">{statusCounts.rejected}</span>
+              </button>
+            </div>
+            <Input
+              value={interviewQuery}
+              onChange={(event) => setInterviewQuery(event.target.value)}
+              placeholder={`Search ${statusView} applicants...`}
+              className="border-white/10 bg-black/30 text-white placeholder:text-zinc-500"
+            />
+          </div>
         </CardHeader>
         <CardContent className="space-y-3">
           <button
@@ -165,7 +208,7 @@ export default function InterviewHub({
                 </div>
               </button>
             ))}
-            {!filtered.length && <div className="rounded-2xl border border-white/10 bg-black/25 p-4 text-sm text-zinc-400">No interview applications found.</div>}
+            {!filtered.length && <div className="rounded-2xl border border-white/10 bg-black/25 p-4 text-sm text-zinc-400">{`No ${statusView} interview applications found.`}</div>}
           </div>
         </CardContent>
       </Card>
