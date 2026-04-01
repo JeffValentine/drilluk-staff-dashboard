@@ -9,6 +9,7 @@ create table if not exists public.profiles (
   last_seen_at timestamptz,
   role text not null default 'viewer' check (role in ('viewer', 'staff_in_training', 'trainer', 'admin', 'head_admin')),
   is_active boolean not null default false,
+  identifiers jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
 );
 
@@ -115,6 +116,7 @@ $$;
 alter table public.profiles add column if not exists avatar_url text;
 alter table public.profiles add column if not exists god_key_enabled boolean not null default false;
 alter table public.profiles add column if not exists experimental_quiz_enabled boolean not null default false;
+alter table public.profiles add column if not exists identifiers jsonb not null default '{}'::jsonb;
 alter table public.profiles add column if not exists last_seen_at timestamptz;
 alter table public.staff_members add column if not exists trainee_user_id uuid references auth.users(id);
 alter table public.staff_members add column if not exists quiz_history jsonb not null default '[]'::jsonb;

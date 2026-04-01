@@ -23,6 +23,16 @@ import { EXPERIMENTAL_QUIZ_QUESTIONS } from '@/experimentalQuizData';
 const roles = ['T-MOD', 'MOD', 'S-MOD', 'ADMIN', 'S-ADMIN', 'HEAD-ADMIN'];
 const SITE_OWNER_EMAIL = 'justappletje@gmail.com';
 const defaultRankDisplayNames = Object.fromEntries(roles.map(role => [role, role]));
+const KNOWN_PROFILE_IDENTIFIER_KEYS = ['discord', 'fivem', 'license', 'license2', 'live', 'xbl', 'steam'];
+const PROFILE_IDENTIFIER_LABELS = {
+  discord: 'Discord',
+  fivem: 'FiveM',
+  license: 'License',
+  license2: 'License 2',
+  live: 'Live',
+  xbl: 'XBL',
+  steam: 'Steam',
+};
 
 const drillRosterSeed = [
   { rank: 'Junior Associate', name: 'Begoshi' },
@@ -1289,6 +1299,9 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [filterActiveOnly, setFilterActiveOnly] = useState(false);
   const [filterWarningOnly, setFilterWarningOnly] = useState(false);
   const [managementUsers, setManagementUsers] = useState([]);
+  const [managementIdentifiersOpenId, setManagementIdentifiersOpenId] = useState(null);
+  const [managementIdentifierDrafts, setManagementIdentifierDrafts] = useState({});
+  const [managementIdentifierPasteDrafts, setManagementIdentifierPasteDrafts] = useState({});
   const [managementLoading, setManagementLoading] = useState(false);
   const [managementError, setManagementError] = useState('');
   const [auditLogs, setAuditLogs] = useState([]);
@@ -1566,6 +1579,79 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     return true;
   }
 
+  function normalizeProfileIdentifiers(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    return Object.fromEntries(
+      Object.entries(value)
+        .map(([key, entry]) => [String(key || '').trim().toLowerCase(), String(entry || '').trim()])
+        .filter(([key, entry]) => key && entry)
+    );
+  }
+
+  function countProfileIdentifiers(value) {
+    return Object.values(normalizeProfileIdentifiers(value)).filter(Boolean).length;
+  }
+
+  function formatProfileIdentifierLabel(key) {
+    if (PROFILE_IDENTIFIER_LABELS[key]) return PROFILE_IDENTIFIER_LABELS[key];
+    return String(key || '')
+      .replace(/_/g, ' ')
+      .split(' ')
+      .filter(Boolean)
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+  }
+
+  function getManagementIdentifierDraft(user) {
+    return managementIdentifierDrafts[user.id] || normalizeProfileIdentifiers(user.identifiers);
+  }
+
+  function parseProfileIdentifierBlock(rawText, base = {}) {
+    const next = { ...normalizeProfileIdentifiers(base) };
+    String(rawText || '')
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(Boolean)
+      .forEach(line => {
+        const separatorIndex = line.indexOf(':');
+        if (separatorIndex <= 0) return;
+        const key = line.slice(0, separatorIndex).trim().toLowerCase();
+        const value = line.slice(separatorIndex + 1).trim();
+        if (!key || !value) return;
+        next[key] = value;
+      });
+    return next;
+  }
+
+  function updateManagementIdentifierDraft(userId, key, value) {
+    setManagementIdentifierDrafts(prev => ({
+      ...prev,
+      [userId]: {
+        ...(prev[userId] || {}),
+        [key]: value,
+      },
+    }));
+  }
+
+  function applyManagementIdentifierPaste(userId) {
+    const rawText = managementIdentifierPasteDrafts[userId] || '';
+    const current = managementIdentifierDrafts[userId] || normalizeProfileIdentifiers(managementUsers.find(user => user.id === userId)?.identifiers);
+    const parsed = parseProfileIdentifierBlock(rawText, current);
+    setManagementIdentifierDrafts(prev => ({ ...prev, [userId]: parsed }));
+  }
+
+  async function pasteManagementIdentifiersFromClipboard(userId) {
+    try {
+      const text = await navigator.clipboard.readText();
+      setManagementIdentifierPasteDrafts(prev => ({ ...prev, [userId]: text }));
+      const current = managementIdentifierDrafts[userId] || normalizeProfileIdentifiers(managementUsers.find(user => user.id === userId)?.identifiers);
+      const parsed = parseProfileIdentifierBlock(text, current);
+      setManagementIdentifierDrafts(prev => ({ ...prev, [userId]: parsed }));
+    } catch (error) {
+      window.alert('Clipboard paste failed. Paste the identifier block into the raw box manually.');
+    }
+  }
+
   async function refreshManagementUsersFromDb() {
     if (!dbReady || !supabase || !canManageUsers) return;
     setManagementLoading(true);
@@ -1573,10 +1659,10 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     try {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, username, role, is_active, avatar_url, god_key_enabled, experimental_quiz_enabled, last_seen_at')
+      .select('id, username, role, is_active, avatar_url, god_key_enabled, experimental_quiz_enabled, last_seen_at, identifiers')
       .order('username', { ascending: true });
 
-      if (error?.code === '42703') {
+      if (error?.code === '42703' || error?.code === 'PGRST204') {
       const { data: fallbackData, error: fallbackError } = await supabase
         .from('profiles')
         .select('id, username, role, is_active')
@@ -1591,6 +1677,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           avatar_url: null,
           god_key_enabled: false,
           last_seen_at: null,
+          identifiers: {},
           is_developer: isOwnerSession && u.id === authUser?.id,
         })).sort((a, b) => {
           const rankDiff = accountRoleSortValue(a.role) - accountRoleSortValue(b.role);
@@ -1608,6 +1695,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
       setManagementUsers((data || []).map(u => ({
         ...u,
+        identifiers: normalizeProfileIdentifiers(u.identifiers),
         is_developer: isOwnerSession && u.id === authUser?.id,
       })).sort((a, b) => {
         const rankDiff = accountRoleSortValue(a.role) - accountRoleSortValue(b.role);
@@ -4187,6 +4275,23 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     if (profile?.id === userId) onProfileRefresh?.();
   }
 
+  async function saveUserIdentifiers(userId) {
+    if (!canManageUsers || !dbReady || !supabase) return;
+    const target = managementUsers.find(user => user.id === userId);
+    const identifiers = normalizeProfileIdentifiers(managementIdentifierDrafts[userId] || target?.identifiers);
+    const { error } = await supabase.from('profiles').update({ identifiers }).eq('id', userId);
+    if (error) {
+      if (error.code === '42703' || error.code === 'PGRST204' || /identifiers/i.test(String(error.message || error.details || ''))) {
+        window.alert('Identifiers are not enabled in Supabase yet. Run the latest SQL block first.');
+        return;
+      }
+      window.alert('Identifier save failed: ' + (error.message || 'Unknown error'));
+      return;
+    }
+    setManagementUsers(prev => prev.map(user => (user.id === userId ? { ...user, identifiers } : user)));
+    await writeAudit('user.identifiers.update', userId, null, { identifiers });
+  }
+
   async function forceHeadAdminReset() {
     if (!profile?.god_key_enabled || !dbReady || !supabase || !authUser?.id) return;
     const { error } = await supabase
@@ -6536,8 +6641,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                         )}
                         {filteredManagementUsers.map(user => {
                           const linkedStaff = staff.find(member => member.traineeUserId === user.id) || null;
+                          const identifierDraft = getManagementIdentifierDraft(user);
+                          const additionalIdentifiers = Object.entries(identifierDraft).filter(([key]) => !KNOWN_PROFILE_IDENTIFIER_KEYS.includes(key));
                           return (
-                          <div key={user.id} className="grid gap-2 rounded-xl border border-white/10 bg-black/20 p-2.5 md:grid-cols-[1.35fr,0.95fr,1fr,1.9fr,0.78fr,220px] md:items-center">
+                          <div key={user.id} className="space-y-3 rounded-xl border border-white/10 bg-black/20 p-2.5">
+                            <div className="grid gap-2 md:grid-cols-[1.35fr,0.95fr,1fr,1.9fr,0.78fr,220px] md:items-center">
                             <div className="flex items-start gap-3">
                               {user.avatar_url ? (
                                 <img src={user.avatar_url} alt={`${user.username || 'user'} avatar`} className="h-10 w-10 rounded-xl border border-white/10 object-cover" />
@@ -6594,6 +6702,17 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                                   e.target.value = '';
                                 }}
                               />
+                              <Button
+                                type="button"
+                                onClick={() => {
+                                  setManagementIdentifiersOpenId(prev => prev === user.id ? null : user.id);
+                                  setManagementIdentifierDrafts(prev => ({ ...prev, [user.id]: prev[user.id] || normalizeProfileIdentifiers(user.identifiers) }));
+                                  setManagementIdentifierPasteDrafts(prev => ({ ...prev, [user.id]: prev[user.id] || '' }));
+                                }}
+                                className="rounded-xl border border-cyan-400/35 bg-[linear-gradient(135deg,rgba(5,10,20,0.96),rgba(14,116,144,0.18),rgba(8,47,73,0.24))] px-3 text-xs text-white hover:bg-[linear-gradient(135deg,rgba(10,16,28,0.98),rgba(14,116,144,0.24),rgba(8,47,73,0.30))]"
+                              >
+                                {managementIdentifiersOpenId === user.id ? 'Close Identifiers' : 'Identifiers (' + countProfileIdentifiers(identifierDraft) + ')'}
+                              </Button>
                             </div>
                             <div className="grid gap-2 md:grid-cols-2">
                               <div>
@@ -6661,6 +6780,82 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                                 <Trash2 className="mr-1 h-3.5 w-3.5" /> {user.is_developer ? 'Protected' : 'Delete'}
                               </Button>
                             </div>
+                            </div>
+                            {managementIdentifiersOpenId === user.id && (
+                              <div className="rounded-2xl border border-cyan-400/20 bg-[linear-gradient(135deg,rgba(5,10,20,0.92),rgba(8,47,73,0.28),rgba(8,145,178,0.08))] p-4">
+                                <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                                  <div>
+                                    <div className="text-sm font-semibold text-white">Shared Identifiers</div>
+                                    <div className="mt-1 text-xs text-zinc-400">Visible to all head admins. Paste a raw identifier block or fill the boxes manually.</div>
+                                  </div>
+                                  <Badge className="border-cyan-400/35 bg-cyan-500/12 text-cyan-100">{countProfileIdentifiers(identifierDraft)} saved</Badge>
+                                </div>
+                                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                                  {KNOWN_PROFILE_IDENTIFIER_KEYS.map((key) => (
+                                    <div key={user.id + '-identifier-' + key}>
+                                      <div className="mb-1 text-[10px] uppercase tracking-[0.16em] text-zinc-500">{formatProfileIdentifierLabel(key)}</div>
+                                      <Input
+                                        value={identifierDraft[key] || ''}
+                                        onChange={(event) => updateManagementIdentifierDraft(user.id, key, event.target.value)}
+                                        placeholder={key + ':...'}
+                                        className="border-white/10 bg-black/30 text-white"
+                                      />
+                                    </div>
+                                  ))}
+                                  {additionalIdentifiers.map(([key, value]) => (
+                                    <div key={user.id + '-identifier-extra-' + key}>
+                                      <div className="mb-1 text-[10px] uppercase tracking-[0.16em] text-zinc-500">{formatProfileIdentifierLabel(key)}</div>
+                                      <Input
+                                        value={value || ''}
+                                        onChange={(event) => updateManagementIdentifierDraft(user.id, key, event.target.value)}
+                                        placeholder={key + ':...'}
+                                        className="border-white/10 bg-black/30 text-white"
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+                                <div className="mt-4 grid gap-4 xl:grid-cols-[1.15fr,0.85fr]">
+                                  <div>
+                                    <div className="mb-2 text-[10px] uppercase tracking-[0.16em] text-zinc-500">Raw identifier block</div>
+                                    <Textarea
+                                      value={managementIdentifierPasteDrafts[user.id] || ''}
+                                      onChange={(event) => setManagementIdentifierPasteDrafts(prev => ({ ...prev, [user.id]: event.target.value }))}
+                                      className="min-h-[170px] border-white/10 bg-black/30 text-white"
+                                      placeholder={`discord:1277690839812014120\nfivem:13012825\nlicense:...\nlicense2:...\nlive:...\nxbl:...\nsteam:...`}
+                                    />
+                                  </div>
+                                  <div className="space-y-3">
+                                    <div className="rounded-xl border border-white/10 bg-black/25 p-3 text-xs leading-6 text-zinc-300">
+                                      Paste the full block exactly as copied. Each line with <span className="font-semibold text-white">type:value</span> is parsed into the right box automatically.
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                      <Button
+                                        type="button"
+                                        onClick={() => pasteManagementIdentifiersFromClipboard(user.id)}
+                                        className="rounded-xl border border-cyan-400/35 bg-[linear-gradient(135deg,rgba(5,10,20,0.96),rgba(14,116,144,0.18),rgba(8,47,73,0.24))] px-3 text-xs text-white hover:bg-[linear-gradient(135deg,rgba(10,16,28,0.98),rgba(14,116,144,0.24),rgba(8,47,73,0.30))]"
+                                      >
+                                        Paste From Clipboard
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="secondary"
+                                        onClick={() => applyManagementIdentifierPaste(user.id)}
+                                        className="rounded-xl px-3 text-xs"
+                                      >
+                                        Apply Raw Block
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        onClick={() => saveUserIdentifiers(user.id)}
+                                        className="rounded-xl border border-fuchsia-400/35 bg-[linear-gradient(135deg,rgba(5,10,20,0.96),rgba(8,145,178,0.16),rgba(88,28,135,0.18))] px-3 text-xs text-white hover:bg-[linear-gradient(135deg,rgba(10,16,28,0.98),rgba(8,145,178,0.22),rgba(88,28,135,0.24))]"
+                                      >
+                                        Save Identifiers
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )})}
                       </div>
