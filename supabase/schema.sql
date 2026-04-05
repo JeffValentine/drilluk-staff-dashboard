@@ -206,6 +206,76 @@ begin
   set trainee_user_id = null
   where trainee_user_id = target_user;
 
+  update public.staff_members
+  set updated_by = null
+  where updated_by = target_user;
+
+  update public.audit_logs
+  set actor_id = null
+  where actor_id = target_user;
+
+  update public.checkbox_catalog
+  set updated_by = null
+  where updated_by = target_user;
+
+  update public.rank_display_names
+  set updated_by = null
+  where updated_by = target_user;
+
+  update public.invite_tokens
+  set created_by = null
+  where created_by = target_user;
+
+  update public.invite_tokens
+  set used_by = null
+  where used_by = target_user;
+
+  update public.managed_quiz_questions
+  set updated_by = null
+  where updated_by = target_user;
+
+  update public.quizzes
+  set created_by = null,
+      updated_by = null
+  where created_by = target_user
+     or updated_by = target_user;
+
+  update public.quiz_questions
+  set updated_by = null
+  where updated_by = target_user;
+
+  update public.quiz_assignments
+  set assigned_by = null
+  where assigned_by = target_user;
+
+  update public.quiz_attempts
+  set profile_id = null
+  where profile_id = target_user;
+
+  update public.quiz_attempts
+  set reviewed_by = null
+  where reviewed_by = target_user;
+
+  update public.interview_applications
+  set reviewed_by = null
+  where reviewed_by = target_user;
+
+  update public.interview_applications
+  set interview_started_by = null
+  where interview_started_by = target_user;
+
+  update public.interview_question_bank
+  set updated_by = null
+  where updated_by = target_user;
+
+  update public.video_quizzes
+  set updated_by = null
+  where updated_by = target_user;
+
+  update public.staff_essentials
+  set updated_by = null
+  where updated_by = target_user;
+
   delete from public.profiles where id = target_user;
   delete from auth.users where id = target_user;
 end;
@@ -213,49 +283,6 @@ $$;
 
 revoke all on function public.admin_delete_user(uuid) from public;
 grant execute on function public.admin_delete_user(uuid) to authenticated;
-
-create or replace function public.create_signup_token(valid_for_hours int default 168)
-returns text
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  generated_token text;
-  expiry_time timestamptz;
-begin
-  if auth.uid() is null then
-    raise exception 'Not authenticated';
-  end if;
-
-  if not (public.current_user_role() = 'head_admin' or public.current_user_has_god_key() = true) then
-    raise exception 'Insufficient permissions';
-  end if;
-
-  generated_token := upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 20));
-  expiry_time := case
-    when coalesce(valid_for_hours, 0) > 0 then now() + make_interval(hours => valid_for_hours)
-    else null
-  end;
-
-  insert into public.invite_tokens (token_hash, created_by, expires_at)
-  values (md5(lower(generated_token)), auth.uid(), expiry_time);
-
-  return generated_token;
-end;
-$$;
-
-create or replace function public.consume_signup_token(token_input text, claimant_email text default null)
-returns boolean
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  normalized_token text;
-begin
-  normalized_token := lower(trim(coalesce(token_input, '')));
-  if normalized_token = '' then
     return false;
   end if;
 
