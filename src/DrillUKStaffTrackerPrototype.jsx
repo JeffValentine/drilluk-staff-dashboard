@@ -1117,6 +1117,42 @@ function formatAuditAction(action) {
     .replace(/\s+/g, ' ')
     .trim();
 }
+function readAuditObjectValue(value, key) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value[key] : undefined;
+}
+function getAuditTargetPresentation(log, staffRecords = [], managementUsers = []) {
+  const targetId = log?.target_id == null ? '' : String(log.target_id);
+  const afterName = readAuditObjectValue(log?.after_value, 'name');
+  const beforeName = readAuditObjectValue(log?.before_value, 'name');
+  const afterUsername = readAuditObjectValue(log?.after_value, 'username');
+  const beforeUsername = readAuditObjectValue(log?.before_value, 'username');
+  const afterTitle = readAuditObjectValue(log?.after_value, 'title');
+  const beforeTitle = readAuditObjectValue(log?.before_value, 'title');
+  const afterRole = readAuditObjectValue(log?.after_value, 'role');
+  const beforeRole = readAuditObjectValue(log?.before_value, 'role');
+  const matchedStaff = staffRecords.find(member => String(member.id) === targetId);
+  const matchedUser = managementUsers.find(user => String(user.id) === targetId);
+  const label = afterName
+    || beforeName
+    || matchedStaff?.name
+    || afterUsername
+    || beforeUsername
+    || matchedUser?.username
+    || afterTitle
+    || beforeTitle
+    || targetId
+    || '-';
+  const meta = matchedStaff?.role
+    || afterRole
+    || beforeRole
+    || (matchedUser?.role ? accountRoleLabel(matchedUser.role) : '')
+    || '';
+  return {
+    label,
+    meta,
+    rawId: targetId || '',
+  };
+}
 
 function buildAuditTabActionOrFilter(tab) {
   if (tab === 'Management') return 'action.ilike.user.%,action.ilike.god_key.%,action.ilike.profile.%';
@@ -2639,10 +2675,13 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       .filter(log => {
         if (!q) return true;
         const actor = managementUsers.find(user => user.id === log.actor_id);
+        const target = getAuditTargetPresentation(log, staffRecords, managementUsers);
         const haystack = [
           log.action,
           inferAuditTab(log.action),
           log.target_id,
+          target.label,
+          target.meta,
           actor?.username,
           log.actor_id,
         ]
@@ -2652,7 +2691,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         return haystack.includes(q);
       })
       .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
-  }, [auditLogs, auditTabFilter, auditActorFilter, auditActionFilter, auditDateFilter, auditRequireChanges, deferredAuditFieldQuery, deferredAuditQuery, managementUsers]);
+  }, [auditLogs, auditTabFilter, auditActorFilter, auditActionFilter, auditDateFilter, auditRequireChanges, deferredAuditFieldQuery, deferredAuditQuery, managementUsers, staffRecords]);
 
   useEffect(() => {
     if (!(canUseViewAs && viewAsRole === 'staff_in_training')) return;
@@ -6979,6 +7018,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                       <div className="space-y-2">
                         {filteredAuditLogs.map(log => {
                           const actor = managementUsers.find(user => user.id === log.actor_id);
+                          const target = getAuditTargetPresentation(log, staffRecords, managementUsers);
                           const changedFields = log.after_value && typeof log.after_value === 'object' && !Array.isArray(log.after_value)
                             ? Object.keys(log.after_value).slice(0, 5)
                             : [];
@@ -6998,7 +7038,12 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                               </div>
                               <div className="min-w-0">
                                 <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">Target</div>
-                                <div className="truncate text-sm text-zinc-300">{log.target_id || '-'}</div>
+                                <div className="truncate text-sm font-medium text-zinc-100">{target.label}</div>
+                                {(target.meta || target.rawId) && (
+                                  <div className="truncate text-[11px] text-zinc-500">
+                                    {[target.meta, target.rawId && target.rawId !== target.label ? 'ID: ' + target.rawId : ''].filter(Boolean).join(' | ')}
+                                  </div>
+                                )}
                               </div>
                               <div className="text-right">
                                 <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">When</div>
