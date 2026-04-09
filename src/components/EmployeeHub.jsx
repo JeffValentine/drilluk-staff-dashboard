@@ -131,6 +131,7 @@ export default function EmployeeHub({
                         <Badge className={`${roleColor(member.role)} px-2 text-[10px]`}>{rankLabel(member.role)}</Badge>
                         <Badge className={`${statusColor(member.status)} px-2 text-[10px]`}>{member.status}</Badge>
                         {member.disciplinary?.warnings > 0 && <Badge className="border-red-500/30 bg-red-500/12 px-2 text-[10px] text-red-200">Warning {member.disciplinary.warnings}</Badge>}
+                        {member.disciplinary?.actions > 0 && <Badge className="border-red-600/45 bg-red-600/18 px-2 text-[10px] text-red-100">Action {member.disciplinary.actions}</Badge>}
                       </div>
                     </div>
                   </div>
@@ -183,6 +184,8 @@ export default function EmployeeHub({
                     <div className="text-2xl font-semibold text-white">{selected?.name}</div>
                     <Badge className={`${roleColor(selected?.role)} px-2.5 text-[10px]`}>{rankLabel(selected?.role)}</Badge>
                     <Badge className={`${statusColor(selected?.status)} px-2.5 text-[10px]`}>{selected?.status}</Badge>
+                    {selected?.disciplinary?.warnings > 0 && <Badge className="border-red-500/30 bg-red-500/12 px-2.5 text-[10px] text-red-200">Warning {selected.disciplinary.warnings}</Badge>}
+                    {selected?.disciplinary?.actions > 0 && <Badge className="border-red-600/45 bg-red-600/18 px-2.5 text-[10px] text-red-100">Action {selected.disciplinary.actions}</Badge>}
                   </div>
                   <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                     <div className="rounded-2xl border border-white/10 bg-white/5 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Trainer</div><div className="mt-2 text-sm text-white">{selected?.trainer}</div></div>
