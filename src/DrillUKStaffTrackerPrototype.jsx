@@ -3724,8 +3724,16 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     }));
 
     if (updatedMember) {
-      void saveStaffMember(updatedMember);
-      void syncQuizAttemptToUnifiedModel(updatedMember, quizDefinition, attempt);
+      void (async () => {
+        try {
+          await saveStaffMember(updatedMember);
+          await syncQuizAttemptToUnifiedModel(updatedMember, quizDefinition, attempt);
+          await refreshUnifiedQuizModelFromDb();
+        } catch (error) {
+          console.error('Quiz completion save failed', error);
+          window.alert(`Quiz save failed: ${error?.message || 'Unknown error'}`);
+        }
+      })();
       writeAudit('quiz.submit', updatedMember.id, null, { quizKey: quizDefinition.key, score: attempt.score, passed: attempt.passed });
     }
   }
