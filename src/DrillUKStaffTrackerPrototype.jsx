@@ -3702,23 +3702,32 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       })),
     };
 
-    const quizHistory = [attempt, ...(selected.quizHistory || [])].slice(0, 200);
-    const patch = { quizHistory };
+    let updatedMember = null;
+    setStaff(prev => prev.map(member => {
+      if (member.id !== selected.id) return member;
+      const quizHistory = [attempt, ...(Array.isArray(member.quizHistory) ? member.quizHistory : [])].slice(0, 200);
+      const patch = { quizHistory };
 
-    if (attempt.passed && quizDefinition.kind === 'pack') {
-      const sourceTitles = (quizDefinition.sourceItems || []).map(item => item.sourceCheckbox?.title).filter(Boolean);
-      if (quizDefinition.key.endsWith('|role')) {
-        patch.checks = { ...selected.checks, ...Object.fromEntries(sourceTitles.map(title => [title, true])) };
-      } else if (quizDefinition.key.endsWith('|core')) {
-        patch.values = { ...selected.values, ...Object.fromEntries(sourceTitles.map(title => [title, true])) };
-      } else {
-        patch.permissions = { ...selected.permissions, ...Object.fromEntries(sourceTitles.map(title => [title, true])) };
+      if (attempt.passed && quizDefinition.kind === 'pack') {
+        const sourceTitles = (quizDefinition.sourceItems || []).map(item => item.sourceCheckbox?.title).filter(Boolean);
+        if (quizDefinition.key.endsWith('|role')) {
+          patch.checks = { ...(member.checks || {}), ...Object.fromEntries(sourceTitles.map(title => [title, true])) };
+        } else if (quizDefinition.key.endsWith('|core')) {
+          patch.values = { ...(member.values || {}), ...Object.fromEntries(sourceTitles.map(title => [title, true])) };
+        } else {
+          patch.permissions = { ...(member.permissions || {}), ...Object.fromEntries(sourceTitles.map(title => [title, true])) };
+        }
       }
-    }
 
-    updateSelected(patch);
-    void syncQuizAttemptToUnifiedModel(selected, quizDefinition, attempt);
-    writeAudit('quiz.submit', selected.id, null, { quizKey: quizDefinition.key, score: attempt.score, passed: attempt.passed });
+      updatedMember = { ...member, ...patch };
+      return updatedMember;
+    }));
+
+    if (updatedMember) {
+      void saveStaffMember(updatedMember);
+      void syncQuizAttemptToUnifiedModel(updatedMember, quizDefinition, attempt);
+      writeAudit('quiz.submit', updatedMember.id, null, { quizKey: quizDefinition.key, score: attempt.score, passed: attempt.passed });
+    }
   }
   async function setSelectedQuizManualState(quizDefinition, status) {
     if (!selected || !canEdit || !quizDefinition) return;
