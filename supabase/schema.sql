@@ -847,7 +847,11 @@ begin
         coalesce((attempt_value ->> 'at')::timestamptz, now()),
         coalesce(attempt_value ->> 'reviewStatus', 'pending'),
         nullif(attempt_value ->> 'reviewNote', ''),
-        nullif(attempt_value ->> 'reviewedBy', '')::uuid,
+        case
+          when coalesce(attempt_value ->> 'reviewedBy', '') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+            then (attempt_value ->> 'reviewedBy')::uuid
+          else null
+        end,
         nullif(attempt_value ->> 'reviewedAt', '')::timestamptz
       )
       on conflict (legacy_attempt_id) do update
@@ -1134,3 +1138,4 @@ using (
   public.current_user_role() = 'head_admin'
   or public.current_user_has_god_key() = true
 );
+
