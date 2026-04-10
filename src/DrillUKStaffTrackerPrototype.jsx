@@ -1401,6 +1401,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const lastLocalStaffEditRef = useRef(0);
   const staffSaveQueueRef = useRef(new Map());
   const removalColumnsAvailableRef = useRef(false);
+  const quizShellBackfillBusyRef = useRef(false);
   const isOwnerSession = (authUser?.email || '').toLowerCase() === SITE_OWNER_EMAIL;
   const [rosterSyncOpen, setRosterSyncOpen] = useState(false);
   const [rosterSyncText, setRosterSyncText] = useState(formatRosterSeedForInput());
@@ -3354,6 +3355,27 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     if (displayedKnowledgeQuizDefinitions.some(item => item.key === selectedKnowledgeQuizKey)) return;
     setSelectedKnowledgeQuizKey(displayedKnowledgeQuizDefinitions[0]?.key || 'mandatory-general');
   }, [displayedKnowledgeQuizDefinitions, selectedKnowledgeQuizKey]);
+
+  useEffect(() => {
+    if (!dbReady || !supabase || !canManageCheckboxes || isStaffInTraining || quizShellBackfillBusyRef.current) return;
+    const existingKeys = new Set((unifiedQuizzes || []).map(item => item.quiz_key));
+    const missingDefinitions = knowledgeQuizDefinitions.filter(definition => definition.kind !== 'video' && !existingKeys.has(definition.key));
+    if (!missingDefinitions.length) return;
+
+    quizShellBackfillBusyRef.current = true;
+    void (async () => {
+      try {
+        for (const definition of missingDefinitions) {
+          await resolveUnifiedQuizRow(definition.key, definition);
+        }
+        await refreshUnifiedQuizModelFromDb();
+      } catch (error) {
+        console.error('Failed to backfill unified quiz shells', error);
+      } finally {
+        quizShellBackfillBusyRef.current = false;
+      }
+    })();
+  }, [dbReady, supabase, canManageCheckboxes, isStaffInTraining, knowledgeQuizDefinitions, unifiedQuizzes]);
 
   useEffect(() => {
     if (displayedStaffEssentials.some(item => item.slug === selectedEssentialSlug)) return;
