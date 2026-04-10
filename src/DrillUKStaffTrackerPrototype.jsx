@@ -3746,14 +3746,29 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     }));
 
     if (updatedMember) {
+      const shouldPersistLegacyStaffState = !isStaffInTraining;
       void (async () => {
+        let legacySaveError = null;
+        if (shouldPersistLegacyStaffState) {
+          try {
+            await saveStaffMember(updatedMember);
+          } catch (error) {
+            legacySaveError = error;
+            console.warn('Legacy staff quiz history save failed; continuing with unified attempt sync.', error);
+          }
+        }
+
         try {
-          await saveStaffMember(updatedMember);
           await syncQuizAttemptToUnifiedModel(updatedMember, quizDefinition, attempt);
           await refreshUnifiedQuizModelFromDb();
         } catch (error) {
           console.error('Quiz completion save failed', error);
           window.alert(`Quiz save failed: ${error?.message || 'Unknown error'}`);
+          return;
+        }
+
+        if (legacySaveError) {
+          console.warn('Unified quiz attempt saved, but legacy staff history did not persist.', legacySaveError);
         }
       })();
       writeAudit('quiz.submit', updatedMember.id, null, { quizKey: quizDefinition.key, score: attempt.score, passed: attempt.passed });
