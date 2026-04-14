@@ -41,89 +41,89 @@ const REPORT_SYSTEM_INTRO_SLIDES = [
     title: 'Welcome to the new report dashboard',
     image: '/assets/report-system/1.png',
     body: [
-      'Hello. This is our new report system. Going forwards the report system is going to be an interactive, auto-updating admin panel.',
-      'No more needing to teleport to players first. Staff should now work through the report menu and dashboard as the main moderation workspace.'
+      'This is the new report system staff will be using going forward. It is an interactive, auto-updating dashboard designed to keep reports organized and visible in one place.',
+      'The main change is simple: do not start by teleporting to players. Staff should now work from the report dashboard first and use it as the main moderation workspace.'
     ],
   },
   {
     kicker: 'Screenshot 10',
-    title: 'Go on duty for reports first',
+    title: 'Go on duty before expecting reports',
     image: '/assets/report-system/10.png',
     body: [
-      'Before reports can come in, open the settings in the top right and go on duty for reports.',
-      'Without being on duty, no incoming report will appear on your dashboard.'
+      'Open the settings in the top right and switch yourself on duty for reports before you begin moderating.',
+      'If you are not on duty, reports will not appear on your dashboard. Always check this first if nothing is coming through.'
     ],
   },
   {
     kicker: 'Screenshot 2',
-    title: 'This is the report window staff will use',
+    title: 'This is the main report workspace',
     image: '/assets/report-system/2.png',
     body: [
-      'Once you are on duty, you will be presented with the new report dashboard window.',
-      'This dashboard is now the main place staff should work from when handling player reports.'
+      'Once you are on duty, this is the window you will use to handle reports.',
+      'From this point on, treat this dashboard as the central place for staff work on tickets, evidence, and player handling.'
     ],
   },
   {
     kicker: 'Screenshot 3',
-    title: 'New reports arrive under the New state',
+    title: 'New reports appear automatically',
     image: '/assets/report-system/3.png',
     body: [
-      'When a new report appears, all staff on duty are notified with a sound.',
-      'The dashboard refreshes automatically and the new report is shown under State: New.'
+      'When a player opens a new report, all staff currently on duty will hear a notification sound.',
+      'The dashboard refreshes automatically and the ticket appears under the New state, ready for a staff member to pick up.'
     ],
   },
   {
     kicker: 'Screenshot 4',
-    title: 'Opening a new report assigns it to you',
+    title: 'Opening a report assigns it to you',
     image: '/assets/report-system/4.png',
     body: [
-      'When you click a report in the New state, you are automatically assigned as the staff member handling it.',
-      'Everyone can then see the status change to Pending, meaning the ticket is being handled.'
+      'When you click a report that is marked New, you become the staff member handling that ticket.',
+      'The status then changes to Pending so other staff can clearly see that the report is already being worked on.'
     ],
   },
   {
     kicker: 'Screenshot 5',
-    title: 'Use the chat, timeline, and area snapshots',
+    title: 'Use the report details to build the full picture',
     image: '/assets/report-system/5.png',
     body: [
-      'Inside the report you will be presented with the chat, timeline, report author, and the admins on the ticket.',
-      'The system also snapshots players in the area for evidence and moderation context.'
+      'Inside the ticket you can review the report chat, the timeline, the report author, and the list of staff attached to the ticket.',
+      'The system also snapshots nearby players, which helps with evidence gathering and understanding who was involved in the scene.'
     ],
   },
   {
     kicker: 'Screenshot 6',
-    title: 'Inspect players from the ticket itself',
+    title: 'Inspect players directly from the ticket',
     image: '/assets/report-system/6.png',
     body: [
-      'From now on, staff should use this report dashboard instead of going straight to players directly.',
-      'From the report information panel you can click players in the area to open their inventory, Discord ID, Rockstar license, health, name, coordinates, and other useful information.'
+      'You should now work through the dashboard instead of going straight to players first. The report itself gives you most of the context you need.',
+      'From the player list on the right, you can open useful information such as inventory, Discord ID, Rockstar license, health, name, coordinates, and more.'
     ],
   },
   {
     kicker: 'Screenshot 7',
-    title: 'Use the player moderation actions when needed',
+    title: 'Use ticket-based moderation actions when needed',
     image: '/assets/report-system/7.png',
     body: [
-      'When clicking a player involved in the ticket, a green icon means they are online and a red icon means they went offline.',
-      'Online player views expose moderation commands such as heal, revive, freeze, and bring when needed.'
+      'Players tied to the report show status icons so staff can quickly tell whether they are still online or have already gone offline.',
+      'If a player is online, the ticket gives you access to moderation actions such as heal, revive, freeze, and bring without leaving the dashboard flow.'
     ],
   },
   {
     kicker: 'Screenshots 8 and 9',
-    title: 'Add more players or admins to the ticket',
+    title: 'Add more players or extra staff to the report',
     image: '/assets/report-system/9.png',
     body: [
-      'As the admin of the ticket, you can add extra players or additional admins under the title of the report.',
-      'Use this whenever the report needs extra subjects or extra staff visibility.'
+      'If the report grows or more people become relevant, you can add extra players directly under the report title.',
+      'You can also add additional admins to the same ticket whenever more visibility, oversight, or support is needed.'
     ],
   },
   {
     kicker: 'Closeout',
-    title: 'Finish tickets properly and keep the system clean',
+    title: 'Close reports properly and keep the queue clean',
     image: '/assets/report-system/8.png',
     body: [
-      'When everything is done, close the report from the bottom right of the ticket.',
-      'Everything is logged and viewable. Do not access tickets without solving them, because they will become pending. Any additional quality-of-life features will be covered in training with xJeffValentine.'
+      'Once the situation is fully handled, close the report from the bottom right of the ticket rather than leaving it sitting open.',
+      'Everything is logged and visible. Do not open tickets casually and leave them pending. Any extra quality-of-life details or workflow tips will be covered in training with xJeffValentine.'
     ],
   },
 ];
@@ -8951,4 +8951,5 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     </div>
   );
 }
+
 
