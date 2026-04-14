@@ -182,8 +182,24 @@ export default function ExperimentalStaffQuiz({
                     Mandatory introduction {introIndex + 1} / {activeIntroSlides.length}
                   </div>
                   <div className="overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(20,20,24,0.95),rgba(12,12,16,0.94))] shadow-[0_22px_48px_rgba(0,0,0,0.28)]">
+                    <div className="border-b border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] px-5 py-6 text-center md:px-8 md:py-8">
+                      <div className="flex flex-wrap items-center justify-center gap-2">
+                        <Badge className={accent === 'amber' ? 'border-amber-400/40 bg-amber-500/15 text-amber-100' : 'border-fuchsia-400/40 bg-fuchsia-500/15 text-fuchsia-100'}>
+                          Instruction Slide
+                        </Badge>
+                        {currentIntroSlide.kicker ? <Badge className="border-white/10 bg-white/10 text-zinc-200">{currentIntroSlide.kicker}</Badge> : null}
+                      </div>
+                      <div className="mx-auto mt-4 max-w-4xl text-3xl font-semibold tracking-tight text-white md:text-4xl">{currentIntroSlide.title}</div>
+                      <div className="mx-auto mt-4 max-w-4xl space-y-3">
+                        {(currentIntroSlide.body || []).map((paragraph, index) => (
+                          <p key={`${currentIntroSlide.title || 'slide'}-${index}`} className="text-base leading-8 text-zinc-200 md:text-lg">
+                            {paragraph}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
                     {currentIntroSlide.image ? (
-                      <div className="flex justify-center px-4 pt-4 md:px-6 md:pt-6">
+                      <div className="flex justify-center px-4 py-4 md:px-6 md:py-6">
                         <img
                           src={currentIntroSlide.image}
                           alt={currentIntroSlide.title || `Instruction slide ${introIndex + 1}`}
@@ -191,20 +207,6 @@ export default function ExperimentalStaffQuiz({
                         />
                       </div>
                     ) : null}
-                    <div className="space-y-3 p-5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge className={accent === 'amber' ? 'border-amber-400/40 bg-amber-500/15 text-amber-100' : 'border-fuchsia-400/40 bg-fuchsia-500/15 text-fuchsia-100'}>
-                          Instruction Slide
-                        </Badge>
-                        {currentIntroSlide.kicker ? <Badge className="border-white/10 bg-white/10 text-zinc-200">{currentIntroSlide.kicker}</Badge> : null}
-                      </div>
-                      <div className="text-2xl font-semibold text-white">{currentIntroSlide.title}</div>
-                      {(currentIntroSlide.body || []).map((paragraph, index) => (
-                        <p key={`${currentIntroSlide.title || 'slide'}-${index}`} className="text-sm leading-7 text-zinc-300">
-                          {paragraph}
-                        </p>
-                      ))}
-                    </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button
