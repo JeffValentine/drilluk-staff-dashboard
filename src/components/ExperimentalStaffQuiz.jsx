@@ -181,13 +181,15 @@ export default function ExperimentalStaffQuiz({
                   <div className={`rounded-2xl border px-4 py-3 text-sm text-zinc-200 ${accentSoft}`}>
                     Mandatory introduction {introIndex + 1} / {activeIntroSlides.length}
                   </div>
-                  <div className="overflow-hidden rounded-[28px] border border-white/10 bg-black/35 shadow-[0_22px_48px_rgba(0,0,0,0.28)]">
+                  <div className="overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(20,20,24,0.95),rgba(12,12,16,0.94))] shadow-[0_22px_48px_rgba(0,0,0,0.28)]">
                     {currentIntroSlide.image ? (
-                      <img
-                        src={currentIntroSlide.image}
-                        alt={currentIntroSlide.title || `Instruction slide ${introIndex + 1}`}
-                        className="max-h-[360px] w-full object-contain bg-black"
-                      />
+                      <div className="flex justify-center px-4 pt-4 md:px-6 md:pt-6">
+                        <img
+                          src={currentIntroSlide.image}
+                          alt={currentIntroSlide.title || `Instruction slide ${introIndex + 1}`}
+                          className="h-auto max-h-[72vh] w-auto max-w-full rounded-[22px] border border-white/10 object-contain shadow-[0_18px_36px_rgba(0,0,0,0.28)]"
+                        />
+                      </div>
                     ) : null}
                     <div className="space-y-3 p-5">
                       <div className="flex flex-wrap items-center gap-2">
