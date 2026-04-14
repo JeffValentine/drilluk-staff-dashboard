@@ -34,6 +34,286 @@ const PROFILE_IDENTIFIER_LABELS = {
   steam: 'Steam',
 };
 
+
+const REPORT_SYSTEM_INTRO_SLIDES = [
+  {
+    kicker: 'Screenshot 1',
+    title: 'Welcome to the new report dashboard',
+    image: '/assets/report-system/1.png',
+    body: [
+      'Hello. This is our new report system. Going forwards the report system is going to be an interactive, auto-updating admin panel.',
+      'No more needing to teleport to players first. Staff should now work through the report menu and dashboard as the main moderation workspace.'
+    ],
+  },
+  {
+    kicker: 'Screenshot 10',
+    title: 'Go on duty for reports first',
+    image: '/assets/report-system/10.png',
+    body: [
+      'Before reports can come in, open the settings in the top right and go on duty for reports.',
+      'Without being on duty, no incoming report will appear on your dashboard.'
+    ],
+  },
+  {
+    kicker: 'Screenshot 2',
+    title: 'This is the report window staff will use',
+    image: '/assets/report-system/2.png',
+    body: [
+      'Once you are on duty, you will be presented with the new report dashboard window.',
+      'This dashboard is now the main place staff should work from when handling player reports.'
+    ],
+  },
+  {
+    kicker: 'Screenshot 3',
+    title: 'New reports arrive under the New state',
+    image: '/assets/report-system/3.png',
+    body: [
+      'When a new report appears, all staff on duty are notified with a sound.',
+      'The dashboard refreshes automatically and the new report is shown under State: New.'
+    ],
+  },
+  {
+    kicker: 'Screenshot 4',
+    title: 'Opening a new report assigns it to you',
+    image: '/assets/report-system/4.png',
+    body: [
+      'When you click a report in the New state, you are automatically assigned as the staff member handling it.',
+      'Everyone can then see the status change to Pending, meaning the ticket is being handled.'
+    ],
+  },
+  {
+    kicker: 'Screenshot 5',
+    title: 'Use the chat, timeline, and area snapshots',
+    image: '/assets/report-system/5.png',
+    body: [
+      'Inside the report you will be presented with the chat, timeline, report author, and the admins on the ticket.',
+      'The system also snapshots players in the area for evidence and moderation context.'
+    ],
+  },
+  {
+    kicker: 'Screenshot 6',
+    title: 'Inspect players from the ticket itself',
+    image: '/assets/report-system/6.png',
+    body: [
+      'From now on, staff should use this report dashboard instead of going straight to players directly.',
+      'From the report information panel you can click players in the area to open their inventory, Discord ID, Rockstar license, health, name, coordinates, and other useful information.'
+    ],
+  },
+  {
+    kicker: 'Screenshot 7',
+    title: 'Use the player moderation actions when needed',
+    image: '/assets/report-system/7.png',
+    body: [
+      'When clicking a player involved in the ticket, a green icon means they are online and a red icon means they went offline.',
+      'Online player views expose moderation commands such as heal, revive, freeze, and bring when needed.'
+    ],
+  },
+  {
+    kicker: 'Screenshots 8 and 9',
+    title: 'Add more players or admins to the ticket',
+    image: '/assets/report-system/9.png',
+    body: [
+      'As the admin of the ticket, you can add extra players or additional admins under the title of the report.',
+      'Use this whenever the report needs extra subjects or extra staff visibility.'
+    ],
+  },
+  {
+    kicker: 'Closeout',
+    title: 'Finish tickets properly and keep the system clean',
+    image: '/assets/report-system/8.png',
+    body: [
+      'When everything is done, close the report from the bottom right of the ticket.',
+      'Everything is logged and viewable. Do not access tickets without solving them, because they will become pending. Any additional quality-of-life features will be covered in training with xJeffValentine.'
+    ],
+  },
+];
+
+const REPORT_SYSTEM_QUIZ_QUESTIONS = [
+  {
+    category: 'Report Dashboard Basics',
+    question: 'How should staff open the new report portal?',
+    options: [
+      'By typing /report and using the report dashboard.',
+      'By teleporting to the player first and only opening logs later.',
+      'By waiting for another admin to post it in Discord.',
+      'By using /bring on every player involved before reading the ticket.',
+    ],
+    answer: 0,
+  },
+  {
+    category: 'Duty Flow',
+    question: 'What must staff do before reports will start coming in?',
+    options: [
+      'Go to settings in the top right and go on duty for reports.',
+      'Reload the server every time they join.',
+      'Teleport to city hall and activate duty there.',
+      'Open the report and close it once to refresh the queue.',
+    ],
+    answer: 0,
+  },
+  {
+    category: 'Duty Flow',
+    question: 'What happens if a staff member is not on duty for reports?',
+    options: [
+      'They will not see any reports come in.',
+      'They will still receive reports, but without sound.',
+      'They can only see staff-created reports.',
+      'They can only see reports after teleporting once.',
+    ],
+    answer: 0,
+  },
+  {
+    category: 'Incoming Reports',
+    question: 'How are staff alerted when a new report appears?',
+    options: [
+      'All staff on duty hear a sound and the dashboard refreshes with the report under New.',
+      'Only head admins receive a Discord DM.',
+      'The system auto-closes every current ticket and opens the newest one.',
+      'The reporter must type /report twice for it to show.',
+    ],
+    answer: 0,
+  },
+  {
+    category: 'Incoming Reports',
+    question: 'What state is shown when a fresh report first appears?',
+    options: ['New.', 'Closed.', 'Escalated.', 'Handled.'],
+    answer: 0,
+  },
+  {
+    category: 'Ownership',
+    question: 'What happens when you click a report that is in the New state?',
+    options: [
+      'You become the assigned staff member and the report moves to Pending / Being Handled.',
+      'The report closes automatically and is archived.',
+      'The reporter is teleported to you instantly.',
+      'It becomes hidden from other staff members completely.',
+    ],
+    answer: 0,
+  },
+  {
+    category: 'Ticket View',
+    question: 'Which set of tools are presented inside the report itself?',
+    options: [
+      'Chat, timeline, author/admin details, and player snapshots in area.',
+      'Only the reporter name and a close button.',
+      'Only Discord logs and a punishment menu.',
+      'A teleport menu with no evidence or timeline view.',
+    ],
+    answer: 0,
+  },
+  {
+    category: 'Workflow',
+    question: 'What is the new main rule for how staff should handle reports?',
+    options: [
+      'Use the report dashboard to conduct the ticket instead of going straight to players directly.',
+      'Teleport to every player first before looking at the report.',
+      'Only deal with reports through Discord tickets.',
+      'Ignore the dashboard unless a senior asks you to use it.',
+    ],
+    answer: 0,
+  },
+  {
+    category: 'Player Intel',
+    question: 'What can staff open from the player list on the right side of the report?',
+    options: [
+      'Information such as inventory, Discord ID, Rockstar license, health, name, and coordinates.',
+      'Only their ping and their current weapon.',
+      'Only their job title and bank balance.',
+      'Only whether they are speaking in voice chat.',
+    ],
+    answer: 0,
+  },
+  {
+    category: 'Player Intel',
+    question: 'What do the player status icons indicate in the report dashboard?',
+    options: [
+      'Green means the player is online, red means they are offline.',
+      'Green means they are guilty, red means they are innocent.',
+      'Green means they are staff, red means they are civilians.',
+      'Green means they accepted a teleport, red means they denied it.',
+    ],
+    answer: 0,
+  },
+  {
+    category: 'Moderation Actions',
+    question: 'What becomes available when clicking an online player involved in the ticket?',
+    options: [
+      'A view of admin commands such as heal, revive, freeze, and bring.',
+      'An automatic punishment that cannot be changed.',
+      'A forced Discord call with the player.',
+      'A menu that only shows their cash and vehicle list.',
+    ],
+    answer: 0,
+  },
+  {
+    category: 'Ticket Management',
+    question: 'Where can the ticket admin add additional players or admins to a report?',
+    options: ['Under the title of the report.', 'Only in global staff chat.', 'Inside the FAQ page.', 'From the close report button.'],
+    answer: 0,
+  },
+  {
+    category: 'Ticket Management',
+    question: 'How do you finish a report once everything is done?',
+    options: [
+      'Close the report from the bottom right of the ticket.',
+      'Teleport away and leave it on Pending.',
+      'Delete the report author from the timeline.',
+      'Tell another staff member to close it from their dashboard.',
+    ],
+    answer: 0,
+  },
+  {
+    category: 'Accountability',
+    question: 'Why should staff avoid opening tickets without solving them?',
+    options: [
+      'Because everything is logged and the report will become Pending.',
+      'Because the system auto-bans staff who view tickets.',
+      'Because only head admins are allowed to see ticket histories.',
+      'Because it permanently deletes the timeline.',
+    ],
+    answer: 0,
+  },
+  {
+    category: 'Follow-up',
+    question: 'Where will extra quality-of-life details and feature guidance be covered?',
+    options: [
+      'In a training session with xJeffValentine.',
+      'Only in the public server rules page.',
+      'Inside the player inventory panel.',
+      'They will not be explained further.',
+    ],
+    answer: 0,
+  },
+];
+
+function buildReportSystemInstructionQuiz() {
+  return {
+    key: 'mandatory-report-dashboard',
+    title: 'Mandatory Instruction Quiz - New Report Dashboard',
+    description: 'Mandatory onboarding for the new report system, including dashboard flow, on-duty handling, and full ticket moderation from the panel.',
+    badge: 'Instruction Quiz',
+    browseCategory: 'instruction',
+    kind: 'mandatory',
+    rankLabel: null,
+    rankKey: '',
+    passScore: 85,
+    sourceType: 'instruction',
+    introSlides: REPORT_SYSTEM_INTRO_SLIDES,
+    sourceItems: REPORT_SYSTEM_QUIZ_QUESTIONS.map((item, index) => ({
+      id: `report-dashboard-${index + 1}`,
+      category: item.category,
+      question: item.question,
+      correctAnswer: item.options[item.answer] || '',
+      wrongAnswers: item.options.filter((_, optionIndex) => optionIndex !== item.answer),
+    })),
+    questions: REPORT_SYSTEM_QUIZ_QUESTIONS.map(item => ({
+      category: item.category,
+      question: item.question,
+      options: [...item.options],
+      answer: item.answer,
+    })),
+  };
+}
 const drillRosterSeed = [
   { rank: 'Junior Associate', name: 'Begoshi' },
   { rank: 'Junior Associate', name: 'Cailen' },
@@ -3046,7 +3326,17 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           };
         });
 
-      return [...normalizedUnified, ...fallbackPackDefinitions, ...normalizedVideoDefinitions]
+      const staticInstructionDefinitions = [buildReportSystemInstructionQuiz()].map(definition => {
+        const sortMeta = getKnowledgeQuizSortMeta(definition);
+        return {
+          ...definition,
+          sortLabel: 'All staff instruction',
+          sortWeight: sortMeta,
+        };
+      });
+
+      return [...staticInstructionDefinitions, ...normalizedUnified, ...fallbackPackDefinitions, ...normalizedVideoDefinitions]
+        .filter((definition, index, allDefinitions) => allDefinitions.findIndex(item => item.key === definition.key) === index)
         .sort((a, b) => {
           if (a.sortWeight?.group !== undefined && b.sortWeight?.group !== undefined && a.sortWeight.group !== b.sortWeight.group) return a.sortWeight.group - b.sortWeight.group;
           const aMeta = a.sortWeight || getKnowledgeQuizSortMeta(a);
@@ -3083,6 +3373,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         }));
 
     const definitions = [
+      buildReportSystemInstructionQuiz(),
       {
         key: 'mandatory-general',
         title: 'Mandatory Quiz - General Rules',
@@ -8660,5 +8951,4 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     </div>
   );
 }
-
 

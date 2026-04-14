@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,11 +38,14 @@ export default function ExperimentalStaffQuiz({
   questions: providedQuestions = EXPERIMENTAL_QUIZ_QUESTIONS,
   recommendedPass = 80,
   accent = 'fuchsia',
+  introSlides = [],
   onComplete = null,
 }) {
   const [playerName, setPlayerName] = useState(defaultName);
   const [attemptSeed, setAttemptSeed] = useState(0);
   const [started, setStarted] = useState(false);
+  const [introActive, setIntroActive] = useState(false);
+  const [introIndex, setIntroIndex] = useState(0);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedIndex, setSelectedIndex] = useState(null);
   const [answers, setAnswers] = useState([]);
@@ -53,12 +56,18 @@ export default function ExperimentalStaffQuiz({
     () => (Array.isArray(providedQuestions) ? providedQuestions.map(cloneQuestion) : []),
     [providedQuestions]
   );
+  const normalizedIntroSlides = useMemo(
+    () => (Array.isArray(introSlides) ? introSlides.filter(Boolean) : []),
+    [introSlides]
+  );
   const previewQuestions = useMemo(() => shuffleQuestions(sourceQuestions), [sourceQuestions, attemptSeed]);
   const questions = attemptSnapshot?.questions || previewQuestions;
   const activeTitle = attemptSnapshot?.title || title;
   const activeSubtitle = attemptSnapshot?.subtitle || subtitle;
   const activeRecommendedPass = attemptSnapshot?.recommendedPass ?? recommendedPass;
   const activeAccent = attemptSnapshot?.accent || accent;
+  const activeIntroSlides = attemptSnapshot?.introSlides || normalizedIntroSlides;
+  const currentIntroSlide = activeIntroSlides[introIndex] || null;
   const currentQuestion = questions[currentIndex] || null;
   const isFinished = started && currentIndex >= questions.length;
   const totalQuestions = questions.length;
@@ -81,6 +90,7 @@ export default function ExperimentalStaffQuiz({
       subtitle,
       recommendedPass,
       accent,
+      introSlides: normalizedIntroSlides,
       questions: frozenQuestions,
       startedAt: new Date().toISOString(),
     });
@@ -88,7 +98,22 @@ export default function ExperimentalStaffQuiz({
     setSelectedIndex(null);
     setCurrentIndex(0);
     setStarted(true);
+    setIntroActive(false);
     completionReportedRef.current = false;
+  }
+
+  function beginIntroduction() {
+    if (!normalizedIntroSlides.length) {
+      beginQuiz();
+      return;
+    }
+    setIntroIndex(0);
+    setIntroActive(true);
+  }
+
+  function continueFromIntro() {
+    setIntroActive(false);
+    beginQuiz();
   }
 
   function submitAnswer(answerIndex) {
@@ -117,6 +142,8 @@ export default function ExperimentalStaffQuiz({
 
   function resetQuiz() {
     setStarted(false);
+    setIntroActive(false);
+    setIntroIndex(0);
     setCurrentIndex(0);
     setSelectedIndex(null);
     setAnswers([]);
@@ -149,35 +176,86 @@ export default function ExperimentalStaffQuiz({
               <CardTitle>{activeTitle}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {activeSubtitle ? (
-                <div className={`rounded-2xl border px-4 py-3 text-sm text-zinc-200 ${accentSoft}`}>
-                  {activeSubtitle}
+              {introActive && currentIntroSlide ? (
+                <div className="space-y-4">
+                  <div className={`rounded-2xl border px-4 py-3 text-sm text-zinc-200 ${accentSoft}`}>
+                    Mandatory introduction {introIndex + 1} / {activeIntroSlides.length}
+                  </div>
+                  <div className="overflow-hidden rounded-[28px] border border-white/10 bg-black/35 shadow-[0_22px_48px_rgba(0,0,0,0.28)]">
+                    {currentIntroSlide.image ? (
+                      <img
+                        src={currentIntroSlide.image}
+                        alt={currentIntroSlide.title || `Instruction slide ${introIndex + 1}`}
+                        className="max-h-[360px] w-full object-contain bg-black"
+                      />
+                    ) : null}
+                    <div className="space-y-3 p-5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge className={accent === 'amber' ? 'border-amber-400/40 bg-amber-500/15 text-amber-100' : 'border-fuchsia-400/40 bg-fuchsia-500/15 text-fuchsia-100'}>
+                          Instruction Slide
+                        </Badge>
+                        {currentIntroSlide.kicker ? <Badge className="border-white/10 bg-white/10 text-zinc-200">{currentIntroSlide.kicker}</Badge> : null}
+                      </div>
+                      <div className="text-2xl font-semibold text-white">{currentIntroSlide.title}</div>
+                      {(currentIntroSlide.body || []).map((paragraph, index) => (
+                        <p key={`${currentIntroSlide.title || 'slide'}-${index}`} className="text-sm leading-7 text-zinc-300">
+                          {paragraph}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={introIndex === 0}
+                      onClick={() => setIntroIndex(prev => Math.max(prev - 1, 0))}
+                      className="rounded-2xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10"
+                    >
+                      Previous
+                    </Button>
+                    {introIndex < activeIntroSlides.length - 1 ? (
+                      <Button type="button" onClick={() => setIntroIndex(prev => Math.min(prev + 1, activeIntroSlides.length - 1))} className={`rounded-2xl text-white ${accentButton}`}>
+                        Next Slide
+                      </Button>
+                    ) : (
+                      <Button type="button" onClick={continueFromIntro} className={`rounded-2xl text-white ${accentButton}`}>
+                        Start Quiz Questions
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              ) : null}
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                  <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Question pool</div>
-                  <div className="mt-2 text-2xl font-semibold text-white">{totalQuestions}</div>
-
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                  <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Recommended pass</div>
-                  <div className="mt-2 text-2xl font-semibold text-white">{activeRecommendedPass}%</div>
-
-                </div>
-              </div>
-              <div>
-                <div className="mb-2 text-xs uppercase tracking-[0.18em] text-zinc-500">Display name</div>
-                <Input
-                  value={playerName}
-                  onChange={(event) => setPlayerName(event.target.value)}
-                  placeholder="Enter staff name for this attempt"
-                  className="border-white/10 bg-black/30 text-white"
-                />
-              </div>
-              <Button type="button" onClick={beginQuiz} className={`w-full rounded-2xl text-white ${accentButton}`}>
-                Start Quiz
-              </Button>
+              ) : (
+                <>
+                  {activeSubtitle ? (
+                    <div className={`rounded-2xl border px-4 py-3 text-sm text-zinc-200 ${accentSoft}`}>
+                      {activeSubtitle}
+                    </div>
+                  ) : null}
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                      <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Question pool</div>
+                      <div className="mt-2 text-2xl font-semibold text-white">{totalQuestions}</div>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                      <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Recommended pass</div>
+                      <div className="mt-2 text-2xl font-semibold text-white">{activeRecommendedPass}%</div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="mb-2 text-xs uppercase tracking-[0.18em] text-zinc-500">Display name</div>
+                    <Input
+                      value={playerName}
+                      onChange={(event) => setPlayerName(event.target.value)}
+                      placeholder="Enter staff name for this attempt"
+                      className="border-white/10 bg-black/30 text-white"
+                    />
+                  </div>
+                  <Button type="button" onClick={beginIntroduction} className={`w-full rounded-2xl text-white ${accentButton}`}>
+                    {normalizedIntroSlides.length ? 'Begin Mandatory Introduction' : 'Start Quiz'}
+                  </Button>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -199,7 +277,7 @@ export default function ExperimentalStaffQuiz({
                   <span>Progress</span>
                   <span>{Math.min(currentIndex + 1, totalQuestions)} / {totalQuestions}</span>
                 </div>
-                <Progress value={((currentIndex) / totalQuestions) * 100} className="mt-3 h-2.5 bg-white/10" />
+                <Progress value={(currentIndex / totalQuestions) * 100} className="mt-3 h-2.5 bg-white/10" />
               </div>
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
@@ -295,7 +373,7 @@ export default function ExperimentalStaffQuiz({
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button type="button" onClick={beginQuiz} className={`rounded-2xl text-white ${accentButton}`}>
+                <Button type="button" onClick={beginIntroduction} className={`rounded-2xl text-white ${accentButton}`}>
                   Retake Quiz
                 </Button>
                 <Button type="button" variant="secondary" onClick={resetQuiz} className="rounded-2xl border border-white/15 bg-black/30 text-zinc-100 hover:bg-white/10">
@@ -321,9 +399,12 @@ export default function ExperimentalStaffQuiz({
                     <Badge className="border-red-400/35 bg-red-500/10 text-red-100">Missed</Badge>
                     <Badge className="border-white/10 bg-white/10 text-zinc-200">{item.category}</Badge>
                   </div>
-                  <div className="mt-3 text-sm font-semibold leading-6 text-white">{item.question}</div>
-                  <div className="mt-3 rounded-xl border border-emerald-400/25 bg-emerald-500/8 p-3 text-sm text-emerald-100">
-                    Correct answer: {LETTERS[item.correctIndex]}. {item.correctAnswer}
+                  <div className="mt-3 text-base font-semibold text-white">{item.question}</div>
+                  <div className="mt-3 rounded-2xl border border-red-400/25 bg-red-500/8 p-3 text-sm text-red-100">
+                    Selected: {item.selectedAnswer || 'No answer'}
+                  </div>
+                  <div className="mt-2 rounded-2xl border border-emerald-400/25 bg-emerald-500/8 p-3 text-sm text-emerald-100">
+                    Correct: {item.correctAnswer}
                   </div>
                 </div>
               ))}
@@ -334,4 +415,3 @@ export default function ExperimentalStaffQuiz({
     </div>
   );
 }
-

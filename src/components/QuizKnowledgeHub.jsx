@@ -31,7 +31,14 @@ export default function QuizKnowledgeHub({
   const modalActionClass = 'rounded-2xl border px-4 py-2 text-sm font-medium shadow-[0_12px_32px_rgba(0,0,0,0.24)]';
   const cardBadgeClass = 'rounded-full border px-2.5 py-1 text-[10px] font-semibold tracking-[0.16em] uppercase';
 
-  const standardQuizzes = useMemo(() => quizDefinitions.filter(definition => definition.kind !== 'video'), [quizDefinitions]);
+  const standardQuizzes = useMemo(
+    () => quizDefinitions.filter(definition => definition.kind !== 'video' && definition.browseCategory !== 'instruction'),
+    [quizDefinitions]
+  );
+  const instructionQuizzes = useMemo(
+    () => quizDefinitions.filter(definition => definition.browseCategory === 'instruction'),
+    [quizDefinitions]
+  );
   const videoQuizzes = useMemo(() => quizDefinitions.filter(definition => definition.kind === 'video'), [quizDefinitions]);
 
   useEffect(() => {
@@ -40,11 +47,12 @@ export default function QuizKnowledgeHub({
 
   useEffect(() => {
     if (selectedQuiz?.kind === 'video') setBrowseTab('video');
-  }, [selectedQuiz?.kind]);
+    else if (selectedQuiz?.browseCategory === 'instruction') setBrowseTab('instruction');
+  }, [selectedQuiz?.kind, selectedQuiz?.browseCategory]);
 
   function handleSelectQuiz(definition) {
     setSelectedQuizKey(definition.key);
-    setBrowseTab(definition.kind === 'video' ? 'video' : 'standard');
+    setBrowseTab(definition.kind === 'video' ? 'video' : definition.browseCategory === 'instruction' ? 'instruction' : 'standard');
     if (canManageCheckboxes) setQuestionBankOpen(true);
   }
 
@@ -55,6 +63,13 @@ export default function QuizKnowledgeHub({
   }
 
   function renderQuizCard(definition) {
+    const badgeTone = definition.kind === 'video'
+      ? 'border-red-400/45 bg-red-500/18 text-red-50'
+      : definition.browseCategory === 'instruction'
+        ? 'border-amber-400/45 bg-amber-500/18 text-amber-50'
+        : definition.kind === 'mandatory'
+          ? 'border-amber-400/45 bg-amber-500/18 text-amber-50'
+          : 'border-cyan-400/45 bg-cyan-500/18 text-cyan-50';
     return (
       <button
         key={definition.key}
@@ -63,7 +78,7 @@ export default function QuizKnowledgeHub({
         className={`rounded-2xl border p-4 text-left transition ${selectedQuizKey === definition.key ? 'border-fuchsia-500/45 bg-fuchsia-500/12' : 'border-white/10 bg-black/25 hover:bg-white/5'}`}
       >
         <div className="flex flex-wrap items-center gap-2">
-          <Badge className={`${cardBadgeClass} ${definition.kind === 'mandatory' ? 'border-amber-400/45 bg-amber-500/18 text-amber-50' : definition.kind === 'video' ? 'border-red-400/45 bg-red-500/18 text-red-50' : 'border-cyan-400/45 bg-cyan-500/18 text-cyan-50'}`}>
+          <Badge className={`${cardBadgeClass} ${badgeTone}`}>
             {definition.badge}
           </Badge>
           {definition.rankLabel && <Badge className={`${cardBadgeClass} ${rankBadgeClass?.(definition.rankKey) || 'border-white/10 bg-white/10 text-zinc-200'}`}>{definition.rankLabel}</Badge>}
@@ -88,7 +103,7 @@ export default function QuizKnowledgeHub({
         <CardContent className="space-y-5">
           <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-black/25 p-3">
             <Badge className="border-fuchsia-500/35 bg-fuchsia-500/12 text-fuchsia-200">Knowledge Packs</Badge>
-            <Badge className="border-white/10 bg-white/10 text-zinc-200">Standard quizzes, assignments, and scenario-based video reviews</Badge>
+            <Badge className="border-white/10 bg-white/10 text-zinc-200">Standard quizzes, instruction flows, and scenario-based video reviews</Badge>
             {canManageCheckboxes && (
               <div className="ml-auto flex flex-wrap gap-2">
                 <Button onClick={() => onAddManagedQuestion?.(null)} className="rounded-2xl border border-emerald-400/35 bg-emerald-500/12 text-emerald-100 hover:bg-emerald-500/18">
@@ -105,8 +120,9 @@ export default function QuizKnowledgeHub({
           </div>
 
           <Tabs value={browseTab} onValueChange={setBrowseTab} className="space-y-4">
-            <TabsList className="grid w-full max-w-[420px] grid-cols-2 rounded-2xl border border-white/10 bg-black/25 p-1">
+            <TabsList className="grid w-full max-w-[620px] grid-cols-3 rounded-2xl border border-white/10 bg-black/25 p-1">
               <TabsTrigger value="standard" className="rounded-xl data-[state=active]:bg-white/12 data-[state=active]:text-white">Standard Quizzes</TabsTrigger>
+              <TabsTrigger value="instruction" className="rounded-xl data-[state=active]:bg-amber-500/18 data-[state=active]:text-amber-50">Instruction Quizzes</TabsTrigger>
               <TabsTrigger value="video" className="rounded-xl data-[state=active]:bg-red-500/18 data-[state=active]:text-red-50">Video Quizzes</TabsTrigger>
             </TabsList>
 
@@ -114,6 +130,19 @@ export default function QuizKnowledgeHub({
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {standardQuizzes.map(renderQuizCard)}
               </div>
+            </TabsContent>
+
+            <TabsContent value="instruction" className="mt-0 space-y-3">
+              {!!instructionQuizzes.length ? (
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {instructionQuizzes.map(renderQuizCard)}
+                </div>
+              ) : (
+                <div className="rounded-3xl border border-amber-500/20 bg-[linear-gradient(135deg,rgba(10,10,15,0.96),rgba(146,64,14,0.12),rgba(120,53,15,0.14))] p-5">
+                  <div className="text-sm font-semibold text-white">No instruction quizzes yet</div>
+                  <div className="mt-2 text-sm text-zinc-400">Instruction quizzes combine a mandatory visual introduction with a scored quiz at the end.</div>
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="video" className="mt-0 space-y-3">
@@ -148,6 +177,7 @@ export default function QuizKnowledgeHub({
           questions={selectedQuiz.questions}
           recommendedPass={selectedQuiz.passScore || 80}
           accent={selectedQuiz.kind === 'mandatory' ? 'amber' : 'fuchsia'}
+          introSlides={selectedQuiz.introSlides || []}
           onComplete={(result) => onQuizComplete?.(selectedQuiz, result)}
         />
       )}
@@ -179,9 +209,11 @@ export default function QuizKnowledgeHub({
                   {isAssignedToSelected ? `Unassign from ${selectedStaff.name}` : `Assign to ${selectedStaff.name}`}
                 </Button>
               )}
-              <Button onClick={() => onAddManagedQuestion?.(selectedQuiz.sourceType === 'managed' ? selectedQuiz.key : null)} className={`${modalActionClass} border-amber-400/45 bg-amber-500/18 text-amber-50 hover:bg-amber-500/24`}>
-                {selectedQuiz.sourceType === 'managed' ? 'Add Question' : 'Create Managed Quiz'}
-              </Button>
+              {selectedQuiz.browseCategory !== 'instruction' && (
+                <Button onClick={() => onAddManagedQuestion?.(selectedQuiz.sourceType === 'managed' ? selectedQuiz.key : null)} className={`${modalActionClass} border-amber-400/45 bg-amber-500/18 text-amber-50 hover:bg-amber-500/24`}>
+                  {selectedQuiz.sourceType === 'managed' ? 'Add Question' : 'Create Managed Quiz'}
+                </Button>
+              )}
               <Button onClick={onOpenBuilder} className={`${modalActionClass} border-white/15 bg-white/8 text-zinc-100 hover:bg-white/12`}>
                 Open Quiz Builder
               </Button>
@@ -205,9 +237,11 @@ export default function QuizKnowledgeHub({
                         ))}
                       </div>
                     </div>
-                    <Button onClick={() => onEditQuizQuestion?.(selectedQuiz, item)} className={`${modalActionClass} border-fuchsia-400/45 bg-fuchsia-500/18 text-fuchsia-50 hover:bg-fuchsia-500/24`}>
-                      Edit
-                    </Button>
+                    {selectedQuiz.browseCategory !== 'instruction' && (
+                      <Button onClick={() => onEditQuizQuestion?.(selectedQuiz, item)} className={`${modalActionClass} border-fuchsia-400/45 bg-fuchsia-500/18 text-fuchsia-50 hover:bg-fuchsia-500/24`}>
+                        Edit
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -259,7 +293,7 @@ export default function QuizKnowledgeHub({
                       </div>
                     </div>
                     <div>
-                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-red-200">Response Prompts</div>
+                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200">Answer Prompts</div>
                       <div className="mt-2 space-y-2">
                         {(scene.notePrompts || []).map((prompt, promptIndex) => (
                           <div key={`${scene.id}-prompt-${promptIndex}`} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-200">{prompt}</div>
@@ -270,6 +304,7 @@ export default function QuizKnowledgeHub({
                   </div>
                 </div>
               ))}
+              {!(selectedQuiz.scenes || []).length && <div className="rounded-xl border border-white/10 bg-black/25 p-4 text-sm text-zinc-400">No video scenes are available for this quiz yet.</div>}
             </div>
           </div>
         </div>
