@@ -306,12 +306,16 @@ function buildReportSystemInstructionQuiz() {
       correctAnswer: item.options[item.answer] || '',
       wrongAnswers: item.options.filter((_, optionIndex) => optionIndex !== item.answer),
     })),
-    questions: REPORT_SYSTEM_QUIZ_QUESTIONS.map(item => ({
-      category: item.category,
-      question: item.question,
-      options: [...item.options],
-      answer: item.answer,
-    })),
+    questions: REPORT_SYSTEM_QUIZ_QUESTIONS.map(item => {
+      const correctAnswer = item.options[item.answer] || '';
+      const options = shuffleArray([...item.options]);
+      return {
+        category: item.category,
+        question: item.question,
+        options,
+        answer: Math.max(options.indexOf(correctAnswer), 0),
+      };
+    }),
   };
 }
 const drillRosterSeed = [
