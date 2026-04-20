@@ -18,6 +18,7 @@ import ManagementHub from '@/components/ManagementHub';
 import InterviewHub from '@/components/InterviewHub';
 import StaffEssentialsHub from '@/components/StaffEssentialsHub';
 import EmbeddedSheetHub from '@/components/EmbeddedSheetHub';
+import OnboardingQuizCheckupHub from '@/components/OnboardingQuizCheckupHub';
 import { DEFAULT_INTERVIEW_TEMPLATE, normalizeInterviewTemplate } from '@/interviewQuestionBank';
 import { EXPERIMENTAL_QUIZ_QUESTIONS } from '@/experimentalQuizData';
 
@@ -1468,6 +1469,7 @@ const KNOWN_AUDIT_ACTIONS = [
   'user.god_key.update',
   'god_key.force_head_admin',
   'profile.update',
+  'profile.checkup.mark',
   'checkbox_catalog.save',
   'checkbox_catalog.delete',
   'checkbox_catalog.repair_false_answers',
@@ -1565,6 +1567,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const canDeleteStaff = ['head_admin', 'admin'].includes(effectiveRole);
   const canManageInterviews = effectiveRole === 'head_admin' || Boolean(profile?.god_key_enabled);
   const canManageEssentials = effectiveRole === 'head_admin' || Boolean(profile?.god_key_enabled);
+  const canManageOperationalCheckups = profile?.role === 'head_admin' || Boolean(profile?.god_key_enabled);
   const isStaffInTraining = effectiveRole === 'staff_in_training';
   const canAccessExperimentalQuiz = profile?.role === 'head_admin' || Boolean(profile?.experimental_quiz_enabled);
   const [activeMainTab, setActiveMainTab] = useState(isStaffInTraining ? 'myprogress' : 'employee');
@@ -1661,6 +1664,9 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [unifiedQuizQuestions, setUnifiedQuizQuestions] = useState([]);
   const [unifiedQuizAssignments, setUnifiedQuizAssignments] = useState([]);
   const [unifiedQuizAttempts, setUnifiedQuizAttempts] = useState([]);
+  const [latestOperationalCheckup, setLatestOperationalCheckup] = useState(null);
+  const [operationalCheckupLoading, setOperationalCheckupLoading] = useState(false);
+  const [operationalCheckupMarking, setOperationalCheckupMarking] = useState(false);
   const [unifiedQuizAttemptAnswers, setUnifiedQuizAttemptAnswers] = useState([]);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileName, setProfileName] = useState(profile?.username || '');
@@ -1884,6 +1890,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       trainingLogs: Array.isArray(row.training_logs) ? row.training_logs : [],
       assignedQuizKeys: Array.isArray(row.assigned_quiz_keys) ? row.assigned_quiz_keys : [],
       notes: row.notes || '',
+      createdAt: row.created_at || null,
+      updatedAt: row.updated_at || null,
       isRemoved: Boolean(row.is_removed),
       removedAt: row.removed_at || null,
       removedBy: row.removed_by || null,
@@ -2414,6 +2422,30 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     setStaffEssentials((data || []).map(normalizeStaffEssentialRecord));
   }
 
+  async function refreshOperationalCheckupFromDb() {
+    if (!dbReady || !supabase) return;
+    setOperationalCheckupLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('audit_logs')
+        .select('id, actor_id, action, target_id, after_value, created_at')
+        .eq('action', 'profile.checkup.mark')
+        .eq('target_id', 'staff-onboarding-quiz-completion')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        setLatestOperationalCheckup(null);
+        return;
+      }
+
+      setLatestOperationalCheckup(data || null);
+    } finally {
+      setOperationalCheckupLoading(false);
+    }
+  }
+
   async function refreshUnifiedQuizModelFromDb() {
     if (!dbReady || !supabase) return;
     const [quizzesResult, questionsResult, assignmentsResult, attemptsResult, attemptAnswersResult] = await Promise.all([
@@ -2632,6 +2664,16 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     if (!dbReady || !supabase) return;
     refreshUnifiedQuizModelFromDb();
   }, [dbReady, authUser?.id]);
+
+  useEffect(() => {
+    if (!dbReady || !supabase) return;
+    refreshOperationalCheckupFromDb();
+  }, [dbReady, authUser?.id]);
+
+  useEffect(() => {
+    if (activeMainTab !== 'onboardingcheckup' || !dbReady || !supabase) return;
+    refreshOperationalCheckupFromDb();
+  }, [activeMainTab, dbReady, authUser?.id]);
 
   useEffect(() => {
     if (!dbReady || !supabase) return;
@@ -3011,7 +3053,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   useEffect(() => {
     const traineeTabs = ['myprogress', 'livesheet', 'essentials', 'stafftools'];
-    const staffTabs = ['employee', 'quizknowledge', 'livesheet', 'essentials', 'stafftools', 'management', 'tracker', 'session', 'progression', 'discipline', 'audit', 'ranks', 'checkboxes', ...(canManageInterviews ? ['interviews'] : [])];
+    const staffTabs = ['employee', 'quizknowledge', 'onboardingcheckup', 'livesheet', 'essentials', 'stafftools', 'management', 'tracker', 'session', 'progression', 'discipline', 'audit', 'ranks', 'checkboxes', ...(canManageInterviews ? ['interviews'] : [])];
     const allowed = isStaffInTraining ? traineeTabs : staffTabs;
     const fallback = isStaffInTraining ? 'myprogress' : 'employee';
     if (!allowed.includes(activeMainTab)) setActiveMainTab(fallback);
@@ -3621,6 +3663,34 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     [staffRecords]
   );
 
+  const operationalCheckupSnapshot = useMemo(() => {
+    if (!latestOperationalCheckup) return null;
+    const actor = managementUsers.find(user => user.id === latestOperationalCheckup.actor_id);
+    return {
+      ...latestOperationalCheckup,
+      actorLabel: actor?.username
+        || (latestOperationalCheckup.actor_id === authUser?.id ? (profile?.username || authUser?.email?.split('@')[0] || latestOperationalCheckup.actor_id) : latestOperationalCheckup.actor_id)
+        || 'Unknown',
+    };
+  }, [latestOperationalCheckup, managementUsers, authUser?.id, authUser?.email, profile?.username]);
+
+  const operationalCheckupSince = operationalCheckupSnapshot?.created_at || null;
+
+  const newStaffSinceOperationalCheckup = useMemo(
+    () => activeStaffRecords
+      .filter(member => {
+        const joinedAt = member.createdAt || member.staffSince;
+        return operationalCheckupSince ? isOnOrAfterDate(joinedAt, operationalCheckupSince) : true;
+      })
+      .sort((a, b) => new Date((b.createdAt || b.staffSince) || 0).getTime() - new Date((a.createdAt || a.staffSince) || 0).getTime()),
+    [activeStaffRecords, operationalCheckupSince]
+  );
+
+  const quizAttemptsSinceOperationalCheckup = useMemo(
+    () => allCompletedQuizAttempts.filter(attempt => (operationalCheckupSince ? isOnOrAfterDate(attempt.at, operationalCheckupSince) : true)),
+    [allCompletedQuizAttempts, operationalCheckupSince]
+  );
+
   const weeklyCompletedQuizAttempts = useMemo(
     () => allCompletedQuizAttempts.filter(attempt => isOnOrAfterDate(attempt.at, currentWeekStart)),
     [allCompletedQuizAttempts, currentWeekStart]
@@ -3809,6 +3879,24 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       before_value: beforeValue || null,
       after_value: afterValue || null,
     });
+  }
+
+  async function markOperationalCheckup() {
+    if (!canManageOperationalCheckups || !dbReady || !supabase) return;
+    const confirmed = window.confirm('Mark this page as checked up? New staff and quiz completion counters will track forward from now.');
+    if (!confirmed) return;
+
+    setOperationalCheckupMarking(true);
+    try {
+      await writeAudit('profile.checkup.mark', 'staff-onboarding-quiz-completion', null, {
+        scope: 'staff_onboarding_and_quiz_completion',
+        new_staff_count: newStaffSinceOperationalCheckup.length,
+        quiz_attempt_count: quizAttemptsSinceOperationalCheckup.length,
+      });
+      await refreshOperationalCheckupFromDb();
+    } finally {
+      setOperationalCheckupMarking(false);
+    }
   }
 
   async function resolveUnifiedQuizRow(quizKey, quizDefinition = null) {
@@ -5722,6 +5810,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               <>
                 <TabsTrigger value="employee">Staff Team Overview</TabsTrigger>
                 <TabsTrigger value="quizknowledge">Quizzes & Knowledge</TabsTrigger>
+                <TabsTrigger value="onboardingcheckup">Staff onboarding and Quiz completion</TabsTrigger>
                 <TabsTrigger value="livesheet">Coms & Importance</TabsTrigger>
                 <TabsTrigger value="essentials">Staff Essentials</TabsTrigger>
                 <TabsTrigger value="stafftools">Staff Tools</TabsTrigger>
@@ -5824,6 +5913,17 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               isAssignedToSelected={Boolean(selectedKnowledgeQuiz && (selected?.assignedQuizKeys || []).includes(selectedKnowledgeQuiz.key))}
               onToggleAssignment={toggleQuizAssignment}
               onQuizComplete={handleKnowledgeQuizComplete}
+            />
+          </TabsContent>
+
+          <TabsContent value="onboardingcheckup">
+            <OnboardingQuizCheckupHub
+              lastCheckup={operationalCheckupSnapshot}
+              newStaff={newStaffSinceOperationalCheckup}
+              quizAttempts={quizAttemptsSinceOperationalCheckup}
+              canMarkCheckup={canManageOperationalCheckups}
+              markingCheckup={operationalCheckupMarking || operationalCheckupLoading}
+              onMarkCheckup={markOperationalCheckup}
             />
           </TabsContent>
           <TabsContent value="livesheet">
@@ -8966,6 +9066,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     </div>
   );
 }
+
+
+
+
+
 
 
 
