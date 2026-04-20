@@ -1042,6 +1042,17 @@ function isOnOrAfterDate(iso, cutoff) {
   return value.getTime() >= cutoff.getTime();
 }
 
+function inPeriodRange(iso, startExclusive, endInclusive) {
+  if (!iso) return false;
+  const value = new Date(iso);
+  if (Number.isNaN(value.getTime())) return false;
+  const start = startExclusive ? new Date(startExclusive) : null;
+  const end = endInclusive ? new Date(endInclusive) : null;
+  if (start && !Number.isNaN(start.getTime()) && value.getTime() <= start.getTime()) return false;
+  if (end && !Number.isNaN(end.getTime()) && value.getTime() > end.getTime()) return false;
+  return true;
+}
+
 function formatLastSeen(iso) {
   if (!iso) return 'Unknown';
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -1664,7 +1675,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [unifiedQuizQuestions, setUnifiedQuizQuestions] = useState([]);
   const [unifiedQuizAssignments, setUnifiedQuizAssignments] = useState([]);
   const [unifiedQuizAttempts, setUnifiedQuizAttempts] = useState([]);
-  const [latestOperationalCheckup, setLatestOperationalCheckup] = useState(null);
+  const [operationalCheckupHistory, setOperationalCheckupHistory] = useState([]);
   const [operationalCheckupLoading, setOperationalCheckupLoading] = useState(false);
   const [operationalCheckupMarking, setOperationalCheckupMarking] = useState(false);
   const [unifiedQuizAttemptAnswers, setUnifiedQuizAttemptAnswers] = useState([]);
@@ -2431,16 +2442,14 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         .select('id, actor_id, action, target_id, after_value, created_at')
         .eq('action', 'profile.checkup.mark')
         .eq('target_id', 'staff-onboarding-quiz-completion')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .order('created_at', { ascending: false });
 
       if (error) {
-        setLatestOperationalCheckup(null);
+        setOperationalCheckupHistory([]);
         return;
       }
 
-      setLatestOperationalCheckup(data || null);
+      setOperationalCheckupHistory(data || []);
     } finally {
       setOperationalCheckupLoading(false);
     }
@@ -3663,17 +3672,37 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     [staffRecords]
   );
 
-  const operationalCheckupSnapshot = useMemo(() => {
-    if (!latestOperationalCheckup) return null;
-    const actor = managementUsers.find(user => user.id === latestOperationalCheckup.actor_id);
-    return {
-      ...latestOperationalCheckup,
-      actorLabel: actor?.username
-        || (latestOperationalCheckup.actor_id === authUser?.id ? (profile?.username || authUser?.email?.split('@')[0] || latestOperationalCheckup.actor_id) : latestOperationalCheckup.actor_id)
-        || 'Unknown',
-    };
-  }, [latestOperationalCheckup, managementUsers, authUser?.id, authUser?.email, profile?.username]);
+  const operationalCheckupHistoryDetailed = useMemo(() => {
+    return (operationalCheckupHistory || []).map((entry, index, allEntries) => {
+      const actor = managementUsers.find(user => user.id === entry.actor_id);
+      const actorLabel = actor?.username
+        || (entry.actor_id === authUser?.id ? (profile?.username || authUser?.email?.split('@')[0] || entry.actor_id) : entry.actor_id)
+        || 'Unknown';
+      const previousEntry = allEntries[index + 1] || null;
+      const startAt = previousEntry?.created_at || null;
+      const endAt = entry.created_at || null;
+      const periodNewStaff = activeStaffRecords
+        .filter(member => inPeriodRange(member.createdAt || member.staffSince, startAt, endAt))
+        .sort((a, b) => new Date((b.createdAt || b.staffSince) || 0).getTime() - new Date((a.createdAt || a.staffSince) || 0).getTime());
+      const periodQuizAttempts = allCompletedQuizAttempts
+        .filter(attempt => inPeriodRange(attempt.at, startAt, endAt))
+        .sort((a, b) => new Date(b.at || 0).getTime() - new Date(a.at || 0).getTime());
+      const afterValue = entry.after_value && typeof entry.after_value === 'object' && !Array.isArray(entry.after_value) ? entry.after_value : {};
+      return {
+        ...entry,
+        actorLabel,
+        startAt,
+        endAt,
+        newStaff: periodNewStaff,
+        quizAttempts: periodQuizAttempts,
+        onboardedCount: Number(afterValue.new_staff_count ?? periodNewStaff.length ?? 0),
+        quizAttemptCount: Number(afterValue.quiz_attempt_count ?? periodQuizAttempts.length ?? 0),
+        passedQuizAttemptCount: periodQuizAttempts.filter(attempt => attempt.passed).length,
+      };
+    });
+  }, [operationalCheckupHistory, managementUsers, authUser?.id, authUser?.email, profile?.username, activeStaffRecords, allCompletedQuizAttempts]);
 
+  const operationalCheckupSnapshot = operationalCheckupHistoryDetailed[0] || null;
   const operationalCheckupSince = operationalCheckupSnapshot?.created_at || null;
 
   const newStaffSinceOperationalCheckup = useMemo(
@@ -5924,6 +5953,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               canMarkCheckup={canManageOperationalCheckups}
               markingCheckup={operationalCheckupMarking || operationalCheckupLoading}
               onMarkCheckup={markOperationalCheckup}
+              checkupHistory={operationalCheckupHistoryDetailed}
             />
           </TabsContent>
           <TabsContent value="livesheet">
@@ -9066,6 +9096,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     </div>
   );
 }
+
 
 
 
