@@ -5721,7 +5721,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               <>
                 <TabsTrigger value="employee">Staff Team Overview</TabsTrigger>
                 <TabsTrigger value="quizknowledge">Quizzes & Knowledge</TabsTrigger>
-                <TabsTrigger value="livesheet">Live Sheet</TabsTrigger>
+                <TabsTrigger value="livesheet">Coms & Importance</TabsTrigger>
                 <TabsTrigger value="essentials">Staff Essentials</TabsTrigger>
                 <TabsTrigger value="stafftools">Staff Tools</TabsTrigger>
                 <TabsTrigger value="management">Management</TabsTrigger>
@@ -5827,7 +5827,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
           </TabsContent>
           <TabsContent value="livesheet">
             <EmbeddedSheetHub
-              title="Live Spreadsheet"
+              title="Coms & Importance"
               sourceUrl={LIVE_SPREADSHEET_URL}
             />
           </TabsContent>
@@ -8965,5 +8965,6 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     </div>
   );
 }
+
 
 
