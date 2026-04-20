@@ -3635,13 +3635,13 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   }, [getMemberTrainingSummary]);
 
   const totals = {
-    total: staffRecords.length,
-    inTraining: staffRecords.filter(s => s.status === 'In Training').length,
-    promotionReady: staffRecords.filter(s => {
+    total: activeStaffRecords.length,
+    inTraining: activeStaffRecords.filter(s => s.status === 'In Training').length,
+    promotionReady: activeStaffRecords.filter(s => {
       const summary = getMemberTrainingSummary(s);
       return summary.total > 0 && summary.approved === summary.total && s.signedOff;
     }).length,
-    signedOff: staffRecords.filter(s => s.signedOff).length,
+    signedOff: activeStaffRecords.filter(s => s.signedOff).length,
   };
 
   const currentWeekStart = useMemo(() => startOfCurrentWeek(), []);
