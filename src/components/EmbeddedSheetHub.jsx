@@ -41,15 +41,10 @@ export default function EmbeddedSheetHub({
       <Card className="border-white/10 bg-white/5">
         <CardHeader>
           <CardTitle className="flex flex-wrap items-center justify-between gap-3">
-            <div className="space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <span>{title}</span>
-                <Badge className="border-cyan-400/35 bg-cyan-500/12 text-cyan-100">Google Sheets</Badge>
-                <Badge className="border-emerald-400/35 bg-emerald-500/12 text-emerald-100">Live owner updates</Badge>
-              </div>
-              <div className="text-sm font-normal text-zinc-400">
-                This tab embeds the live spreadsheet, so owner edits remain visible here without changing the dashboard code.
-              </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span>{title}</span>
+              <Badge className="border-cyan-400/35 bg-cyan-500/12 text-cyan-100">Google Sheets</Badge>
+              <Badge className="border-emerald-400/35 bg-emerald-500/12 text-emerald-100">Live owner updates</Badge>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button
@@ -77,12 +72,7 @@ export default function EmbeddedSheetHub({
             </div>
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="rounded-3xl border border-amber-400/25 bg-amber-500/8 p-4 text-sm leading-7 text-amber-100">
-            For this embed to work for everyone, the Google Sheet should be set to <span className="font-semibold">Anyone with the link -&gt; Viewer</span>.
-            If Google still blocks anonymous viewing, publish the sheet to the web and swap the URL here to the published link.
-          </div>
-
+        <CardContent>
           {!!iframeUrl ? (
             <div className="overflow-hidden rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(16,18,24,0.98),rgba(8,10,14,0.98))] p-3 shadow-[0_22px_60px_rgba(0,0,0,0.28)]">
               <iframe
@@ -105,4 +95,3 @@ export default function EmbeddedSheetHub({
     </div>
   );
 }
-
