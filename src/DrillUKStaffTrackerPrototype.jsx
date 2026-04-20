@@ -1036,10 +1036,11 @@ function startOfCurrentWeek(date = new Date()) {
 }
 
 function isOnOrAfterDate(iso, cutoff) {
-  if (!iso) return false;
+  if (!iso || !cutoff) return false;
   const value = new Date(iso);
-  if (Number.isNaN(value.getTime())) return false;
-  return value.getTime() >= cutoff.getTime();
+  const cutoffDate = cutoff instanceof Date ? cutoff : new Date(cutoff);
+  if (Number.isNaN(value.getTime()) || Number.isNaN(cutoffDate.getTime())) return false;
+  return value.getTime() >= cutoffDate.getTime();
 }
 
 function inPeriodRange(iso, startExclusive, endInclusive) {
