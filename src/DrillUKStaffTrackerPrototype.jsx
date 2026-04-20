@@ -17,12 +17,14 @@ import QuizKnowledgeHub from '@/components/QuizKnowledgeHub';
 import ManagementHub from '@/components/ManagementHub';
 import InterviewHub from '@/components/InterviewHub';
 import StaffEssentialsHub from '@/components/StaffEssentialsHub';
+import EmbeddedSheetHub from '@/components/EmbeddedSheetHub';
 import { DEFAULT_INTERVIEW_TEMPLATE, normalizeInterviewTemplate } from '@/interviewQuestionBank';
 import { EXPERIMENTAL_QUIZ_QUESTIONS } from '@/experimentalQuizData';
 
 const roles = ['T-MOD', 'MOD', 'S-MOD', 'ADMIN', 'S-ADMIN', 'HEAD-ADMIN'];
 const SITE_OWNER_EMAIL = 'justappletje@gmail.com';
 const defaultRankDisplayNames = Object.fromEntries(roles.map(role => [role, role]));
+const LIVE_SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/1OBqJY8mUKu74ankaLN1CrjFzKrRhwxzQsJ_aUd0kNz8/edit?gid=0#gid=0';
 const KNOWN_PROFILE_IDENTIFIER_KEYS = ['discord', 'fivem', 'license', 'license2', 'live', 'xbl', 'steam'];
 const PROFILE_IDENTIFIER_LABELS = {
   discord: 'Discord',
@@ -3009,7 +3011,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   useEffect(() => {
     const traineeTabs = ['myprogress', 'essentials', 'stafftools'];
-    const staffTabs = ['employee', 'quizknowledge', 'essentials', 'stafftools', 'management', 'tracker', 'session', 'progression', 'discipline', 'audit', 'ranks', 'checkboxes', ...(canManageInterviews ? ['interviews'] : [])];
+    const staffTabs = ['employee', 'quizknowledge', 'livesheet', 'essentials', 'stafftools', 'management', 'tracker', 'session', 'progression', 'discipline', 'audit', 'ranks', 'checkboxes', ...(canManageInterviews ? ['interviews'] : [])];
     const allowed = isStaffInTraining ? traineeTabs : staffTabs;
     const fallback = isStaffInTraining ? 'myprogress' : 'employee';
     if (!allowed.includes(activeMainTab)) setActiveMainTab(fallback);
@@ -5719,6 +5721,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               <>
                 <TabsTrigger value="employee">Staff Team Overview</TabsTrigger>
                 <TabsTrigger value="quizknowledge">Quizzes & Knowledge</TabsTrigger>
+                <TabsTrigger value="livesheet">Live Sheet</TabsTrigger>
                 <TabsTrigger value="essentials">Staff Essentials</TabsTrigger>
                 <TabsTrigger value="stafftools">Staff Tools</TabsTrigger>
                 <TabsTrigger value="management">Management</TabsTrigger>
@@ -5822,6 +5825,13 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               onQuizComplete={handleKnowledgeQuizComplete}
             />
           </TabsContent>
+          <TabsContent value="livesheet">
+            <EmbeddedSheetHub
+              title="Live Spreadsheet"
+              sourceUrl={LIVE_SPREADSHEET_URL}
+            />
+          </TabsContent>
+
 
 
           <TabsContent value="essentials">
