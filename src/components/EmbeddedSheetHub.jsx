@@ -3,6 +3,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
+const SHEET_SCALE = 0.8;
+const SHEET_WIDTH_PERCENT = `${100 / SHEET_SCALE}%`;
+const SHEET_HEIGHT = '97.5vh';
+const SHEET_VIEWPORT_HEIGHT = '78vh';
+
 function buildGoogleSheetEmbedUrl(rawUrl) {
   const value = String(rawUrl || '').trim();
   if (!value) return '';
@@ -75,15 +80,23 @@ export default function EmbeddedSheetHub({
         <CardContent>
           {!!iframeUrl ? (
             <div className="overflow-hidden rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(16,18,24,0.98),rgba(8,10,14,0.98))] p-3 shadow-[0_22px_60px_rgba(0,0,0,0.28)]">
-              <iframe
-                key={iframeUrl}
-                src={iframeUrl}
-                title={title}
-                className="h-[78vh] w-full rounded-[24px] border border-white/10 bg-white"
-                style={darkView ? { filter: 'invert(0.94) hue-rotate(180deg) saturate(0.88) contrast(0.96)' } : undefined}
-                referrerPolicy="strict-origin-when-cross-origin"
-                loading="lazy"
-              />
+              <div className="overflow-hidden rounded-[24px] border border-white/10 bg-white" style={{ height: SHEET_VIEWPORT_HEIGHT }}>
+                <iframe
+                  key={iframeUrl}
+                  src={iframeUrl}
+                  title={title}
+                  className="block rounded-[24px] bg-white"
+                  style={{
+                    width: SHEET_WIDTH_PERCENT,
+                    height: SHEET_HEIGHT,
+                    transform: `scale(${SHEET_SCALE})`,
+                    transformOrigin: 'top left',
+                    filter: darkView ? 'invert(0.94) hue-rotate(180deg) saturate(0.88) contrast(0.96)' : undefined,
+                  }}
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  loading="lazy"
+                />
+              </div>
             </div>
           ) : (
             <div className="rounded-3xl border border-red-400/25 bg-red-500/8 p-4 text-sm text-red-100">
