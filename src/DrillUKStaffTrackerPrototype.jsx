@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
@@ -6094,6 +6094,42 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     );
   }
 
+  const knowledgeNavItems = isStaffInTraining
+    ? [
+        { key: 'livesheet', label: 'Coms' },
+        { key: 'affiliates', label: 'Affiliates' },
+        { key: 'essentials', label: 'Essentials' },
+        { key: 'stafftools', label: 'Tools' },
+      ]
+    : [
+        { key: 'quizknowledge', label: 'Quizzes' },
+        { key: 'livesheet', label: 'Coms' },
+        { key: 'essentials', label: 'Essentials' },
+        { key: 'stafftools', label: 'Tools' },
+      ];
+  const operationsNavItems = [
+    { key: 'onboardingcheckup', label: 'Checkups' },
+    { key: 'affiliates', label: 'Affiliates' },
+  ];
+  const knowledgeNavKeys = knowledgeNavItems.map(item => item.key);
+  const operationsNavKeys = operationsNavItems.map(item => item.key);
+  const managementNavKeys = ['management', 'audit', 'ranks', 'checkboxes'];
+  const activeKnowledge = knowledgeNavKeys.includes(activeMainTab);
+  const activeOperations = !isStaffInTraining && operationsNavKeys.includes(activeMainTab);
+  const activeManagement = managementNavKeys.includes(activeMainTab);
+  const mainNavButtonClass = (active) => [
+    'inline-flex h-10 items-center justify-center whitespace-nowrap rounded-[18px] border px-4 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(0,0,0,0.2)] transition hover:-translate-y-[1px]',
+    active
+      ? 'border-cyan-300/40 bg-[linear-gradient(135deg,rgba(5,10,20,0.98),rgba(8,145,178,0.22),rgba(88,28,135,0.24))]'
+      : 'border-white/10 bg-black/25 text-zinc-300 hover:border-cyan-400/25 hover:bg-white/8 hover:text-white',
+  ].join(' ');
+  const submenuButtonClass = (active) => [
+    'inline-flex h-9 items-center justify-center whitespace-nowrap rounded-[16px] border px-3.5 text-xs font-semibold text-white transition',
+    active
+      ? 'border-cyan-300/35 bg-cyan-500/16 text-cyan-50'
+      : 'border-white/10 bg-black/25 text-zinc-300 hover:border-white/20 hover:bg-white/8 hover:text-white',
+  ].join(' ');
+
   return (
     <div className="min-h-screen bg-[#07070b] text-white">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(140,33,255,0.22),transparent_35%),radial-gradient(circle_at_right,rgba(164,52,235,0.16),transparent_25%)]" />
@@ -6304,29 +6340,68 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         )}
 
         <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="space-y-4">
-          <TabsList className="flex w-full flex-wrap justify-start gap-2 bg-white/5 p-2 h-auto">
+          <TabsList className="flex w-full flex-wrap justify-start gap-2 rounded-2xl border border-white/10 bg-white/5 p-2 h-auto">
             {isStaffInTraining ? (
               <>
-                <TabsTrigger value="myprogress">My Progress</TabsTrigger>
-                <TabsTrigger value="livesheet">Coms & Importance</TabsTrigger>
-                <TabsTrigger value="affiliates">Drill-UK Affiliates</TabsTrigger>
-                <TabsTrigger value="essentials">Staff Essentials</TabsTrigger>
-                <TabsTrigger value="stafftools">Staff Tools</TabsTrigger>
+                <button type="button" onClick={() => setActiveMainTab('myprogress')} className={mainNavButtonClass(activeMainTab === 'myprogress')}>
+                  My Progress
+                </button>
+                <button type="button" onClick={() => setActiveMainTab('livesheet')} className={mainNavButtonClass(activeKnowledge)}>
+                  Knowledge Hub
+                </button>
               </>
             ) : (
               <>
-                <TabsTrigger value="employee">Staff Team Overview</TabsTrigger>
-                <TabsTrigger value="quizknowledge">Quizzes & Knowledge</TabsTrigger>
-                <TabsTrigger value="onboardingcheckup">Staff onboarding and Quiz completion</TabsTrigger>
-                <TabsTrigger value="livesheet">Coms & Importance</TabsTrigger>
-                <TabsTrigger value="affiliates">Drill-UK Affiliates</TabsTrigger>
-                <TabsTrigger value="essentials">Staff Essentials</TabsTrigger>
-                <TabsTrigger value="stafftools">Staff Tools</TabsTrigger>
-                <TabsTrigger value="management">Management</TabsTrigger>
-                {canManageInterviews && <TabsTrigger value="interviews">Interviews</TabsTrigger>}
+                <button type="button" onClick={() => setActiveMainTab('employee')} className={mainNavButtonClass(activeMainTab === 'employee' || ['tracker', 'session', 'progression', 'discipline'].includes(activeMainTab))}>
+                  Staff Team
+                </button>
+                <button type="button" onClick={() => setActiveMainTab('quizknowledge')} className={mainNavButtonClass(activeKnowledge)}>
+                  Knowledge Hub
+                </button>
+                <button type="button" onClick={() => setActiveMainTab('onboardingcheckup')} className={mainNavButtonClass(activeOperations)}>
+                  Operations
+                </button>
+                <button type="button" onClick={() => setActiveMainTab('management')} className={mainNavButtonClass(activeManagement)}>
+                  Management
+                </button>
+                {canManageInterviews && (
+                  <button type="button" onClick={() => setActiveMainTab('interviews')} className={mainNavButtonClass(activeMainTab === 'interviews')}>
+                    Interviews
+                  </button>
+                )}
               </>
             )}
           </TabsList>
+
+          {activeKnowledge && (
+            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-black/20 p-2">
+              {knowledgeNavItems.map(item => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setActiveMainTab(item.key)}
+                  className={submenuButtonClass(activeMainTab === item.key)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {activeOperations && (
+            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-black/20 p-2">
+              {operationsNavItems.map(item => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setActiveMainTab(item.key)}
+                  className={submenuButtonClass(activeMainTab === item.key)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {['tracker', 'session', 'progression', 'discipline'].includes(activeMainTab) && (
             <div className="flex flex-wrap items-center gap-2 rounded-3xl border border-white/10 bg-gradient-to-r from-black/35 via-fuchsia-950/20 to-cyan-950/20 p-2.5 shadow-[0_18px_50px_rgba(0,0,0,0.28)]">
