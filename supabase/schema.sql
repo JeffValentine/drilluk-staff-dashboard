@@ -1139,3 +1139,117 @@ using (
   or public.current_user_has_god_key() = true
 );
 
+create table if not exists public.affiliate_profiles (
+  id uuid primary key default gen_random_uuid(),
+  slug text unique not null,
+  display_name text not null,
+  category text not null default 'streamer',
+  status text not null default 'active',
+  primary_platform text not null default 'twitch',
+  manager_name text not null default '',
+  notes text not null default '',
+  is_active boolean not null default true,
+  handles jsonb not null default '{}'::jsonb,
+  goals jsonb not null default '{}'::jsonb,
+  automation jsonb not null default '{}'::jsonb,
+  updated_by uuid references auth.users(id),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.affiliate_profiles enable row level security;
+
+drop policy if exists "affiliate_profiles_read_authenticated" on public.affiliate_profiles;
+create policy "affiliate_profiles_read_authenticated"
+on public.affiliate_profiles for select
+to authenticated
+using (auth.uid() is not null);
+
+drop policy if exists "affiliate_profiles_write_head_admin" on public.affiliate_profiles;
+create policy "affiliate_profiles_write_head_admin"
+on public.affiliate_profiles for insert
+to authenticated
+with check (
+  public.current_user_role() = 'head_admin'
+  or public.current_user_has_god_key() = true
+);
+
+drop policy if exists "affiliate_profiles_update_head_admin" on public.affiliate_profiles;
+create policy "affiliate_profiles_update_head_admin"
+on public.affiliate_profiles for update
+to authenticated
+using (
+  public.current_user_role() = 'head_admin'
+  or public.current_user_has_god_key() = true
+)
+with check (
+  public.current_user_role() = 'head_admin'
+  or public.current_user_has_god_key() = true
+);
+
+drop policy if exists "affiliate_profiles_delete_head_admin" on public.affiliate_profiles;
+create policy "affiliate_profiles_delete_head_admin"
+on public.affiliate_profiles for delete
+to authenticated
+using (
+  public.current_user_role() = 'head_admin'
+  or public.current_user_has_god_key() = true
+);
+
+create table if not exists public.affiliate_stat_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  affiliate_id uuid not null references public.affiliate_profiles(id) on delete cascade,
+  captured_at timestamptz not null default now(),
+  source text not null default 'manual',
+  is_live boolean not null default false,
+  current_viewers numeric not null default 0,
+  average_viewers numeric not null default 0,
+  peak_viewers numeric not null default 0,
+  activity_hours numeric not null default 0,
+  follower_count bigint not null default 0,
+  subscriber_count bigint not null default 0,
+  view_count bigint not null default 0,
+  content_count bigint not null default 0,
+  notes text not null default '',
+  metadata jsonb not null default '{}'::jsonb,
+  updated_by uuid references auth.users(id)
+);
+
+alter table public.affiliate_stat_snapshots enable row level security;
+
+drop policy if exists "affiliate_stat_snapshots_read_authenticated" on public.affiliate_stat_snapshots;
+create policy "affiliate_stat_snapshots_read_authenticated"
+on public.affiliate_stat_snapshots for select
+to authenticated
+using (auth.uid() is not null);
+
+drop policy if exists "affiliate_stat_snapshots_write_head_admin" on public.affiliate_stat_snapshots;
+create policy "affiliate_stat_snapshots_write_head_admin"
+on public.affiliate_stat_snapshots for insert
+to authenticated
+with check (
+  public.current_user_role() = 'head_admin'
+  or public.current_user_has_god_key() = true
+);
+
+drop policy if exists "affiliate_stat_snapshots_update_head_admin" on public.affiliate_stat_snapshots;
+create policy "affiliate_stat_snapshots_update_head_admin"
+on public.affiliate_stat_snapshots for update
+to authenticated
+using (
+  public.current_user_role() = 'head_admin'
+  or public.current_user_has_god_key() = true
+)
+with check (
+  public.current_user_role() = 'head_admin'
+  or public.current_user_has_god_key() = true
+);
+
+drop policy if exists "affiliate_stat_snapshots_delete_head_admin" on public.affiliate_stat_snapshots;
+create policy "affiliate_stat_snapshots_delete_head_admin"
+on public.affiliate_stat_snapshots for delete
+to authenticated
+using (
+  public.current_user_role() = 'head_admin'
+  or public.current_user_has_god_key() = true
+);
+

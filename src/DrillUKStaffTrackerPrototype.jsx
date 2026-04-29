@@ -19,6 +19,7 @@ import InterviewHub from '@/components/InterviewHub';
 import StaffEssentialsHub from '@/components/StaffEssentialsHub';
 import EmbeddedSheetHub from '@/components/EmbeddedSheetHub';
 import OnboardingQuizCheckupHub from '@/components/OnboardingQuizCheckupHub';
+import AffiliatesHub from '@/components/AffiliatesHub';
 import { DEFAULT_INTERVIEW_TEMPLATE, normalizeInterviewTemplate } from '@/interviewQuestionBank';
 import { EXPERIMENTAL_QUIZ_QUESTIONS } from '@/experimentalQuizData';
 
@@ -26,6 +27,7 @@ const roles = ['T-MOD', 'MOD', 'S-MOD', 'ADMIN', 'S-ADMIN', 'HEAD-ADMIN'];
 const SITE_OWNER_EMAIL = 'justappletje@gmail.com';
 const defaultRankDisplayNames = Object.fromEntries(roles.map(role => [role, role]));
 const LIVE_SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/1OBqJY8mUKu74ankaLN1CrjFzKrRhwxzQsJ_aUd0kNz8/edit?gid=0#gid=0';
+const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY || '';
 const KNOWN_PROFILE_IDENTIFIER_KEYS = ['discord', 'fivem', 'license', 'license2', 'live', 'xbl', 'steam'];
 const PROFILE_IDENTIFIER_LABELS = {
   discord: 'Discord',
@@ -36,6 +38,72 @@ const PROFILE_IDENTIFIER_LABELS = {
   xbl: 'XBL',
   steam: 'Steam',
 };
+const AFFILIATE_HANDLE_KEYS = ['twitch', 'youtube', 'youtubeChannelId', 'kick', 'tiktok', 'discord', 'x', 'instagram', 'website'];
+
+function normalizeAffiliateHandles(handles) {
+  return AFFILIATE_HANDLE_KEYS.reduce((acc, key) => {
+    acc[key] = String(handles?.[key] || '').trim();
+    return acc;
+  }, {});
+}
+
+function normalizeAffiliateGoals(goals) {
+  const targetAvgViewers = Number(goals?.targetAvgViewers || 0);
+  const targetHoursWeekly = Number(goals?.targetHoursWeekly || 0);
+  const targetPostsMonthly = Number(goals?.targetPostsMonthly || 0);
+  return {
+    targetAvgViewers: Number.isFinite(targetAvgViewers) ? targetAvgViewers : 0,
+    targetHoursWeekly: Number.isFinite(targetHoursWeekly) ? targetHoursWeekly : 0,
+    targetPostsMonthly: Number.isFinite(targetPostsMonthly) ? targetPostsMonthly : 0,
+  };
+}
+
+function normalizeAffiliateAutomation(automation) {
+  return {
+    mode: String(automation?.mode || 'manual').trim() || 'manual',
+    syncNotes: String(automation?.syncNotes || '').trim(),
+    lastSyncAt: automation?.lastSyncAt || null,
+    lastSyncStatus: String(automation?.lastSyncStatus || '').trim(),
+  };
+}
+
+function normalizeAffiliateProfileRecord(row) {
+  return {
+    id: row.id,
+    slug: row.slug,
+    displayName: row.display_name || 'Untitled affiliate',
+    category: String(row.category || 'streamer').trim() || 'streamer',
+    status: String(row.status || 'active').trim() || 'active',
+    primaryPlatform: String(row.primary_platform || 'twitch').trim() || 'twitch',
+    managerName: row.manager_name || '',
+    notes: row.notes || '',
+    isActive: row.is_active !== false,
+    handles: normalizeAffiliateHandles(row.handles),
+    goals: normalizeAffiliateGoals(row.goals),
+    automation: normalizeAffiliateAutomation(row.automation),
+    updatedAt: row.updated_at || null,
+  };
+}
+
+function normalizeAffiliateSnapshotRecord(row) {
+  return {
+    id: row.id,
+    affiliateId: row.affiliate_id,
+    capturedAt: row.captured_at || null,
+    source: String(row.source || 'manual').trim() || 'manual',
+    isLive: row.is_live === true,
+    currentViewers: Number(row.current_viewers || 0) || 0,
+    averageViewers: Number(row.average_viewers || 0) || 0,
+    peakViewers: Number(row.peak_viewers || 0) || 0,
+    activityHours: Number(row.activity_hours || 0) || 0,
+    followerCount: Number(row.follower_count || 0) || 0,
+    subscriberCount: Number(row.subscriber_count || 0) || 0,
+    viewCount: Number(row.view_count || 0) || 0,
+    contentCount: Number(row.content_count || 0) || 0,
+    notes: row.notes || '',
+    metadata: row.metadata && typeof row.metadata === 'object' ? row.metadata : {},
+  };
+}
 
 
 const REPORT_SYSTEM_INTRO_SLIDES = [
@@ -1579,6 +1647,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const canDeleteStaff = ['head_admin', 'admin'].includes(effectiveRole);
   const canManageInterviews = effectiveRole === 'head_admin' || Boolean(profile?.god_key_enabled);
   const canManageEssentials = effectiveRole === 'head_admin' || Boolean(profile?.god_key_enabled);
+  const canManageAffiliates = effectiveRole === 'head_admin' || Boolean(profile?.god_key_enabled);
   const canManageOperationalCheckups = profile?.role === 'head_admin' || Boolean(profile?.god_key_enabled);
   const isStaffInTraining = effectiveRole === 'staff_in_training';
   const canAccessExperimentalQuiz = profile?.role === 'head_admin' || Boolean(profile?.experimental_quiz_enabled);
@@ -1672,6 +1741,9 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [staffEssentials, setStaffEssentials] = useState([]);
   const [selectedEssentialSlug, setSelectedEssentialSlug] = useState('');
   const [staffEssentialsTableAvailable, setStaffEssentialsTableAvailable] = useState(true);
+  const [affiliateProfiles, setAffiliateProfiles] = useState([]);
+  const [selectedAffiliateSlug, setSelectedAffiliateSlug] = useState('');
+  const [affiliateTablesAvailable, setAffiliateTablesAvailable] = useState(true);
   const [unifiedQuizzes, setUnifiedQuizzes] = useState([]);
   const [unifiedQuizQuestions, setUnifiedQuizQuestions] = useState([]);
   const [unifiedQuizAssignments, setUnifiedQuizAssignments] = useState([]);
@@ -2308,6 +2380,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     return error?.code === 'PGRST205' || error?.code === '42P01' || /staff_essentials/i.test(message) && /(not found|does not exist|Could not find the table|relation)/i.test(message);
   }
 
+  function isMissingAffiliateTableError(error) {
+    const message = String(error?.message || error?.details || '');
+    return error?.code === 'PGRST205' || error?.code === '42P01' || /(affiliate_profiles|affiliate_stat_snapshots)/i.test(message) && /(not found|does not exist|Could not find the table|relation)/i.test(message);
+  }
+
   function buildStaffEssentialModule(index = 0) {
     return {
       id: 'module-' + Date.now() + '-' + index,
@@ -2432,6 +2509,59 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
     setStaffEssentialsTableAvailable(true);
     setStaffEssentials((data || []).map(normalizeStaffEssentialRecord));
+  }
+
+  async function refreshAffiliatesFromDb() {
+    if (!dbReady || !supabase) return;
+
+    const [profilesResult, snapshotsResult] = await Promise.all([
+      supabase
+        .from('affiliate_profiles')
+        .select('*')
+        .order('display_name', { ascending: true })
+        .order('updated_at', { ascending: false }),
+      supabase
+        .from('affiliate_stat_snapshots')
+        .select('*')
+        .order('captured_at', { ascending: false })
+        .limit(1200),
+    ]);
+
+    if (profilesResult.error) {
+      if (isMissingAffiliateTableError(profilesResult.error)) {
+        setAffiliateTablesAvailable(false);
+        setAffiliateProfiles([]);
+        return;
+      }
+      return;
+    }
+
+    if (snapshotsResult.error) {
+      if (isMissingAffiliateTableError(snapshotsResult.error)) {
+        setAffiliateTablesAvailable(false);
+        setAffiliateProfiles([]);
+        return;
+      }
+      return;
+    }
+
+    const snapshotsByAffiliateId = new Map();
+    (snapshotsResult.data || []).map(normalizeAffiliateSnapshotRecord).forEach((snapshot) => {
+      const list = snapshotsByAffiliateId.get(snapshot.affiliateId) || [];
+      list.push(snapshot);
+      snapshotsByAffiliateId.set(snapshot.affiliateId, list);
+    });
+
+    setAffiliateTablesAvailable(true);
+    setAffiliateProfiles((profilesResult.data || []).map((row) => {
+      const profileRow = normalizeAffiliateProfileRecord(row);
+      const snapshots = snapshotsByAffiliateId.get(profileRow.id) || [];
+      return {
+        ...profileRow,
+        snapshots,
+        latestSnapshot: snapshots[0] || null,
+      };
+    }));
   }
 
   async function refreshOperationalCheckupFromDb() {
@@ -2672,6 +2802,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   useEffect(() => {
     if (!dbReady || !supabase) return;
+    refreshAffiliatesFromDb();
+  }, [dbReady, authUser?.id]);
+
+  useEffect(() => {
+    if (!dbReady || !supabase) return;
     refreshUnifiedQuizModelFromDb();
   }, [dbReady, authUser?.id]);
 
@@ -2683,6 +2818,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   useEffect(() => {
     if (activeMainTab !== 'onboardingcheckup' || !dbReady || !supabase) return;
     refreshOperationalCheckupFromDb();
+  }, [activeMainTab, dbReady, authUser?.id]);
+
+  useEffect(() => {
+    if (activeMainTab !== 'affiliates' || !dbReady || !supabase) return;
+    refreshAffiliatesFromDb();
   }, [activeMainTab, dbReady, authUser?.id]);
 
   useEffect(() => {
@@ -3062,8 +3202,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   }, [sessionTargetId]);
 
   useEffect(() => {
-    const traineeTabs = ['myprogress', 'livesheet', 'essentials', 'stafftools'];
-    const staffTabs = ['employee', 'quizknowledge', 'onboardingcheckup', 'livesheet', 'essentials', 'stafftools', 'management', 'tracker', 'session', 'progression', 'discipline', 'audit', 'ranks', 'checkboxes', ...(canManageInterviews ? ['interviews'] : [])];
+    const traineeTabs = ['myprogress', 'livesheet', 'affiliates', 'essentials', 'stafftools'];
+    const staffTabs = ['employee', 'quizknowledge', 'onboardingcheckup', 'livesheet', 'affiliates', 'essentials', 'stafftools', 'management', 'tracker', 'session', 'progression', 'discipline', 'audit', 'ranks', 'checkboxes', ...(canManageInterviews ? ['interviews'] : [])];
     const allowed = isStaffInTraining ? traineeTabs : staffTabs;
     const fallback = isStaffInTraining ? 'myprogress' : 'employee';
     if (!allowed.includes(activeMainTab)) setActiveMainTab(fallback);
@@ -5443,6 +5583,202 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     return true;
   }
 
+  async function saveAffiliateProfile(draft) {
+    if (!dbReady || !supabase || !canManageAffiliates) return false;
+    const displayName = String(draft?.displayName || '').trim();
+    if (!displayName) {
+      alert('Affiliate display name is required.');
+      return false;
+    }
+
+    const slug = String(draft?.slug || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || `affiliate-${Date.now()}`;
+    const payload = {
+      id: draft?.id || undefined,
+      slug,
+      display_name: displayName,
+      category: String(draft?.category || 'streamer').trim() || 'streamer',
+      status: String(draft?.status || 'active').trim() || 'active',
+      primary_platform: String(draft?.primaryPlatform || 'twitch').trim() || 'twitch',
+      manager_name: String(draft?.managerName || '').trim(),
+      notes: String(draft?.notes || '').trim(),
+      is_active: draft?.isActive !== false,
+      handles: normalizeAffiliateHandles(draft?.handles),
+      goals: normalizeAffiliateGoals(draft?.goals),
+      automation: normalizeAffiliateAutomation(draft?.automation),
+      updated_by: authUser?.id || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase.from('affiliate_profiles').upsert(payload, { onConflict: 'slug' });
+    if (error) {
+      if (isMissingAffiliateTableError(error)) {
+        setAffiliateTablesAvailable(false);
+        alert('Drill-UK Affiliates is not enabled in Supabase yet. Run the latest SQL block first.');
+        return false;
+      }
+      alert(error.message || 'Affiliate profile could not be saved.');
+      return false;
+    }
+
+    setAffiliateTablesAvailable(true);
+    await writeAudit('affiliate_profiles.save', slug, null, payload);
+    void refreshAffiliatesFromDb();
+    return slug;
+  }
+
+  async function deleteAffiliateProfile(item) {
+    if (!item || !dbReady || !supabase || !canManageAffiliates) return false;
+    const { error } = await supabase.from('affiliate_profiles').delete().eq('slug', item.slug);
+    if (error) {
+      if (isMissingAffiliateTableError(error)) {
+        setAffiliateTablesAvailable(false);
+        alert('Drill-UK Affiliates is not enabled in Supabase yet. Run the latest SQL block first.');
+        return false;
+      }
+      alert(error.message || 'Affiliate profile could not be deleted.');
+      return false;
+    }
+
+    setAffiliateTablesAvailable(true);
+    await writeAudit('affiliate_profiles.delete', item.slug, item, null);
+    void refreshAffiliatesFromDb();
+    return true;
+  }
+
+  async function saveAffiliateSnapshot(item, draft, options = {}) {
+    if (!item?.id || !dbReady || !supabase || !canManageAffiliates) return false;
+    const payload = {
+      affiliate_id: item.id,
+      captured_at: draft?.capturedAt ? new Date(draft.capturedAt).toISOString() : new Date().toISOString(),
+      source: String(draft?.source || 'manual').trim() || 'manual',
+      is_live: draft?.isLive === true,
+      current_viewers: Number(draft?.currentViewers || 0) || 0,
+      average_viewers: Number(draft?.averageViewers || 0) || 0,
+      peak_viewers: Number(draft?.peakViewers || 0) || 0,
+      activity_hours: Number(draft?.activityHours || 0) || 0,
+      follower_count: Number(draft?.followerCount || 0) || 0,
+      subscriber_count: Number(draft?.subscriberCount || 0) || 0,
+      view_count: Number(draft?.viewCount || 0) || 0,
+      content_count: Number(draft?.contentCount || 0) || 0,
+      notes: String(draft?.notes || '').trim(),
+      metadata: draft?.metadata && typeof draft.metadata === 'object' ? draft.metadata : {},
+      updated_by: authUser?.id || null,
+    };
+
+    const { error } = await supabase.from('affiliate_stat_snapshots').insert(payload);
+    if (error) {
+      if (isMissingAffiliateTableError(error)) {
+        setAffiliateTablesAvailable(false);
+        if (!options.silent) alert('Drill-UK Affiliates is not enabled in Supabase yet. Run the latest SQL block first.');
+        return false;
+      }
+      if (!options.silent) alert(error.message || 'Affiliate snapshot could not be saved.');
+      return false;
+    }
+
+    setAffiliateTablesAvailable(true);
+    await writeAudit('affiliate_snapshots.save', item.slug, null, payload);
+    void refreshAffiliatesFromDb();
+    return true;
+  }
+
+  async function syncAffiliateYouTubeStats(item) {
+    if (!item?.id || !canManageAffiliates) return;
+    if (!YOUTUBE_API_KEY) {
+      alert('Add VITE_YOUTUBE_API_KEY to enable YouTube sync.');
+      return;
+    }
+
+    const channelId = String(item?.handles?.youtubeChannelId || '').trim();
+    if (!channelId) {
+      alert('This affiliate needs a YouTube Channel ID before it can be synced.');
+      return;
+    }
+
+    try {
+      const channelUrl = new URL('https://www.googleapis.com/youtube/v3/channels');
+      channelUrl.searchParams.set('part', 'snippet,statistics');
+      channelUrl.searchParams.set('id', channelId);
+      channelUrl.searchParams.set('key', YOUTUBE_API_KEY);
+
+      const channelResponse = await fetch(channelUrl.toString());
+      const channelJson = await channelResponse.json();
+      const channel = channelJson?.items?.[0];
+      if (!channelResponse.ok || !channel) throw new Error(channelJson?.error?.message || 'YouTube channel could not be loaded.');
+
+      let liveVideoId = '';
+      let concurrentViewers = 0;
+      let liveTitle = '';
+      let isLive = false;
+
+      const searchUrl = new URL('https://www.googleapis.com/youtube/v3/search');
+      searchUrl.searchParams.set('part', 'snippet');
+      searchUrl.searchParams.set('channelId', channelId);
+      searchUrl.searchParams.set('eventType', 'live');
+      searchUrl.searchParams.set('type', 'video');
+      searchUrl.searchParams.set('maxResults', '1');
+      searchUrl.searchParams.set('key', YOUTUBE_API_KEY);
+
+      const searchResponse = await fetch(searchUrl.toString());
+      const searchJson = await searchResponse.json();
+      if (searchResponse.ok && searchJson?.items?.[0]?.id?.videoId) {
+        liveVideoId = searchJson.items[0].id.videoId;
+        liveTitle = searchJson.items[0]?.snippet?.title || '';
+        isLive = true;
+
+        const liveVideoUrl = new URL('https://www.googleapis.com/youtube/v3/videos');
+        liveVideoUrl.searchParams.set('part', 'liveStreamingDetails,statistics');
+        liveVideoUrl.searchParams.set('id', liveVideoId);
+        liveVideoUrl.searchParams.set('key', YOUTUBE_API_KEY);
+        const liveVideoResponse = await fetch(liveVideoUrl.toString());
+        const liveVideoJson = await liveVideoResponse.json();
+        concurrentViewers = Number(liveVideoJson?.items?.[0]?.liveStreamingDetails?.concurrentViewers || 0) || 0;
+      }
+
+      const snapshotSaved = await saveAffiliateSnapshot(item, {
+        capturedAt: new Date().toISOString(),
+        source: 'youtube_api',
+        isLive,
+        currentViewers: concurrentViewers,
+        averageViewers: concurrentViewers || item?.latestSnapshot?.averageViewers || 0,
+        peakViewers: item?.latestSnapshot?.peakViewers || concurrentViewers || 0,
+        activityHours: item?.latestSnapshot?.activityHours || 0,
+        followerCount: 0,
+        subscriberCount: Number(channel?.statistics?.subscriberCount || 0) || 0,
+        viewCount: Number(channel?.statistics?.viewCount || 0) || 0,
+        contentCount: Number(channel?.statistics?.videoCount || 0) || 0,
+        notes: isLive ? `Auto-synced from YouTube while live: ${liveTitle || 'Current broadcast'}` : 'Auto-synced from YouTube channel statistics.',
+        metadata: {
+          liveVideoId,
+          liveTitle,
+          channelTitle: channel?.snippet?.title || '',
+        },
+      }, { silent: true });
+
+      if (!snapshotSaved) throw new Error('YouTube snapshot could not be saved.');
+
+      const nextAutomation = {
+        ...normalizeAffiliateAutomation(item.automation),
+        mode: 'youtube_api',
+        lastSyncAt: new Date().toISOString(),
+        lastSyncStatus: isLive ? 'Live stats refreshed' : 'Channel stats refreshed',
+      };
+      await supabase.from('affiliate_profiles').update({
+        automation: nextAutomation,
+        updated_by: authUser?.id || null,
+        updated_at: new Date().toISOString(),
+      }).eq('id', item.id);
+      await writeAudit('affiliate.youtube.sync', item.slug, null, nextAutomation);
+      void refreshAffiliatesFromDb();
+    } catch (error) {
+      alert(error?.message || 'YouTube sync failed.');
+    }
+  }
+
   async function saveCheckboxItem(item) {
     if (!canManageCheckboxes || !dbReady || !supabase) return;
     holdRealtimeSync(2600);
@@ -5833,6 +6169,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               <>
                 <TabsTrigger value="myprogress">My Progress</TabsTrigger>
                 <TabsTrigger value="livesheet">Coms & Importance</TabsTrigger>
+                <TabsTrigger value="affiliates">Drill-UK Affiliates</TabsTrigger>
                 <TabsTrigger value="essentials">Staff Essentials</TabsTrigger>
                 <TabsTrigger value="stafftools">Staff Tools</TabsTrigger>
               </>
@@ -5842,6 +6179,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
                 <TabsTrigger value="quizknowledge">Quizzes & Knowledge</TabsTrigger>
                 <TabsTrigger value="onboardingcheckup">Staff onboarding and Quiz completion</TabsTrigger>
                 <TabsTrigger value="livesheet">Coms & Importance</TabsTrigger>
+                <TabsTrigger value="affiliates">Drill-UK Affiliates</TabsTrigger>
                 <TabsTrigger value="essentials">Staff Essentials</TabsTrigger>
                 <TabsTrigger value="stafftools">Staff Tools</TabsTrigger>
                 <TabsTrigger value="management">Management</TabsTrigger>
@@ -5961,6 +6299,22 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
             <EmbeddedSheetHub
               title="Coms & Importance"
               sourceUrl={LIVE_SPREADSHEET_URL}
+            />
+          </TabsContent>
+
+          <TabsContent value="affiliates">
+            <AffiliatesHub
+              affiliates={affiliateProfiles}
+              selectedAffiliateSlug={selectedAffiliateSlug}
+              setSelectedAffiliateSlug={setSelectedAffiliateSlug}
+              canManageAffiliates={canManageAffiliates}
+              tableAvailable={affiliateTablesAvailable}
+              onRefresh={refreshAffiliatesFromDb}
+              onSaveAffiliate={saveAffiliateProfile}
+              onDeleteAffiliate={deleteAffiliateProfile}
+              onSaveSnapshot={saveAffiliateSnapshot}
+              onSyncYouTubeAffiliate={syncAffiliateYouTubeStats}
+              youtubeAutomationAvailable={Boolean(YOUTUBE_API_KEY)}
             />
           </TabsContent>
 
