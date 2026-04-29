@@ -39,6 +39,117 @@ const PROFILE_IDENTIFIER_LABELS = {
   steam: 'Steam',
 };
 const AFFILIATE_HANDLE_KEYS = ['twitch', 'youtube', 'youtubeChannelId', 'kick', 'tiktok', 'discord', 'x', 'instagram', 'website'];
+const DEFAULT_AFFILIATE_CREATORS = [
+  {
+    slug: 'arron',
+    display_name: 'arron',
+    category: 'creator',
+    status: 'active',
+    primary_platform: 'tiktok',
+    handles: { tiktok: 'https://www.tiktok.com/@arrondrilluk' },
+  },
+  {
+    slug: 'baldy',
+    display_name: 'Baldy',
+    category: 'creator',
+    status: 'active',
+    primary_platform: 'tiktok',
+    handles: { tiktok: 'https://www.tiktok.com/@baldyy00' },
+  },
+  {
+    slug: 'eddie',
+    display_name: 'eddie',
+    category: 'creator',
+    status: 'active',
+    primary_platform: 'tiktok',
+    handles: { tiktok: 'https://www.tiktok.com/@venom31.4' },
+  },
+  {
+    slug: 'franksabout',
+    display_name: 'FRANKSABOUT',
+    category: 'creator',
+    status: 'active',
+    primary_platform: 'tiktok',
+    handles: { tiktok: 'https://www.tiktok.com/@franksabout' },
+  },
+  {
+    slug: 'gummz',
+    display_name: 'GUMMZ',
+    category: 'creator',
+    status: 'active',
+    primary_platform: 'youtube',
+    handles: {
+      youtube: 'https://youtube.com/@gummzgaming',
+      tiktok: 'https://www.tiktok.com/@gummzgaming',
+    },
+  },
+  {
+    slug: 'james',
+    display_name: 'James',
+    category: 'streamer',
+    status: 'active',
+    primary_platform: 'twitch',
+    handles: { twitch: 'https://www.twitch.tv/nsidestreamers' },
+  },
+  {
+    slug: 'mmb664',
+    display_name: 'MMB664',
+    category: 'creator',
+    status: 'active',
+    primary_platform: 'tiktok',
+    handles: { tiktok: 'https://www.tiktok.com/@mmb_664' },
+  },
+  {
+    slug: 'moses',
+    display_name: 'Moses',
+    category: 'creator',
+    status: 'active',
+    primary_platform: 'tiktok',
+    handles: { tiktok: 'https://www.tiktok.com/@moses_fivem' },
+  },
+  {
+    slug: 'mr-wick',
+    display_name: 'Mr.Wick',
+    category: 'creator',
+    status: 'active',
+    primary_platform: 'tiktok',
+    handles: { tiktok: 'https://www.tiktok.com/@mrwick847' },
+  },
+  {
+    slug: 'rez',
+    display_name: 'Rez',
+    category: 'creator',
+    status: 'active',
+    primary_platform: 'tiktok',
+    handles: { tiktok: 'https://vm.tiktok.com/ZN9d2rsLBvttD-rwkcp/' },
+  },
+  {
+    slug: 'ryley',
+    display_name: 'Ryley',
+    category: 'creator',
+    status: 'active',
+    primary_platform: 'tiktok',
+    handles: { tiktok: 'https://www.tiktok.com/@gameglitch23' },
+  },
+  {
+    slug: 'spudman',
+    display_name: 'spudman',
+    category: 'creator',
+    status: 'active',
+    primary_platform: 'tiktok',
+    handles: { tiktok: 'https://www.tiktok.com/@__msngg__' },
+  },
+].map((creator) => ({
+  ...creator,
+  manager_name: '',
+  notes: 'Preloaded from the DRILL-UK creator / affiliate socials overview.',
+  is_active: true,
+  goals: {},
+  automation: {
+    mode: 'manual',
+    syncNotes: 'Preloaded profile. Add stat snapshots after streams or weekly reviews.',
+  },
+}));
 
 function normalizeAffiliateHandles(handles) {
   return AFFILIATE_HANDLE_KEYS.reduce((acc, key) => {
@@ -1778,6 +1889,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const staffSaveQueueRef = useRef(new Map());
   const removalColumnsAvailableRef = useRef(false);
   const quizShellBackfillBusyRef = useRef(false);
+  const affiliateDefaultSeedAttemptedRef = useRef(false);
   const isOwnerSession = (authUser?.email || '').toLowerCase() === SITE_OWNER_EMAIL;
   const [rosterSyncOpen, setRosterSyncOpen] = useState(false);
   const [rosterSyncText, setRosterSyncText] = useState(formatRosterSeedForInput());
@@ -2545,6 +2657,34 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       return;
     }
 
+    let profileRows = profilesResult.data || [];
+    if (canManageAffiliates && !affiliateDefaultSeedAttemptedRef.current) {
+      affiliateDefaultSeedAttemptedRef.current = true;
+      const existingSlugs = new Set(profileRows.map(row => row.slug));
+      const missingDefaults = DEFAULT_AFFILIATE_CREATORS
+        .filter(seed => !existingSlugs.has(seed.slug))
+        .map(seed => ({
+          ...seed,
+          updated_by: authUser?.id || null,
+          updated_at: new Date().toISOString(),
+        }));
+
+      if (missingDefaults.length) {
+        const { data: seededRows, error: seedError } = await supabase
+          .from('affiliate_profiles')
+          .upsert(missingDefaults, { onConflict: 'slug' })
+          .select('*');
+
+        if (!seedError && seededRows?.length) {
+          profileRows = [...profileRows, ...seededRows];
+          await writeAudit('affiliate_profiles.seed_defaults', 'drill-uk-creators', null, {
+            count: missingDefaults.length,
+            slugs: missingDefaults.map(seed => seed.slug),
+          });
+        }
+      }
+    }
+
     const snapshotsByAffiliateId = new Map();
     (snapshotsResult.data || []).map(normalizeAffiliateSnapshotRecord).forEach((snapshot) => {
       const list = snapshotsByAffiliateId.get(snapshot.affiliateId) || [];
@@ -2553,7 +2693,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     });
 
     setAffiliateTablesAvailable(true);
-    setAffiliateProfiles((profilesResult.data || []).map((row) => {
+    setAffiliateProfiles(profileRows.map((row) => {
       const profileRow = normalizeAffiliateProfileRecord(row);
       const snapshots = snapshotsByAffiliateId.get(profileRow.id) || [];
       return {

@@ -107,7 +107,10 @@ function statusBadgeClass(status) {
 }
 
 function buildPlatformUrl(platform, value, extra = {}) {
-  const cleaned = String(value || '').trim().replace(/^@/, '');
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const cleaned = raw.replace(/^@/, '');
   if (!cleaned) return '';
   if (platform === 'website') return cleaned.startsWith('http') ? cleaned : `https://${cleaned}`;
   if (platform === 'twitch') return `https://www.twitch.tv/${cleaned}`;
