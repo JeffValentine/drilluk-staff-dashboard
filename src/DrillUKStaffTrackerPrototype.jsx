@@ -20,6 +20,7 @@ import StaffEssentialsHub from '@/components/StaffEssentialsHub';
 import EmbeddedSheetHub from '@/components/EmbeddedSheetHub';
 import OnboardingQuizCheckupHub from '@/components/OnboardingQuizCheckupHub';
 import AffiliatesHub from '@/components/AffiliatesHub';
+import RiskPlayersHub from '@/components/RiskPlayersHub';
 import { DEFAULT_INTERVIEW_TEMPLATE, normalizeInterviewTemplate } from '@/interviewQuestionBank';
 import { EXPERIMENTAL_QUIZ_QUESTIONS } from '@/experimentalQuizData';
 
@@ -1759,6 +1760,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const canManageInterviews = effectiveRole === 'head_admin' || Boolean(profile?.god_key_enabled);
   const canManageEssentials = effectiveRole === 'head_admin' || Boolean(profile?.god_key_enabled);
   const canManageAffiliates = effectiveRole === 'head_admin' || Boolean(profile?.god_key_enabled);
+  const canManageRiskPlayers = ['head_admin', 'admin'].includes(effectiveRole) || Boolean(profile?.god_key_enabled);
   const canManageOperationalCheckups = profile?.role === 'head_admin' || Boolean(profile?.god_key_enabled);
   const isStaffInTraining = effectiveRole === 'staff_in_training';
   const canAccessExperimentalQuiz = profile?.role === 'head_admin' || Boolean(profile?.experimental_quiz_enabled);
@@ -1855,6 +1857,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [affiliateProfiles, setAffiliateProfiles] = useState([]);
   const [selectedAffiliateSlug, setSelectedAffiliateSlug] = useState('');
   const [affiliateTablesAvailable, setAffiliateTablesAvailable] = useState(true);
+  const [riskPlayerUploads, setRiskPlayerUploads] = useState([]);
+  const [riskPlayerTableAvailable, setRiskPlayerTableAvailable] = useState(true);
   const [unifiedQuizzes, setUnifiedQuizzes] = useState([]);
   const [unifiedQuizQuestions, setUnifiedQuizQuestions] = useState([]);
   const [unifiedQuizAssignments, setUnifiedQuizAssignments] = useState([]);
@@ -2497,6 +2501,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     return error?.code === 'PGRST205' || error?.code === '42P01' || /(affiliate_profiles|affiliate_stat_snapshots)/i.test(message) && /(not found|does not exist|Could not find the table|relation)/i.test(message);
   }
 
+  function isMissingRiskPlayersTableError(error) {
+    const message = String(error?.message || error?.details || '');
+    return error?.code === 'PGRST205' || error?.code === '42P01' || /risk_player_uploads/i.test(message) && /(not found|does not exist|Could not find the table|relation)/i.test(message);
+  }
+
   function buildStaffEssentialModule(index = 0) {
     return {
       id: 'module-' + Date.now() + '-' + index,
@@ -2702,6 +2711,41 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
         latestSnapshot: snapshots[0] || null,
       };
     }));
+  }
+
+  function normalizeRiskPlayerUploadRecord(row) {
+    return {
+      id: row.id,
+      fileName: row.file_name || 'Risk player upload',
+      uploadedAt: row.uploaded_at || row.created_at || null,
+      uploadedBy: row.uploaded_by || null,
+      report: {
+        summary: row.summary && typeof row.summary === 'object' ? row.summary : {},
+        entries: Array.isArray(row.parsed_entries) ? row.parsed_entries : [],
+        players: Array.isArray(row.parsed_players) ? row.parsed_players : [],
+        topPlayers: Array.isArray(row.top_players) ? row.top_players : [],
+      },
+    };
+  }
+
+  async function refreshRiskPlayersFromDb() {
+    if (!dbReady || !supabase) return;
+    const { data, error } = await supabase
+      .from('risk_player_uploads')
+      .select('id, file_name, uploaded_at, uploaded_by, summary, parsed_entries, parsed_players, top_players')
+      .order('uploaded_at', { ascending: false })
+      .limit(20);
+
+    if (error) {
+      if (isMissingRiskPlayersTableError(error)) {
+        setRiskPlayerTableAvailable(false);
+        setRiskPlayerUploads([]);
+      }
+      return;
+    }
+
+    setRiskPlayerTableAvailable(true);
+    setRiskPlayerUploads((data || []).map(normalizeRiskPlayerUploadRecord));
   }
 
   async function refreshOperationalCheckupFromDb() {
@@ -2947,6 +2991,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   useEffect(() => {
     if (!dbReady || !supabase) return;
+    refreshRiskPlayersFromDb();
+  }, [dbReady, authUser?.id]);
+
+  useEffect(() => {
+    if (!dbReady || !supabase) return;
     refreshUnifiedQuizModelFromDb();
   }, [dbReady, authUser?.id]);
 
@@ -2963,6 +3012,11 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   useEffect(() => {
     if (activeMainTab !== 'affiliates' || !dbReady || !supabase) return;
     refreshAffiliatesFromDb();
+  }, [activeMainTab, dbReady, authUser?.id]);
+
+  useEffect(() => {
+    if (activeMainTab !== 'riskplayers' || !dbReady || !supabase) return;
+    refreshRiskPlayersFromDb();
   }, [activeMainTab, dbReady, authUser?.id]);
 
   useEffect(() => {
@@ -3343,7 +3397,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   useEffect(() => {
     const traineeTabs = ['myprogress', 'livesheet', 'affiliates', 'essentials', 'stafftools'];
-    const staffTabs = ['employee', 'quizknowledge', 'onboardingcheckup', 'livesheet', 'affiliates', 'essentials', 'stafftools', 'management', 'tracker', 'session', 'progression', 'discipline', 'audit', 'ranks', 'checkboxes', ...(canManageInterviews ? ['interviews'] : [])];
+    const staffTabs = ['employee', 'quizknowledge', 'onboardingcheckup', 'riskplayers', 'livesheet', 'affiliates', 'essentials', 'stafftools', 'management', 'tracker', 'session', 'progression', 'discipline', 'audit', 'ranks', 'checkboxes', ...(canManageInterviews ? ['interviews'] : [])];
     const allowed = isStaffInTraining ? traineeTabs : staffTabs;
     const fallback = isStaffInTraining ? 'myprogress' : 'employee';
     if (!allowed.includes(activeMainTab)) setActiveMainTab(fallback);
@@ -5919,6 +5973,36 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     }
   }
 
+  async function saveRiskPlayerUpload(fileName, rawText, parsedReport) {
+    if (!dbReady || !supabase || !canManageRiskPlayers) return false;
+    const payload = {
+      file_name: String(fileName || 'risk-players.txt').trim() || 'risk-players.txt',
+      raw_text: String(rawText || ''),
+      summary: parsedReport?.summary || {},
+      parsed_entries: Array.isArray(parsedReport?.entries) ? parsedReport.entries : [],
+      parsed_players: Array.isArray(parsedReport?.players) ? parsedReport.players : [],
+      top_players: Array.isArray(parsedReport?.topPlayers) ? parsedReport.topPlayers : [],
+      uploaded_by: authUser?.id || null,
+      uploaded_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase.from('risk_player_uploads').insert(payload);
+    if (error) {
+      if (isMissingRiskPlayersTableError(error)) {
+        setRiskPlayerTableAvailable(false);
+        alert('Risk Players is not enabled in Supabase yet. Run the latest SQL block first.');
+        return false;
+      }
+      alert(error.message || 'Risk player upload could not be saved.');
+      return false;
+    }
+
+    setRiskPlayerTableAvailable(true);
+    await writeAudit('risk_players.upload', payload.file_name, null, payload.summary);
+    void refreshRiskPlayersFromDb();
+    return true;
+  }
+
   async function saveCheckboxItem(item) {
     if (!canManageCheckboxes || !dbReady || !supabase) return;
     holdRealtimeSync(2600);
@@ -6109,6 +6193,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       ];
   const operationsNavItems = [
     { key: 'onboardingcheckup', label: 'Checkups' },
+    { key: 'riskplayers', label: 'Risk Players' },
     { key: 'affiliates', label: 'Affiliates' },
   ];
   const knowledgeNavKeys = knowledgeNavItems.map(item => item.key);
@@ -6510,6 +6595,18 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
               checkupHistory={operationalCheckupHistoryDetailed}
             />
           </TabsContent>
+
+          <TabsContent value="riskplayers">
+            <RiskPlayersHub
+              latestUpload={riskPlayerUploads[0] || null}
+              uploadHistory={riskPlayerUploads}
+              tableAvailable={riskPlayerTableAvailable}
+              canManageRiskPlayers={canManageRiskPlayers}
+              onRefresh={refreshRiskPlayersFromDb}
+              onSaveUpload={saveRiskPlayerUpload}
+            />
+          </TabsContent>
+
           <TabsContent value="livesheet">
             <EmbeddedSheetHub
               title="Coms & Importance"

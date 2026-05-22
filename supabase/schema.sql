@@ -276,6 +276,10 @@ begin
   set updated_by = null
   where updated_by = target_user;
 
+  update public.risk_player_uploads
+  set uploaded_by = null
+  where uploaded_by = target_user;
+
   delete from public.profiles where id = target_user;
   delete from auth.users where id = target_user;
 end;
@@ -1433,4 +1437,58 @@ on conflict (slug) do update set
   automation = coalesce(public.affiliate_profiles.automation, '{}'::jsonb) || excluded.automation,
   is_active = true,
   updated_at = now();
+
+create table if not exists public.risk_player_uploads (
+  id uuid primary key default gen_random_uuid(),
+  file_name text not null,
+  raw_text text not null default '',
+  summary jsonb not null default '{}'::jsonb,
+  parsed_entries jsonb not null default '[]'::jsonb,
+  parsed_players jsonb not null default '[]'::jsonb,
+  top_players jsonb not null default '[]'::jsonb,
+  uploaded_by uuid references auth.users(id),
+  uploaded_at timestamptz not null default now()
+);
+
+alter table public.risk_player_uploads enable row level security;
+
+drop policy if exists "risk_player_uploads_read_authenticated" on public.risk_player_uploads;
+create policy "risk_player_uploads_read_authenticated"
+on public.risk_player_uploads for select
+to authenticated
+using (auth.uid() is not null);
+
+drop policy if exists "risk_player_uploads_write_admin_head" on public.risk_player_uploads;
+create policy "risk_player_uploads_write_admin_head"
+on public.risk_player_uploads for insert
+to authenticated
+with check (
+  public.current_user_role() in ('admin', 'head_admin')
+  or public.current_user_has_god_key() = true
+);
+
+drop policy if exists "risk_player_uploads_update_admin_head" on public.risk_player_uploads;
+create policy "risk_player_uploads_update_admin_head"
+on public.risk_player_uploads for update
+to authenticated
+using (
+  public.current_user_role() in ('admin', 'head_admin')
+  or public.current_user_has_god_key() = true
+)
+with check (
+  public.current_user_role() in ('admin', 'head_admin')
+  or public.current_user_has_god_key() = true
+);
+
+drop policy if exists "risk_player_uploads_delete_admin_head" on public.risk_player_uploads;
+create policy "risk_player_uploads_delete_admin_head"
+on public.risk_player_uploads for delete
+to authenticated
+using (
+  public.current_user_role() in ('admin', 'head_admin')
+  or public.current_user_has_god_key() = true
+);
+
+create index if not exists risk_player_uploads_uploaded_at_idx
+on public.risk_player_uploads(uploaded_at desc);
 
