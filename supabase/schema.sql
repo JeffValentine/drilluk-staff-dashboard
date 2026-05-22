@@ -1446,7 +1446,7 @@ create table if not exists public.risk_player_uploads (
   parsed_entries jsonb not null default '[]'::jsonb,
   parsed_players jsonb not null default '[]'::jsonb,
   top_players jsonb not null default '[]'::jsonb,
-  uploaded_by uuid references auth.users(id),
+  uploaded_by uuid references auth.users(id) on delete set null,
   uploaded_at timestamptz not null default now()
 );
 
