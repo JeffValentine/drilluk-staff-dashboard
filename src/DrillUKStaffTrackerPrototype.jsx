@@ -3396,7 +3396,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   }, [sessionTargetId]);
 
   useEffect(() => {
-    const traineeTabs = ['myprogress', 'livesheet', 'affiliates', 'essentials', 'stafftools'];
+    const traineeTabs = ['myprogress', 'riskplayers', 'livesheet', 'affiliates', 'essentials', 'stafftools'];
     const staffTabs = ['employee', 'quizknowledge', 'onboardingcheckup', 'riskplayers', 'livesheet', 'affiliates', 'essentials', 'stafftools', 'management', 'tracker', 'session', 'progression', 'discipline', 'audit', 'ranks', 'checkboxes', ...(canManageInterviews ? ['interviews'] : [])];
     const allowed = isStaffInTraining ? traineeTabs : staffTabs;
     const fallback = isStaffInTraining ? 'myprogress' : 'employee';
@@ -6180,6 +6180,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
 
   const knowledgeNavItems = isStaffInTraining
     ? [
+        { key: 'riskplayers', label: 'Risk Players' },
         { key: 'livesheet', label: 'Coms' },
         { key: 'affiliates', label: 'Affiliates' },
         { key: 'essentials', label: 'Essentials' },
