@@ -73,6 +73,10 @@ grant execute on function public.current_user_role() to authenticated;
 grant execute on function public.current_user_is_active() to authenticated;
 grant execute on function public.current_user_can_access_dashboard() to authenticated;
 grant execute on function public.current_user_has_god_key() to authenticated;
+revoke all on function public.current_user_role() from public;
+revoke all on function public.current_user_is_active() from public;
+revoke all on function public.current_user_can_access_dashboard() from public;
+revoke all on function public.current_user_has_god_key() from public;
 revoke all on function public.current_user_role() from anon;
 revoke all on function public.current_user_is_active() from anon;
 revoke all on function public.current_user_can_access_dashboard() from anon;
@@ -116,6 +120,8 @@ $$;
 
 grant execute on function public.current_user_can_write_quiz_attempt(bigint) to authenticated;
 grant execute on function public.current_user_can_write_quiz_attempt_answers(uuid) to authenticated;
+revoke all on function public.current_user_can_write_quiz_attempt(bigint) from public;
+revoke all on function public.current_user_can_write_quiz_attempt_answers(uuid) from public;
 revoke all on function public.current_user_can_write_quiz_attempt(bigint) from anon;
 revoke all on function public.current_user_can_write_quiz_attempt_answers(uuid) from anon;
 
@@ -131,6 +137,7 @@ as $$
 $$;
 
 grant execute on function public.is_developer_account() to authenticated;
+revoke all on function public.is_developer_account() from public;
 revoke all on function public.is_developer_account() from anon;
 
 -- Public signup pre-validation is no longer needed. The auth trigger validates and consumes tokens.
