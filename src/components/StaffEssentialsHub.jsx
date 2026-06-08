@@ -5,46 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-
-function toEmbeddableVideoUrl(rawUrl) {
-  const value = String(rawUrl || '').trim();
-  if (!value) return '';
-
-  try {
-    const url = new URL(value);
-    const host = url.hostname.toLowerCase();
-
-    if (host === 'youtu.be') {
-      const id = url.pathname.replace(/^\//, '').split('/')[0];
-      return id ? `https://www.youtube.com/embed/${id}` : value;
-    }
-
-    if (host.includes('youtube.com')) {
-      if (url.pathname.startsWith('/embed/')) return value;
-      if (url.pathname === '/watch') {
-        const id = url.searchParams.get('v');
-        return id ? `https://www.youtube.com/embed/${id}` : value;
-      }
-      if (url.pathname.startsWith('/shorts/')) {
-        const id = url.pathname.split('/')[2];
-        return id ? `https://www.youtube.com/embed/${id}` : value;
-      }
-      if (url.pathname.startsWith('/live/')) {
-        const id = url.pathname.split('/')[2];
-        return id ? `https://www.youtube.com/embed/${id}` : value;
-      }
-    }
-
-    if (host.includes('vimeo.com')) {
-      const id = url.pathname.replace(/^\//, '').split('/')[0];
-      return id ? `https://player.vimeo.com/video/${id}` : value;
-    }
-  } catch {
-    return value;
-  }
-
-  return value;
-}
+import { safeExternalHref, toSafeEmbeddableVideoUrl } from '@/lib/safeUrls';
 
 function emptyModuleDraft(index = 0) {
   return {
@@ -137,6 +98,7 @@ export default function StaffEssentialsHub({
     || visibleEssentials[0]
     || essentials[0]
     || null;
+  const selectedCoverEmbedUrl = toSafeEmbeddableVideoUrl(selected?.coverVideoUrl);
 
   useEffect(() => {
     if (!selected && selectedEssentialSlug) setSelectedEssentialSlug('');
@@ -305,10 +267,10 @@ export default function StaffEssentialsHub({
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {selected.coverVideoUrl && (
+                {selectedCoverEmbedUrl && (
                   <div className="overflow-hidden rounded-[28px] border border-white/10 bg-black/40">
                     <iframe
-                      src={toEmbeddableVideoUrl(selected.coverVideoUrl)}
+                      src={selectedCoverEmbedUrl}
                       title={selected.title}
                       className="aspect-video w-full"
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -326,66 +288,76 @@ export default function StaffEssentialsHub({
             </Card>
 
             <div className="space-y-4">
-              {selected.modules.map((module, index) => (
-                <Card key={module.id || `${selected.slug}-${index}`} className="border-white/10 bg-white/5">
-                  <CardHeader>
-                    <CardTitle className="flex flex-wrap items-center gap-2">
-                      <Badge className={moduleTypeClass(module.type)}>{module.type}</Badge>
-                      <span>{module.title || `Module ${index + 1}`}</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {!!module.body && (
-                      <div className="whitespace-pre-line rounded-2xl border border-white/10 bg-black/25 p-4 text-sm leading-7 text-zinc-200">
-                        {module.body}
-                      </div>
-                    )}
-                    {module.videoUrl && (
-                      <div className="space-y-3">
-                        <div className="overflow-hidden rounded-3xl border border-white/10 bg-black/40">
-                          <iframe
-                            src={toEmbeddableVideoUrl(module.videoUrl)}
-                            title={module.title || selected.title}
-                            className="aspect-video w-full"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                            referrerPolicy="strict-origin-when-cross-origin"
-                            allowFullScreen
-                          />
+              {selected.modules.map((module, index) => {
+                const moduleEmbedUrl = toSafeEmbeddableVideoUrl(module.videoUrl);
+                const moduleVideoHref = safeExternalHref(module.videoUrl);
+                const moduleResourceHref = safeExternalHref(module.resourceUrl);
+
+                return (
+                  <Card key={module.id || `${selected.slug}-${index}`} className="border-white/10 bg-white/5">
+                    <CardHeader>
+                      <CardTitle className="flex flex-wrap items-center gap-2">
+                        <Badge className={moduleTypeClass(module.type)}>{module.type}</Badge>
+                        <span>{module.title || `Module ${index + 1}`}</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {!!module.body && (
+                        <div className="whitespace-pre-line rounded-2xl border border-white/10 bg-black/25 p-4 text-sm leading-7 text-zinc-200">
+                          {module.body}
                         </div>
-                        <a href={module.videoUrl} target="_blank" rel="noreferrer" className="inline-flex text-sm text-cyan-200 hover:text-cyan-100">
-                          Open clip in new tab
-                        </a>
-                      </div>
-                    )}
-                    {!!module.checklist?.length && (
-                      <div className="rounded-2xl border border-amber-400/20 bg-amber-500/8 p-4">
-                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-200">Things to remember</div>
-                        <div className="mt-3 space-y-2">
-                          {module.checklist.map((item, checklistIndex) => (
-                            <div key={`${module.id || index}-check-${checklistIndex}`} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-200">
-                              {item}
+                      )}
+                      {(moduleEmbedUrl || moduleVideoHref) && (
+                        <div className="space-y-3">
+                          {moduleEmbedUrl && (
+                            <div className="overflow-hidden rounded-3xl border border-white/10 bg-black/40">
+                              <iframe
+                                src={moduleEmbedUrl}
+                                title={module.title || selected.title}
+                                className="aspect-video w-full"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                referrerPolicy="strict-origin-when-cross-origin"
+                                allowFullScreen
+                              />
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {(module.resourceLabel || module.resourceUrl) && (
-                      <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/8 p-4 text-sm text-cyan-100">
-                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200">Linked resource</div>
-                        <div className="mt-3">
-                          {module.resourceUrl ? (
-                            <a href={module.resourceUrl} target="_blank" rel="noreferrer" className="hover:text-white">
-                              {module.resourceLabel || module.resourceUrl}
+                          )}
+                          {moduleVideoHref && (
+                            <a href={moduleVideoHref} target="_blank" rel="noreferrer" className="inline-flex text-sm text-cyan-200 hover:text-cyan-100">
+                              Open clip in new tab
                             </a>
-                          ) : (
-                            module.resourceLabel
                           )}
                         </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
+                      )}
+                      {!!module.checklist?.length && (
+                        <div className="rounded-2xl border border-amber-400/20 bg-amber-500/8 p-4">
+                          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-200">Things to remember</div>
+                          <div className="mt-3 space-y-2">
+                            {module.checklist.map((item, checklistIndex) => (
+                              <div key={`${module.id || index}-check-${checklistIndex}`} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-200">
+                                {item}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {(module.resourceLabel || moduleResourceHref) && (
+                        <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/8 p-4 text-sm text-cyan-100">
+                          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200">Linked resource</div>
+                          <div className="mt-3">
+                            {moduleResourceHref ? (
+                              <a href={moduleResourceHref} target="_blank" rel="noreferrer" className="hover:text-white">
+                                {module.resourceLabel || moduleResourceHref}
+                              </a>
+                            ) : (
+                              module.resourceLabel
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           </>
         )}

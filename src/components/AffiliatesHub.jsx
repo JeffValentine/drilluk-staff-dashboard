@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { safeExternalHref } from '@/lib/safeUrls';
 
 const PLATFORM_KEYS = ['twitch', 'youtube', 'youtubeChannelId', 'kick', 'tiktok', 'discord', 'x', 'instagram', 'website'];
 const PLATFORM_LABELS = {
@@ -428,7 +429,7 @@ export default function AffiliatesHub({
                     <div className="mt-4 grid gap-3 md:grid-cols-2">
                       {Object.entries(selected.handles || {}).filter(([, value]) => String(value || '').trim()).map(([key, value]) => {
                         if (key === 'youtubeChannelId') return null;
-                        const href = buildPlatformUrl(key, value, selected.handles);
+                        const href = safeExternalHref(buildPlatformUrl(key, value, selected.handles));
                         return (
                           <div key={key} className="rounded-2xl border border-white/10 bg-white/5 p-3">
                             <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">{PLATFORM_LABELS[key] || key}</div>

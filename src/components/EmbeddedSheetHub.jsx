@@ -2,30 +2,12 @@ import React, { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { safeExternalHref, toSafeGoogleSheetEmbedUrl } from '@/lib/safeUrls';
 
 const SHEET_SCALE = 0.8;
 const SHEET_WIDTH_PERCENT = `${100 / SHEET_SCALE}%`;
 const SHEET_HEIGHT = '97.5vh';
 const SHEET_VIEWPORT_HEIGHT = '78vh';
-
-function buildGoogleSheetEmbedUrl(rawUrl) {
-  const value = String(rawUrl || '').trim();
-  if (!value) return '';
-
-  try {
-    const url = new URL(value);
-    const segments = url.pathname.split('/').filter(Boolean);
-    const docIndex = segments.indexOf('d');
-    const sheetId = docIndex >= 0 ? segments[docIndex + 1] : '';
-    const hashParams = new URLSearchParams(String(url.hash || '').replace(/^#/, ''));
-    const gid = url.searchParams.get('gid') || hashParams.get('gid') || '0';
-
-    if (!sheetId) return value;
-    return `https://docs.google.com/spreadsheets/d/${sheetId}/preview?gid=${encodeURIComponent(gid)}&rm=minimal`;
-  } catch {
-    return value;
-  }
-}
 
 export default function EmbeddedSheetHub({
   title = 'Live Spreadsheet',
@@ -34,7 +16,8 @@ export default function EmbeddedSheetHub({
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [darkView, setDarkView] = useState(true);
 
-  const baseEmbedUrl = useMemo(() => buildGoogleSheetEmbedUrl(sourceUrl), [sourceUrl]);
+  const baseEmbedUrl = useMemo(() => toSafeGoogleSheetEmbedUrl(sourceUrl), [sourceUrl]);
+  const sourceHref = useMemo(() => safeExternalHref(sourceUrl), [sourceUrl]);
   const iframeUrl = useMemo(() => {
     if (!baseEmbedUrl) return '';
     const separator = baseEmbedUrl.includes('?') ? '&' : '?';
@@ -66,14 +49,16 @@ export default function EmbeddedSheetHub({
               >
                 Refresh Sheet
               </Button>
-              <a href={sourceUrl} target="_blank" rel="noreferrer" className="inline-flex">
-                <Button
-                  type="button"
-                  className="rounded-2xl border border-emerald-400/35 bg-[linear-gradient(135deg,rgba(5,10,20,0.96),rgba(5,150,105,0.18),rgba(6,78,59,0.24))] text-emerald-50 hover:bg-[linear-gradient(135deg,rgba(10,16,28,0.98),rgba(5,150,105,0.24),rgba(6,78,59,0.3))]"
-                >
-                  Open Full Sheet
-                </Button>
-              </a>
+              {sourceHref && (
+                <a href={sourceHref} target="_blank" rel="noreferrer" className="inline-flex">
+                  <Button
+                    type="button"
+                    className="rounded-2xl border border-emerald-400/35 bg-[linear-gradient(135deg,rgba(5,10,20,0.96),rgba(5,150,105,0.18),rgba(6,78,59,0.24))] text-emerald-50 hover:bg-[linear-gradient(135deg,rgba(10,16,28,0.98),rgba(5,150,105,0.24),rgba(6,78,59,0.3))]"
+                  >
+                    Open Full Sheet
+                  </Button>
+                </a>
+              )}
             </div>
           </CardTitle>
         </CardHeader>

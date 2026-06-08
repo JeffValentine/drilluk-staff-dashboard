@@ -327,21 +327,6 @@ export default function App() {
       return;
     }
 
-    const { data: tokenOk, error: tokenError } = await supabase.rpc("consume_signup_token", {
-      token_input: cleanedToken,
-      claimant_email: email,
-    });
-
-    if (tokenError) {
-      setError(tokenError.message || "Token verification failed.");
-      return;
-    }
-
-    if (!tokenOk) {
-      setError("Invalid or already used token.");
-      return;
-    }
-
     const { error: signUpError } = await supabase.auth.signUp({
       email,
       password,
@@ -349,6 +334,7 @@ export default function App() {
         emailRedirectTo: `${window.location.origin}/`,
         data: {
           username: username?.trim() || email.split("@")[0],
+          signup_token: cleanedToken,
         },
       },
     });

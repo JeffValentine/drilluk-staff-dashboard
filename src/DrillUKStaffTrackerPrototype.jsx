@@ -5072,17 +5072,22 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
       window.alert('You cannot delete your own account from this screen.');
       return;
     }
-    const confirmed = window.confirm('Permanently delete this dashboard account? This removes login access, email/password auth, and profile data.');
+    const confirmed = window.confirm('Disable this dashboard account and unlink it from staff records? This keeps audit history intact.');
     if (!confirmed) return;
 
-    const { error } = await supabase.rpc('admin_delete_user', { target_user: userId });
-    if (error) {
-      window.alert(`Delete failed: ${error.message}`);
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({ is_active: false, god_key_enabled: false, experimental_quiz_enabled: false })
+      .eq('id', userId);
+    if (profileError) {
+      window.alert(`Disable failed: ${profileError.message}`);
       return;
     }
-    setManagementUsers(prev => prev.filter(u => u.id !== userId));
+
+    await supabase.from('staff_members').update({ trainee_user_id: null }).eq('trainee_user_id', userId);
+    setManagementUsers(prev => prev.map(u => (u.id === userId ? { ...u, is_active: false, god_key_enabled: false, experimental_quiz_enabled: false } : u)));
     setStaff(prev => prev.map(member => (member.traineeUserId === userId ? { ...member, traineeUserId: null } : member)));
-    await writeAudit('user.delete', userId, null, { deleted: true });
+    await writeAudit('user.disable', userId, null, { is_active: false, unlinked_staff_profile: true });
   }
 
   async function updateUserAvatar(userId, avatarUrl) {

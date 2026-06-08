@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
+import { safeExternalHref, toSafeEmbeddableVideoUrl } from '@/lib/safeUrls';
 
 function normalizeScenes(scenes = [], title = 'Video Quiz') {
   if (!Array.isArray(scenes) || !scenes.length) {
@@ -27,46 +28,6 @@ function normalizeScenes(scenes = [], title = 'Video Quiz') {
       ? scene.notePrompts.map(value => String(value || '').trim()).filter(Boolean)
       : ['List the rule breaks or concerns you spotted in the clip.'],
   }));
-}
-
-function toEmbeddableVideoUrl(rawUrl) {
-  const value = String(rawUrl || '').trim();
-  if (!value) return '';
-
-  try {
-    const url = new URL(value);
-    const host = url.hostname.toLowerCase();
-
-    if (host === 'youtu.be') {
-      const id = url.pathname.replace(/^\//, '').split('/')[0];
-      return id ? `https://www.youtube.com/embed/${id}` : value;
-    }
-
-    if (host.includes('youtube.com')) {
-      if (url.pathname.startsWith('/embed/')) return value;
-      if (url.pathname === '/watch') {
-        const id = url.searchParams.get('v');
-        return id ? `https://www.youtube.com/embed/${id}` : value;
-      }
-      if (url.pathname.startsWith('/shorts/')) {
-        const id = url.pathname.split('/')[2];
-        return id ? `https://www.youtube.com/embed/${id}` : value;
-      }
-      if (url.pathname.startsWith('/live/')) {
-        const id = url.pathname.split('/')[2];
-        return id ? `https://www.youtube.com/embed/${id}` : value;
-      }
-    }
-
-    if (host.includes('vimeo.com')) {
-      const id = url.pathname.replace(/^\//, '').split('/')[0];
-      return id ? `https://player.vimeo.com/video/${id}` : value;
-    }
-  } catch {
-    return value;
-  }
-
-  return value;
 }
 
 export default function VideoQuizRunner({
@@ -154,7 +115,8 @@ export default function VideoQuizRunner({
 
       <div className="space-y-4">
         {normalizedScenes.map((scene, sceneIndex) => {
-          const embeddedVideoUrl = toEmbeddableVideoUrl(scene.videoUrl);
+          const embeddedVideoUrl = toSafeEmbeddableVideoUrl(scene.videoUrl);
+          const videoHref = safeExternalHref(scene.videoUrl);
           return (
             <div key={scene.id} className="grid gap-4 xl:grid-cols-[1fr,0.92fr]">
               <Card className="border-white/10 bg-white/5">
@@ -178,8 +140,8 @@ export default function VideoQuizRunner({
                       No video URL configured yet.
                     </div>
                   )}
-                  {scene.videoUrl && (
-                    <a href={scene.videoUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-sm text-cyan-200 hover:text-cyan-100">
+                  {videoHref && (
+                    <a href={videoHref} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-sm text-cyan-200 hover:text-cyan-100">
                       Open video in a new tab
                     </a>
                   )}
