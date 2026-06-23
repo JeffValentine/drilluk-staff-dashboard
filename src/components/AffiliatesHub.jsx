@@ -21,6 +21,17 @@ const PLATFORM_LABELS = {
   website: 'Website',
 };
 
+const PLATFORM_ALLOWED_HOSTS = {
+  twitch: ['twitch.tv'],
+  youtube: ['youtube.com', 'youtu.be'],
+  youtubeChannelId: ['youtube.com', 'youtu.be'],
+  kick: ['kick.com'],
+  tiktok: ['tiktok.com'],
+  instagram: ['instagram.com'],
+  x: ['x.com'],
+  website: ['drill-uk.com'],
+};
+
 function emptyHandles(handles = {}) {
   return PLATFORM_KEYS.reduce((acc, key) => ({ ...acc, [key]: String(handles?.[key] || '').trim() }), {});
 }
@@ -429,14 +440,14 @@ export default function AffiliatesHub({
                     <div className="mt-4 grid gap-3 md:grid-cols-2">
                       {Object.entries(selected.handles || {}).filter(([, value]) => String(value || '').trim()).map(([key, value]) => {
                         if (key === 'youtubeChannelId') return null;
-                        const href = safeExternalHref(buildPlatformUrl(key, value, selected.handles));
+                        const href = safeExternalHref(buildPlatformUrl(key, value, selected.handles), PLATFORM_ALLOWED_HOSTS[key]);
                         return (
                           <div key={key} className="rounded-2xl border border-white/10 bg-white/5 p-3">
                             <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">{PLATFORM_LABELS[key] || key}</div>
                             <div className="mt-2 flex items-center justify-between gap-3">
                               <div className="min-w-0 text-sm font-medium text-white">{String(value)}</div>
                               {href ? (
-                                <a href={href} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center justify-center rounded-[16px] border border-white/10 bg-white/8 px-3 text-xs font-semibold text-zinc-100 transition hover:bg-white/12">
+                                <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex h-9 items-center justify-center rounded-[16px] border border-white/10 bg-white/8 px-3 text-xs font-semibold text-zinc-100 transition hover:bg-white/12">
                                   <ExternalLink className="mr-1.5 h-3.5 w-3.5" /> Open
                                 </a>
                               ) : null}

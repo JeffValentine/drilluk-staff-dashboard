@@ -1,19 +1,28 @@
 const YOUTUBE_ID_PATTERN = /^[A-Za-z0-9_-]{6,}$/;
 
-export function safeExternalUrl(rawUrl, allowedProtocols = ['https:', 'http:']) {
+export function safeExternalUrl(rawUrl, allowedProtocols = ['https:'], allowedHosts = null) {
   const value = String(rawUrl || '').trim();
   if (!value) return '';
 
   try {
     const url = new URL(value);
-    return allowedProtocols.includes(url.protocol) ? url.toString() : '';
+    if (!allowedProtocols.includes(url.protocol)) return '';
+    if (allowedHosts) {
+      const host = url.hostname.toLowerCase();
+      const allowed = allowedHosts.some((allowedHost) => {
+        const normalized = String(allowedHost || '').toLowerCase();
+        return host === normalized || host.endsWith(`.${normalized}`);
+      });
+      if (!allowed) return '';
+    }
+    return url.toString();
   } catch {
     return '';
   }
 }
 
-export function safeExternalHref(rawUrl) {
-  return safeExternalUrl(rawUrl, ['https:', 'http:']);
+export function safeExternalHref(rawUrl, allowedHosts = null) {
+  return safeExternalUrl(rawUrl, ['https:'], allowedHosts);
 }
 
 export function toSafeEmbeddableVideoUrl(rawUrl) {
