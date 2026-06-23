@@ -122,7 +122,7 @@ const DEFAULT_AFFILIATE_CREATORS = [
     category: 'creator',
     status: 'active',
     primary_platform: 'tiktok',
-    handles: { tiktok: 'https://vm.tiktok.com/ZN9d2rsLBvttD-rwkcp/' },
+    handles: { tiktok: '' },
   },
   {
     slug: 'ryley',
