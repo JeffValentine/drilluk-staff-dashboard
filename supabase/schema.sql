@@ -245,6 +245,23 @@ grant execute on function public.current_user_can_access_dashboard() to authenti
 revoke all on function public.current_user_has_god_key() from public;
 grant execute on function public.current_user_has_god_key() to authenticated;
 
+create or replace function public.get_dashboard_staff_members()
+returns setof public.staff_members
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select sm.*
+  from public.staff_members sm
+  where public.current_user_can_access_dashboard()
+  order by sm.updated_at desc
+$$;
+
+revoke all on function public.get_dashboard_staff_members() from public;
+revoke all on function public.get_dashboard_staff_members() from anon;
+grant execute on function public.get_dashboard_staff_members() to authenticated;
+
 create or replace function public.touch_last_seen()
 returns void
 language sql

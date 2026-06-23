@@ -2066,10 +2066,18 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     if (!dbReady || !supabase) return false;
     setStaffLoading(true);
     setStaffError('');
-    const { data, error } = await supabase
-      .from('staff_members')
-      .select('*')
-      .order('updated_at', { ascending: false });
+    const { data: rpcData, error: rpcError } = await supabase.rpc('get_dashboard_staff_members');
+    let data = rpcData;
+    let error = rpcError;
+
+    if (rpcError?.code === 'PGRST202' || /get_dashboard_staff_members/i.test(rpcError?.message || '')) {
+      const fallback = await supabase
+        .from('staff_members')
+        .select('*')
+        .order('updated_at', { ascending: false });
+      data = fallback.data;
+      error = fallback.error;
+    }
 
     if (error) {
       setStaff([]);

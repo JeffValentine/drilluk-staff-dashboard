@@ -28,6 +28,23 @@ on public.audit_logs (action, created_at desc);
 create index if not exists audit_logs_target_id_idx
 on public.audit_logs (target_id);
 
+create or replace function public.get_dashboard_staff_members()
+returns setof public.staff_members
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select sm.*
+  from public.staff_members sm
+  where public.current_user_can_access_dashboard()
+  order by sm.updated_at desc
+$$;
+
+revoke all on function public.get_dashboard_staff_members() from public;
+revoke all on function public.get_dashboard_staff_members() from anon;
+grant execute on function public.get_dashboard_staff_members() to authenticated;
+
 drop policy if exists "staff_read_authenticated" on public.staff_members;
 create policy "staff_read_authenticated"
 on public.staff_members for select
