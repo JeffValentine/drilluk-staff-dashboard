@@ -1785,6 +1785,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   const [interviewReviewNotes, setInterviewReviewNotes] = useState('');
 
   const [staff, setStaff] = useState([]);
+  const [staffLoading, setStaffLoading] = useState(true);
+  const [staffError, setStaffError] = useState('');
   const [selectedId, setSelectedId] = useState(null);
   const [query, setQuery] = useState('');
   const [addStaffOpen, setAddStaffOpen] = useState(false);
@@ -2061,13 +2063,28 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   }, [canViewPresence]);
 
   async function refreshStaffFromDb() {
-    if (!dbReady || !supabase) return;
+    if (!dbReady || !supabase) return false;
+    setStaffLoading(true);
+    setStaffError('');
     const { data, error } = await supabase
       .from('staff_members')
       .select('*')
       .order('updated_at', { ascending: false });
 
-    if (error || !data?.length) return false;
+    if (error) {
+      setStaff([]);
+      setSelectedId(null);
+      setStaffError(error.message || 'Failed to load staff records.');
+      setStaffLoading(false);
+      return false;
+    }
+
+    if (!data?.length) {
+      setStaff([]);
+      setSelectedId(null);
+      setStaffLoading(false);
+      return true;
+    }
     let mapped = data.map(row => ({
       id: row.id,
       name: row.name,
@@ -2107,6 +2124,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     }
     setStaff(mapped);
     setSelectedId(prev => (mapped.some(s => s.id === prev) ? prev : mapped[0]?.id ?? null));
+    setStaffLoading(false);
     return true;
   }
 
@@ -2378,43 +2396,34 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
             : null;
 
       const baseSelect = 'id, actor_id, action, target_id, before_value, after_value, created_at';
-      const pageSize = 1000;
-      let from = 0;
-      let allRows = [];
+      const auditFetchLimit = 500;
+      let query = supabase
+        .from('audit_logs')
+        .select(baseSelect)
+        .order('created_at', { ascending: false })
+        .range(0, auditFetchLimit - 1);
 
-      while (true) {
-        let query = supabase
-          .from('audit_logs')
-          .select(baseSelect)
-          .order('created_at', { ascending: false });
-
-        if (auditActorFilter !== 'All') query = query.eq('actor_id', auditActorFilter);
-        if (auditActionFilter !== 'All') query = query.eq('action', auditActionFilter);
-        if (cutoffIso) query = query.gte('created_at', cutoffIso);
-        if (auditRequireChanges) query = query.not('after_value', 'is', null);
-        if (auditQuery.trim()) {
-          const q = auditQuery.trim();
-          query = query.or(`action.ilike.%${q}%,target_id.ilike.%${q}%`);
-        }
-        if (auditTabFilter !== 'All') {
-          const tabFilter = buildAuditTabActionOrFilter(auditTabFilter);
-          if (tabFilter) query = query.or(tabFilter);
-        }
-
-        const { data, error } = await query.range(from, from + pageSize - 1);
-        if (error) {
-          setAuditLogs([]);
-          setAuditError(error.message || 'Failed to load audit logs.');
-          return;
-        }
-
-        const chunk = data || [];
-        allRows = allRows.concat(chunk);
-        if (chunk.length < pageSize) break;
-        from += pageSize;
+      if (auditActorFilter !== 'All') query = query.eq('actor_id', auditActorFilter);
+      if (auditActionFilter !== 'All') query = query.eq('action', auditActionFilter);
+      if (cutoffIso) query = query.gte('created_at', cutoffIso);
+      if (auditRequireChanges) query = query.not('after_value', 'is', null);
+      if (auditQuery.trim()) {
+        const q = auditQuery.trim();
+        query = query.or(`action.ilike.%${q}%,target_id.ilike.%${q}%`);
+      }
+      if (auditTabFilter !== 'All') {
+        const tabFilter = buildAuditTabActionOrFilter(auditTabFilter);
+        if (tabFilter) query = query.or(tabFilter);
       }
 
-      setAuditLogs(allRows);
+      const { data, error } = await query;
+      if (error) {
+        setAuditLogs([]);
+        setAuditError(error.message || 'Failed to load audit logs.');
+        return;
+      }
+
+      setAuditLogs(data || []);
     } finally {
       setAuditLoading(false);
     }
@@ -2863,6 +2872,8 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     if (!dbReady || !supabase) {
       setStaff(initialStaff);
       setSelectedId(initialStaff[0]?.id ?? null);
+      setStaffLoading(false);
+      setStaffError('');
       return;
     }
 
@@ -2871,8 +2882,7 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
     refreshStaffFromDb().then((loaded) => {
       if (!active) return;
       if (!loaded) {
-        setStaff(initialStaff);
-        setSelectedId(initialStaff[0]?.id ?? null);
+        setSelectedId(null);
       }
     });
     return () => {
@@ -6157,6 +6167,34 @@ export default function DrillUKStaffTrackerPrototype({ authUser, profile, onSign
   }
 
   if (!selected) {
+    if (staffLoading) {
+      return (
+        <div className="min-h-screen bg-[#07070b] p-6 text-zinc-200">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-zinc-300">
+            Loading staff records...
+          </div>
+        </div>
+      );
+    }
+
+    if (staffError) {
+      return (
+        <div className="min-h-screen bg-[#07070b] p-6 text-zinc-200">
+          <div className="rounded-2xl border border-red-500/35 bg-red-500/10 p-6 text-sm text-red-100">
+            <div className="font-semibold text-white">Could not load staff records.</div>
+            <div className="mt-2 text-red-100/90">{staffError}</div>
+            <Button
+              type="button"
+              onClick={refreshStaffFromDb}
+              className="mt-4 rounded-full border border-white/12 bg-white/10 px-4 text-sm text-white hover:bg-white/15"
+            >
+              Retry
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
     if (isStaffInTraining) {
       return (
         <div className="min-h-screen bg-[#07070b] p-6 text-zinc-200">

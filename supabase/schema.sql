@@ -48,6 +48,27 @@ create table if not exists public.audit_logs (
   created_at timestamptz not null default now()
 );
 
+create index if not exists profiles_active_role_id_idx
+on public.profiles (id, is_active, role);
+
+create index if not exists staff_members_updated_at_idx
+on public.staff_members (updated_at desc);
+
+create index if not exists staff_members_trainee_user_id_idx
+on public.staff_members (trainee_user_id);
+
+create index if not exists audit_logs_created_at_idx
+on public.audit_logs (created_at desc);
+
+create index if not exists audit_logs_actor_created_at_idx
+on public.audit_logs (actor_id, created_at desc);
+
+create index if not exists audit_logs_action_created_at_idx
+on public.audit_logs (action, created_at desc);
+
+create index if not exists audit_logs_target_id_idx
+on public.audit_logs (target_id);
+
 create table if not exists public.checkbox_catalog (
   id text primary key,
   category text not null check (category in ('role', 'core', 'permission')),
@@ -418,13 +439,13 @@ drop function if exists public.consume_signup_token(text, text);
 drop policy if exists "profiles_self_read" on public.profiles;
 create policy "profiles_self_read"
 on public.profiles for select
-using (id = auth.uid() or public.current_user_role() = 'head_admin');
+using (id = (select auth.uid()) or (select public.current_user_role()) = 'head_admin');
 
 drop policy if exists "profiles_head_admin_update" on public.profiles;
 create policy "profiles_head_admin_update"
 on public.profiles for update
-using (public.current_user_role() = 'head_admin')
-with check (public.current_user_role() = 'head_admin');
+using ((select public.current_user_role()) = 'head_admin')
+with check ((select public.current_user_role()) = 'head_admin');
 
 drop policy if exists "profiles_god_key_read" on public.profiles;
 create policy "profiles_god_key_read"
@@ -451,7 +472,7 @@ with check (
 drop policy if exists "staff_read_authenticated" on public.staff_members;
 create policy "staff_read_authenticated"
 on public.staff_members for select
-using (public.current_user_can_access_dashboard());
+using ((select public.current_user_can_access_dashboard()));
 
 drop policy if exists "staff_write_trainer_admin" on public.staff_members;
 create policy "staff_write_trainer_admin"
@@ -479,14 +500,14 @@ drop policy if exists "audit_insert_authenticated" on public.audit_logs;
 create policy "audit_insert_authenticated"
 on public.audit_logs for insert
 with check (
-  public.current_user_can_access_dashboard()
-  and actor_id = auth.uid()
+  (select public.current_user_can_access_dashboard())
+  and actor_id = (select auth.uid())
 );
 
 drop policy if exists "audit_read_admin_head" on public.audit_logs;
 create policy "audit_read_admin_head"
 on public.audit_logs for select
-using (public.current_user_role() in ('admin', 'head_admin'));
+using ((select public.current_user_role()) in ('admin', 'head_admin'));
 
 drop policy if exists "checkbox_catalog_read_authenticated" on public.checkbox_catalog;
 create policy "checkbox_catalog_read_authenticated"
